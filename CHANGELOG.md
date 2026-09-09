@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Desktop UI: three-pane workspace (file tree / content / agent chat) with full-window layout
+- Sidecar discovery for local release exe; WebView2Loader helper script for GNU builds
+
 ## [0.1.0] - 2026-09-09
 
 ### Added

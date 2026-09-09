@@ -20,3 +20,5 @@ apps/desktop/src-tauri/gen/
 coverage/
 *.tgz
 .turbo/
+release/
+*.exe
