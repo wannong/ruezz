@@ -1,11 +1,13 @@
 node_modules/
 dist/
+!vendor/llmwiki-core/dist/
 target/
 .DS_Store
 *.log
 .env
 .env.*
 !.env.example
+*.tsbuildinfo
 apps/desktop/src-tauri/target/
 apps/desktop/dist/
 apps/desktop/src-tauri/icons/android/
