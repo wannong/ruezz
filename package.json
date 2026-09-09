@@ -1,0 +1,21 @@
+{
+  "name": "wikihome",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Beginner-friendly local knowledge base agent (Tauri + LLM Wiki engine)",
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "pnpm -r --filter=./packages/* run build",
+    "dev:sidecar": "pnpm --filter @wikihome/sidecar dev",
+    "dev:http": "pnpm --filter @wikihome/sidecar dev:http",
+    "dev:ui": "pnpm --filter @wikihome/desktop dev",
+    "dev:desktop": "pnpm --filter @wikihome/desktop tauri dev",
+    "test": "pnpm -r --filter=./packages/* run test --if-present",
+    "version:check": "node scripts/version-check.mjs",
+    "smoke": "pnpm --filter @wikihome/sidecar smoke"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

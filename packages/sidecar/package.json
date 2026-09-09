@@ -1,0 +1,25 @@
+{
+  "name": "@wikihome/sidecar",
+  "version": "0.1.0",
+  "description": "JSON-RPC sidecar for WikiHome Tauri shell",
+  "type": "module",
+  "bin": {
+    "wikihome-sidecar": "./dist/cli.js"
+  },
+  "main": "./dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --watch dist/cli.js",
+    "dev:http": "node dist/http-main.js",
+    "smoke": "node dist/smoke.js"
+  },
+  "dependencies": {
+    "@wikihome/agent": "workspace:*",
+    "@wikihome/engine-api": "workspace:*",
+    "@wikihome/engine-llmwiki": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2"
+  }
+}

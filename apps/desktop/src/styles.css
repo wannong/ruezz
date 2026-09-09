@@ -1,0 +1,190 @@
+:root {
+  color-scheme: light;
+  --bg: #f6f3ee;
+  --ink: #1c1917;
+  --muted: #78716c;
+  --panel: #fffcf8;
+  --line: #e7e0d6;
+  --accent: #0f766e;
+  --accent-ink: #ecfdf5;
+  --danger: #b91c1c;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.5;
+  font-size: 15px;
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #dbeafe 0%, transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, #ccfbf1 0%, transparent 50%),
+    var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+}
+
+.app-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.brand {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+.lead {
+  color: var(--muted);
+  margin: 0.35rem 0 1.25rem;
+}
+
+.card {
+  background: color-mix(in srgb, var(--panel) 92%, white);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 1.25rem;
+  box-shadow: 0 12px 40px rgba(28, 25, 23, 0.04);
+}
+
+.grid-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.error {
+  color: var(--danger);
+  margin-top: 0.75rem;
+}
+
+.main-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr 320px;
+  gap: 1rem;
+  min-height: 70vh;
+}
+
+@media (max-width: 960px) {
+  .main-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel-title {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+.page-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.page-list button {
+  width: 100%;
+  text-align: left;
+}
+
+.page-list button.active {
+  border-color: var(--accent);
+  background: #ecfdf5;
+}
+
+.reader {
+  white-space: pre-wrap;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.92rem;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.chat {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+
+.bubble {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+}
+
+.dropzone {
+  border: 1.5px dashed var(--line);
+  border-radius: 14px;
+  padding: 1.25rem;
+  text-align: center;
+  color: var(--muted);
+  background: #fff;
+}
+
+.dropzone.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #ecfdf5;
+}

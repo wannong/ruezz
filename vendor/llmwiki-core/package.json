@@ -1,0 +1,23 @@
+{
+  "name": "llmwiki-core",
+  "version": "0.1.0",
+  "description": "Vendored headless LLM Wiki engine core (MIT). WikiHome patches Store to pure-JS.",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

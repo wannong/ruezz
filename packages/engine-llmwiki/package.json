@@ -1,0 +1,27 @@
+{
+  "name": "@wikihome/engine-llmwiki",
+  "version": "0.1.0",
+  "description": "llmwiki-core adapter implementing @wikihome/engine-api",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@wikihome/engine-api": "workspace:*",
+    "@wikihome/llm": "workspace:*",
+    "js-yaml": "^4.1.0",
+    "llmwiki-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2"
+  }
+}
