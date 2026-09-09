@@ -22,48 +22,57 @@ struct SidecarProc {
 
 fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
     // Prefer external binary next to the app; fall back to `node packages/sidecar/dist/cli.js`
-    if let Ok(path) = app.path().resolve(
-        "wikihome-sidecar",
-        tauri::path::BaseDirectory::Resource,
-    ) {
+    if let Ok(path) = app
+        .path()
+        .resolve("wikihome-sidecar", tauri::path::BaseDirectory::Resource)
+    {
         if path.exists() {
             return Ok(Command::new(path));
         }
     }
 
-    let resource = app
-        .path()
-        .resource_dir()
-        .map_err(|e| e.to_string())?;
-    // Dev: walk up from src-tauri to monorepo root
-    let mut candidates = vec![
-        resource.join("binaries").join("wikihome-sidecar.exe"),
-        resource.join("binaries").join("wikihome-sidecar"),
-    ];
-    if let Ok(cwd) = std::env::current_dir() {
-        candidates.push(cwd.join("binaries").join("wikihome-sidecar.exe"));
-        // apps/desktop/src-tauri -> repo root
-        let root = cwd
-            .ancestors()
-            .nth(2)
-            .map(|p| p.to_path_buf())
-            .unwrap_or(cwd.clone());
-        candidates.push(root.join("packages/sidecar/dist/cli.js"));
-        // When running `tauri dev`, cwd is often src-tauri
-        let from_tauri = cwd
-            .parent()
-            .and_then(|p| p.parent())
-            .map(|p| p.join("packages/sidecar/dist/cli.js"));
-        if let Some(p) = from_tauri {
-            candidates.push(p);
+    let mut candidates = Vec::new();
+
+    if let Ok(resource) = app.path().resource_dir() {
+        candidates.push(resource.join("binaries").join("wikihome-sidecar.exe"));
+        candidates.push(resource.join("binaries").join("wikihome-sidecar"));
+    }
+
+    // Walk from the running exe upward to find the monorepo sidecar (local 验收).
+    if let Ok(exe) = std::env::current_exe() {
+        for dir in exe.ancestors().take(8) {
+            candidates.push(dir.join("wikihome-sidecar.exe"));
+            candidates.push(dir.join("binaries").join("wikihome-sidecar.exe"));
+            candidates.push(dir.join("packages").join("sidecar").join("dist").join("cli.js"));
         }
     }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        for dir in cwd.ancestors().take(8) {
+            candidates.push(dir.join("packages").join("sidecar").join("dist").join("cli.js"));
+        }
+    }
+
+    // Explicit local checkout used during development / acceptance.
+    candidates.push(std::path::PathBuf::from(
+        r"D:\WikiHome\packages\sidecar\dist\cli.js",
+    ));
 
     for c in &candidates {
         if c.extension().and_then(|e| e.to_str()) == Some("js") && c.exists() {
             let mut cmd = Command::new("node");
             cmd.arg(c);
-            cmd.env("WIKIHOME_MOCK", std::env::var("WIKIHOME_MOCK").unwrap_or_else(|_| "0".into()));
+            // Keep cwd at monorepo root so workspace package imports resolve.
+            if let Some(root) = c
+                .ancestors()
+                .find(|p| p.join("pnpm-workspace.yaml").exists())
+            {
+                cmd.current_dir(root);
+            }
+            cmd.env(
+                "WIKIHOME_MOCK",
+                std::env::var("WIKIHOME_MOCK").unwrap_or_else(|_| "0".into()),
+            );
             return Ok(cmd);
         }
         if c.exists() {

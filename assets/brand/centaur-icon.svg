@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" role="img" aria-label="WikiHome">
+  <rect width="256" height="256" rx="56" fill="#F6F3EE"/>
+
+  <!-- Far limbs -->
+  <g fill="#A8A29E">
+    <rect x="158" y="96" width="42" height="18" rx="9" transform="rotate(26 158 105)"/>
+    <rect x="156" y="158" width="16" height="40" rx="8" transform="rotate(14 164 158)"/>
+    <rect x="166" y="194" width="14" height="34" rx="7" transform="rotate(-10 173 194)"/>
+    <rect x="96" y="158" width="16" height="38" rx="8" transform="rotate(-8 104 158)"/>
+    <rect x="90" y="192" width="14" height="34" rx="7" transform="rotate(12 97 192)"/>
+  </g>
+
+  <!-- Body continuum -->
+  <rect x="86" y="128" width="108" height="46" rx="23" fill="#C4BEB6"/>
+  <rect x="106" y="84" width="36" height="58" rx="18" fill="#C4BEB6"/>
+
+  <!-- Near arm -->
+  <rect x="62" y="100" width="46" height="18" rx="9" fill="#D6D3D1" transform="rotate(-30 62 109)"/>
+
+  <!-- Head -->
+  <rect x="94" y="44" width="60" height="56" rx="20" fill="#D6D3D1"/>
+
+  <!-- Eyes -->
+  <rect x="110" y="64" width="12" height="20" rx="6" fill="#0F766E"/>
+  <rect x="130" y="64" width="12" height="20" rx="6" fill="#0F766E"/>
+
+  <!-- Near legs -->
+  <g fill="#D6D3D1">
+    <rect x="146" y="162" width="18" height="40" rx="9" transform="rotate(8 155 162)"/>
+    <rect x="152" y="198" width="16" height="34" rx="8" transform="rotate(-16 160 198)"/>
+    <rect x="110" y="162" width="18" height="40" rx="9" transform="rotate(-16 119 162)"/>
+    <rect x="100" y="198" width="16" height="34" rx="8" transform="rotate(8 108 198)"/>
+  </g>
+</svg>

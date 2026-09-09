@@ -32,12 +32,20 @@ pnpm dev
 
 打开 http://localhost:1420
 
-### Tauri 桌面
+### Tauri 桌面 / 独立 exe
 
-需已安装 Rust (`rustc`/`cargo`) 与 WebView2：
+打包后验收目录：`release/`
+
+- `WikiHome.exe`
+- `WebView2Loader.dll`（GNU 工具链必需，运行 `pnpm release:prepare` 自动复制）
+- `启动WikiHome.bat`
+
+需本机已安装 **Node.js**（sidecar）与 **WebView2 运行时**。
 
 ```bash
 pnpm dev:desktop
+pnpm --filter @wikihome/desktop tauri build
+pnpm release:prepare
 ```
 
 ## 版本

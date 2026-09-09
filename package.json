@@ -13,7 +13,8 @@
     "dev:desktop": "pnpm --filter @wikihome/desktop tauri dev",
     "test": "pnpm -r --filter=./packages/* run test --if-present",
     "version:check": "node scripts/version-check.mjs",
-    "smoke": "pnpm --filter @wikihome/sidecar smoke"
+    "smoke": "pnpm --filter @wikihome/sidecar smoke",
+    "release:prepare": "powershell -ExecutionPolicy Bypass -File scripts/copy-webview2-dll.ps1"
   },
   "engines": {
     "node": ">=20"
