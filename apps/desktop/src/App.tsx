@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type VaultSettings } from "./api";
 import { Onboarding } from "./components/Onboarding";
+import { TitleBar } from "./components/TitleBar";
 import { Workspace } from "./components/Workspace";
+import { vaultName } from "./lib/fileTree";
 import { applyTheme, loadTheme, type Theme } from "./theme";
 
 const defaultSettings: VaultSettings = {
@@ -57,28 +59,31 @@ export default function App() {
     }
   }
 
-  if (screen === "onboarding") {
-    return (
-      <Onboarding
-        settings={settings}
-        onChange={setSettings}
-        busy={busy}
-        error={error}
-        onStart={() => void start()}
-      />
-    );
-  }
-
   return (
-    <Workspace
-      settings={settings}
-      onSettings={setSettings}
-      theme={theme}
-      onToggleTheme={toggleTheme}
-      error={error}
-      setError={setError}
-      busy={busy}
-      setBusy={setBusy}
-    />
+    <div className="app-shell">
+      <TitleBar label={settings.vaultPath ? vaultName(settings.vaultPath) : "WikiHome"} />
+      <div className="app-shell-body">
+        {screen === "onboarding" ? (
+          <Onboarding
+            settings={settings}
+            onChange={setSettings}
+            busy={busy}
+            error={error}
+            onStart={() => void start()}
+          />
+        ) : (
+          <Workspace
+            settings={settings}
+            onSettings={setSettings}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            error={error}
+            setError={setError}
+            busy={busy}
+            setBusy={setBusy}
+          />
+        )}
+      </div>
+    </div>
   );
 }

@@ -20,6 +20,16 @@ struct SidecarProc {
     next_id: AtomicU64,
 }
 
+fn hide_console(cmd: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Prevent node.exe from opening a visible console window.
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+}
+
 fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
     // Prefer external binary next to the app; fall back to `node packages/sidecar/dist/cli.js`
     if let Ok(path) = app
@@ -60,7 +70,7 @@ fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
 
     for c in &candidates {
         if c.extension().and_then(|e| e.to_str()) == Some("js") && c.exists() {
-            let mut cmd = Command::new("node");
+            let mut cmd = Command::new("node.exe");
             cmd.arg(c);
             // Keep cwd at monorepo root so workspace package imports resolve.
             if let Some(root) = c
@@ -90,11 +100,19 @@ fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
     ))
 }
 
+impl Drop for SidecarProc {
+    fn drop(&mut self) {
+        let _ = self._child.kill();
+        let _ = self._child.wait();
+    }
+}
+
 fn spawn_sidecar(app: &AppHandle) -> Result<SidecarProc, String> {
     let mut cmd = sidecar_command(app)?;
+    hide_console(&mut cmd);
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
+        .stderr(Stdio::null());
 
     let mut child = cmd.spawn().map_err(|e| format!("spawn sidecar: {e}"))?;
     let stdin = child.stdin.take().ok_or("sidecar stdin missing")?;
@@ -192,6 +210,13 @@ pub fn run() {
             inner: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![rpc])
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(state) = window.try_state::<SidecarState>() {
+                    *state.inner.lock() = None;
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running WikiHome");
 }

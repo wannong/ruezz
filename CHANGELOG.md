@@ -7,10 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-10
+
+### Added
+
+- Obsidian-style workspace: ribbon, file tree, tabs, markdown reading, command palette, search, backlinks, outline, and graph
+- Theme-matched custom titlebar (drag, minimize, maximize, close)
+
+### Fixed
+
+- Sidecar no longer opens a visible Node.js console on Windows
+- Sidecar process is stopped when the app window closes
+- Light theme now applies to the center reading pane
+
 ### Changed
 
-- Desktop UI: three-pane workspace (file tree / content / agent chat) with full-window layout
-- Sidecar discovery for local release exe; WebView2Loader helper script for GNU builds
+- Desktop window uses frameless chrome so the titlebar follows dark/light theme
 
 ## [0.1.0] - 2026-09-09
 
@@ -27,5 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/wikihome/wikihome/releases/tag/v0.1.1
 [0.1.0]: https://github.com/wikihome/wikihome/releases/tag/v0.1.0
