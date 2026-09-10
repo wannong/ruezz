@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-10
+
+### Changed
+
+- Desktop app icon is now the WikiHome robot-head mark
+
 ## [0.1.5] - 2026-09-10
 
 ### Added
@@ -75,7 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/wikihome/wikihome/releases/tag/v0.1.6
 [0.1.5]: https://github.com/wikihome/wikihome/releases/tag/v0.1.5
 [0.1.4]: https://github.com/wikihome/wikihome/releases/tag/v0.1.4
 [0.1.3]: https://github.com/wikihome/wikihome/releases/tag/v0.1.3
