@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   isTauriRuntime,
+  type AgentSessionMessage,
   type GraphDto,
   type PageContent,
   type PageSummary,
@@ -25,7 +26,6 @@ import { RightSidebar, type RightView } from "./RightSidebar";
 import { SettingsModal } from "./SettingsModal";
 import { StatusBar } from "./StatusBar";
 import { TabBar } from "./TabBar";
-import type { ChatMessage } from "./AgentPane";
 
 type WorkspaceProps = {
   settings: VaultSettings;
@@ -79,8 +79,13 @@ export function Workspace({
   const [newNoteOpen, setNewNoteOpen] = useState(false);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [graph, setGraph] = useState<GraphDto | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<AgentSessionMessage[]>([]);
+  const [linkedPageIds, setLinkedPageIds] = useState<string[]>([]);
+  const [pendingUser, setPendingUser] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
+  const sendingRef = useRef(false);
 
   const activeTab = tabs.find((t) => tabKey(t) === activeKey) ?? null;
   const activePageId = activeTab?.kind === "page" ? activeTab.id : null;
@@ -158,6 +163,38 @@ export function Workspace({
       /* graph may be empty on fresh vault */
     });
   }, [loadPages, loadGraph, onError]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { sessions } = await api.agentSessionList();
+        if (cancelled) return;
+        if (!sessions.length) {
+          setSessionId(null);
+          setMessages([]);
+          setLinkedPageIds([]);
+          return;
+        }
+        const { session } = await api.agentSessionGet(sessions[0].id);
+        if (cancelled) return;
+        setSessionId(session.id);
+        setMessages(session.messages);
+        setLinkedPageIds(session.linkedPageIds);
+      } catch (e) {
+        if (!cancelled) onError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [onError]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     savePref("leftCollapsed", leftCollapsed);
@@ -424,10 +461,7 @@ export function Workspace({
       }
       await loadPages();
       await loadGraph();
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: "system", content: `已入库 ${paths.length} 个文件` },
-      ]);
+      setNotice(`已入库 ${paths.length} 个文件`);
       setIngestOpen(false);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -443,10 +477,7 @@ export function Workspace({
       await api.vaultIngestText(title, body);
       await loadPages();
       await loadGraph();
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: "system", content: `已入库文本「${title}」` },
-      ]);
+      setNotice(`已入库文本「${title}」`);
       setIngestOpen(false);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -457,22 +488,37 @@ export function Workspace({
 
   async function sendMessage() {
     const text = draft.trim();
-    if (!text || busy) return;
+    if (!text || busy || sendingRef.current) return;
+    sendingRef.current = true;
     setDraft("");
+    setPendingUser(text);
     setBusy(true);
     setError(null);
-    setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: text }]);
     try {
-      const res = await api.vaultAsk(text);
-      setMessages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), role: "assistant", content: res.answer, sources: res.sources },
-      ]);
+      let id = sessionId;
+      if (!id) {
+        const created = await api.agentSessionCreate({
+          currentPageId: activePageId ?? undefined,
+        });
+        id = created.session.id;
+        setSessionId(id);
+      }
+      const result = await api.agentPrompt({
+        sessionId: id,
+        message: text,
+        currentPageId: activePageId ?? undefined,
+      });
+      setSessionId(result.session.id);
+      setMessages(result.session.messages);
+      setLinkedPageIds(result.session.linkedPageIds);
+      await loadPages();
+      await loadGraph();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       onError(msg);
-      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "system", content: `错误：${msg}` }]);
     } finally {
+      setPendingUser(null);
+      sendingRef.current = false;
       setBusy(false);
     }
   }
@@ -674,6 +720,8 @@ export function Workspace({
           collapsed={rightCollapsed}
           overlay={narrow}
           messages={messages}
+          linkedPageIds={linkedPageIds}
+          pendingUser={pendingUser}
           draft={draft}
           busy={busy}
           pages={pages}
@@ -694,6 +742,7 @@ export function Workspace({
         pageCount={pages.length}
         currentId={activePageId}
         busy={busy}
+        notice={notice}
         dirty={activeDirty}
         saving={noteSaving}
         theme={theme}

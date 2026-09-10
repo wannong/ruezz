@@ -999,6 +999,54 @@ textarea:focus {
   padding: 0.1rem 0.4rem;
 }
 
+.msg-pending {
+  opacity: 0.72;
+}
+
+.msg-tool {
+  background: transparent;
+  border-style: dashed;
+}
+
+.msg-tool summary {
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.msg-tool .msg-body {
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.msg-tool-error {
+  border-color: var(--danger);
+}
+
+.msg-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+}
+
+.tool-chip {
+  border: 1px dashed var(--line);
+  color: var(--muted);
+  font-size: 0.7rem;
+  padding: 0.08rem 0.35rem;
+  border-radius: 4px;
+}
+
+.agent-linked {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.35rem 0.7rem;
+  border-top: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
 .agent-composer {
   position: relative;
   padding: 0.7rem 0.7rem 0.7rem;

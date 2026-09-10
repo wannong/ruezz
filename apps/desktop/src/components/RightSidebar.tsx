@@ -1,9 +1,9 @@
 import { PanelRightClose } from "lucide-react";
-import type { GraphDto, PageSummary } from "../api";
+import type { AgentSessionMessage, GraphDto, PageSummary } from "../api";
 import { attachResizeX } from "../lib/pointerResize";
 import type { OutlineItem } from "../lib/outline";
 import type { Theme } from "../theme";
-import { AgentPane, type ChatMessage } from "./AgentPane";
+import { AgentPane } from "./AgentPane";
 import { LocalGraphPane } from "./LocalGraphPane";
 import { OutlinePane } from "./OutlinePane";
 
@@ -15,7 +15,9 @@ type RightSidebarProps = {
   width: number;
   collapsed: boolean;
   overlay: boolean;
-  messages: ChatMessage[];
+  messages: AgentSessionMessage[];
+  linkedPageIds: string[];
+  pendingUser: string | null;
   draft: string;
   busy: boolean;
   pages: PageSummary[];
@@ -38,6 +40,8 @@ export function RightSidebar({
   collapsed,
   overlay,
   messages,
+  linkedPageIds,
+  pendingUser,
   draft,
   busy,
   pages,
@@ -87,6 +91,8 @@ export function RightSidebar({
       {view === "agent" && (
         <AgentPane
           messages={messages}
+          linkedPageIds={linkedPageIds}
+          pendingUser={pendingUser}
           draft={draft}
           busy={busy}
           pages={pages}

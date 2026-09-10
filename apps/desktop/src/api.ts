@@ -50,6 +50,64 @@ export type AskResult = {
   sources: string[];
 };
 
+export type AgentToolCall = {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+};
+
+export type AgentSessionMessage =
+  | {
+      role: "user";
+      content: string;
+      timestamp: number;
+    }
+  | {
+      role: "assistant";
+      content: string;
+      timestamp: number;
+      provider?: string;
+      model?: string;
+      toolCalls?: AgentToolCall[];
+      sources?: string[];
+    }
+  | {
+      role: "toolResult";
+      toolCallId: string;
+      toolName: string;
+      content: string;
+      isError: boolean;
+      timestamp: number;
+    };
+
+export type AgentSession = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  model: { provider: string; modelId: string };
+  linkedPageIds: string[];
+  messages: AgentSessionMessage[];
+};
+
+export type AgentSessionSummary = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  model: { provider: string; modelId: string };
+  messageCount: number;
+  linkedPageIds: string[];
+};
+
+export type AgentPromptResult = {
+  answer: string;
+  sources: string[];
+  linkedPageIds: string[];
+  toolsUsed: string[];
+  session: AgentSession;
+};
+
 export const isTauriRuntime = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -83,6 +141,17 @@ export const api = {
   vaultIngestPath: (path: string) => rpc("vault_ingest", { path }),
   vaultIngestText: (title: string, text: string) => rpc("vault_ingest", { title, text }),
   vaultAsk: (question: string) => rpc<AskResult>("vault_ask", { question }),
+  agentSessionList: () => rpc<{ sessions: AgentSessionSummary[] }>("agent_session_list"),
+  agentSessionCreate: (opts?: { title?: string; currentPageId?: string }) =>
+    rpc<{ session: AgentSession }>("agent_session_create", opts ?? {}),
+  agentSessionGet: (id: string) => rpc<{ session: AgentSession }>("agent_session_get", { id }),
+  agentSessionDelete: (id: string) => rpc<{ ok: boolean }>("agent_session_delete", { id }),
+  agentPrompt: (opts: { sessionId: string; message: string; currentPageId?: string; graphDepth?: number }) =>
+    rpc<AgentPromptResult>("agent_prompt", opts),
+  agentSetModel: (opts: { sessionId: string; provider: string; model: string }) =>
+    rpc<{ session: AgentSession }>("agent_set_model", opts),
+  agentListProviders: () =>
+    rpc<{ providers: Array<{ name: string; models: string[] }> }>("agent_list_providers"),
   vaultListPages: () => rpc<PageSummary[]>("vault_list_pages"),
   vaultReadPage: (id: string) => rpc<PageContent | null>("vault_read_page", { id }),
   vaultWritePage: (id: string, raw: string) => rpc<PageContent>("vault_write_page", { id, raw }),
