@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
   type AskResult,
+  type GraphDto,
   type IngestResult,
   type LintIssue,
   type PageContent,
@@ -115,12 +116,13 @@ export class LlmWikiEngine implements WikiEngine {
 
   async listPages(root: string): Promise<PageSummary[]> {
     const wiki = this.getWiki(root);
-    const pages = await wiki.listPages();
+    const { pages } = await wiki.load();
     return pages.map((p) => ({
       id: p.id,
-      title: p.title,
-      type: p.type,
-      path: `wiki/${p.id}.md`,
+      title: p.fm?.title,
+      type: p.fm?.type ? String(p.fm.type) : undefined,
+      path: p.path,
+      tags: p.fm?.tags?.length ? p.fm.tags : undefined,
     }));
   }
 
@@ -167,6 +169,33 @@ export class LlmWikiEngine implements WikiEngine {
     const answer = await wiki.ask(question);
     const sources = Array.from(answer.matchAll(/\[\[([^\]]+)\]\]/g)).map((m) => m[1]);
     return { answer, sources };
+  }
+
+  async getGraph(root: string): Promise<GraphDto> {
+    const wiki = this.getWiki(root);
+    const graph = await wiki.getGraph();
+    return {
+      nodes: [...graph.nodes.values()].map((n) => ({
+        id: n.id,
+        type: String(n.type),
+        label: n.label,
+        degree: n.degree,
+      })),
+      edges: graph.edges.map((e) => ({
+        source: e.source,
+        target: e.target,
+        relation: e.relation,
+      })),
+      dataVersion: graph.dataVersion,
+    };
+  }
+
+  async backlinks(root: string, pageId: string): Promise<PageSummary[]> {
+    const wiki = this.getWiki(root);
+    const ids = await wiki.impactSurface(pageId);
+    const all = await this.listPages(root);
+    const byId = new Map(all.map((p) => [p.id, p]));
+    return ids.map((id) => byId.get(id) ?? { id });
   }
 
   close(root?: string): void {

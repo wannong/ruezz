@@ -15,6 +15,7 @@ export const PageSummarySchema = z.object({
   title: z.string().optional(),
   type: z.string().optional(),
   path: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 export type PageSummary = z.infer<typeof PageSummarySchema>;
@@ -55,6 +56,29 @@ export const AskResultSchema = z.object({
 
 export type AskResult = z.infer<typeof AskResultSchema>;
 
+export const GraphNodeDtoSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  label: z.string(),
+  degree: z.number(),
+});
+
+export const GraphEdgeDtoSchema = z.object({
+  source: z.string(),
+  target: z.string(),
+  relation: z.string(),
+});
+
+export const GraphDtoSchema = z.object({
+  nodes: z.array(GraphNodeDtoSchema),
+  edges: z.array(GraphEdgeDtoSchema),
+  dataVersion: z.number(),
+});
+
+export type GraphNodeDto = z.infer<typeof GraphNodeDtoSchema>;
+export type GraphEdgeDto = z.infer<typeof GraphEdgeDtoSchema>;
+export type GraphDto = z.infer<typeof GraphDtoSchema>;
+
 /** Stable engine surface. Implement this to swap backends. */
 export interface WikiEngine {
   initVault(root: string): Promise<void>;
@@ -66,5 +90,7 @@ export interface WikiEngine {
   readPage(root: string, idOrPath: string): Promise<PageContent | null>;
   lint(root: string): Promise<LintIssue[]>;
   ask(root: string, question: string): Promise<AskResult>;
+  getGraph(root: string): Promise<GraphDto>;
+  backlinks(root: string, pageId: string): Promise<PageSummary[]>;
   close?(root?: string): void;
 }

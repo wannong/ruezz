@@ -40,6 +40,35 @@ async function main() {
   const lint = await session.handle({ id: 5, method: "vault_lint", params: {} });
   if (lint.error) throw new Error(lint.error.message);
 
+  const search = await session.handle({
+    id: 6,
+    method: "vault_search",
+    params: { query: "attention" },
+  });
+  if (search.error) throw new Error(search.error.message);
+  const hits = search.result as Array<{ id: string }>;
+  if (!hits.some((h) => h.id.includes("attention"))) {
+    throw new Error(`expected search hit for attention, got ${JSON.stringify(hits)}`);
+  }
+
+  const graphRes = await session.handle({ id: 7, method: "vault_graph", params: {} });
+  if (graphRes.error) throw new Error(graphRes.error.message);
+  const graph = graphRes.result as { nodes: unknown[]; edges: unknown[] };
+  if (!Array.isArray(graph.nodes) || graph.nodes.length === 0) {
+    throw new Error(`expected graph nodes, got ${JSON.stringify(graph)}`);
+  }
+
+  const sampleId = list.find((p) => p.id.includes("attention"))?.id ?? list[0]?.id;
+  const backlinks = await session.handle({
+    id: 8,
+    method: "vault_backlinks",
+    params: { id: sampleId },
+  });
+  if (backlinks.error) throw new Error(backlinks.error.message);
+  if (!Array.isArray(backlinks.result)) {
+    throw new Error(`expected backlinks array, got ${JSON.stringify(backlinks.result)}`);
+  }
+
   session.close();
   console.log("smoke ok", { root, pages: list.length, answerPreview: answer.slice(0, 80) });
 }

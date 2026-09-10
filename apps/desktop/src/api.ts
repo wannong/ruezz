@@ -14,6 +14,26 @@ export type PageSummary = {
   title?: string;
   type?: string;
   path?: string;
+  tags?: string[];
+};
+
+export type GraphNodeDto = {
+  id: string;
+  type: string;
+  label: string;
+  degree: number;
+};
+
+export type GraphEdgeDto = {
+  source: string;
+  target: string;
+  relation: string;
+};
+
+export type GraphDto = {
+  nodes: GraphNodeDto[];
+  edges: GraphEdgeDto[];
+  dataVersion: number;
 };
 
 export type PageContent = {
@@ -30,8 +50,10 @@ export type AskResult = {
   sources: string[];
 };
 
-const isTauri = () =>
+export const isTauriRuntime = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+const isTauri = isTauriRuntime;
 
 /** Dev fallback: talk to sidecar over HTTP if VITE_SIDECAR_HTTP is set. */
 async function httpRpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
@@ -64,6 +86,9 @@ export const api = {
   vaultListPages: () => rpc<PageSummary[]>("vault_list_pages"),
   vaultReadPage: (id: string) => rpc<PageContent | null>("vault_read_page", { id }),
   vaultLint: () => rpc("vault_lint"),
+  vaultSearch: (query: string) => rpc<PageSummary[]>("vault_search", { query }),
+  vaultGraph: () => rpc<GraphDto>("vault_graph"),
+  vaultBacklinks: (id: string) => rpc<PageSummary[]>("vault_backlinks", { id }),
   pickFolder: async () => {
     if (!isTauri()) return null;
     const selected = await open({ directory: true, multiple: false });

@@ -93,6 +93,15 @@ export class SidecarSession {
         return this.engine.lint(this.requireVault());
       case "vault_read_index":
         return { markdown: await this.engine.readIndex(this.requireVault()) };
+      case "vault_search":
+        return this.engine.findPages(this.requireVault(), String(params.query ?? ""));
+      case "vault_graph":
+        return this.engine.getGraph(this.requireVault());
+      case "vault_backlinks":
+        return this.engine.backlinks(
+          this.requireVault(),
+          String(params.id ?? params.pageId ?? ""),
+        );
       case "ping":
         return { ok: true, version: "0.1.0" };
       default:
