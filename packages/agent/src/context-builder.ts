@@ -6,6 +6,8 @@ import type { ContextBuildOptions } from "./types.js";
  * - Current page content
  * - N-hop neighbor pages
  * - Search results (if query provided)
+ * 
+ * Total context is trimmed to stay within character budget (approx 10k chars = ~2.5k tokens).
  */
 export async function buildAgentContext(
   engine: WikiEngine,
@@ -13,14 +15,19 @@ export async function buildAgentContext(
   options: ContextBuildOptions = {},
 ): Promise<string> {
   const { currentPageId, graphDepth = 1, searchQuery } = options;
+  const MAX_CONTEXT_CHARS = 10000; // Approx 2.5k tokens
   const parts: string[] = [];
+  let totalChars = 0;
 
-  // 1. Current page context
+  // 1. Current page context (prioritize this, allow up to 4k chars)
   if (currentPageId) {
     try {
       const page = await engine.readPage(vaultRoot, currentPageId);
       if (page) {
-        parts.push(`## 当前页面：[[${page.id}]]\n\n${page.body.slice(0, 2000)}`);
+        const pageContent = `## 当前页面：[[${page.id}]]\n\n${page.body}`;
+        const trimmed = pageContent.slice(0, 4000);
+        parts.push(trimmed);
+        totalChars += trimmed.length;
       }
     } catch {
       // Page might not exist, skip
@@ -28,23 +35,27 @@ export async function buildAgentContext(
   }
 
   // 2. Neighbor pages (N-hop graph traversal)
-  if (currentPageId && graphDepth > 0) {
+  if (currentPageId && graphDepth > 0 && totalChars < MAX_CONTEXT_CHARS) {
     const neighbors = await collectNeighbors(engine, vaultRoot, currentPageId, graphDepth);
     if (neighbors.length > 0) {
-      parts.push(
-        `## 相关页面（${graphDepth} 跳邻居）\n\n${neighbors.map((p) => `- [[${p.id}]] ${p.title || ""}`).join("\n")}`,
-      );
+      const neighborSection = `## 相关页面（${graphDepth} 跳邻居）\n\n${neighbors.map((p) => `- [[${p.id}]] ${p.title || ""}`).join("\n")}`;
+      const available = MAX_CONTEXT_CHARS - totalChars;
+      const trimmed = neighborSection.slice(0, available);
+      parts.push(trimmed);
+      totalChars += trimmed.length;
     }
   }
 
   // 3. Search results
-  if (searchQuery) {
+  if (searchQuery && totalChars < MAX_CONTEXT_CHARS) {
     try {
       const results = await engine.findPages(vaultRoot, searchQuery);
       if (results.length > 0) {
-        parts.push(
-          `## 搜索结果："${searchQuery}"\n\n${results.slice(0, 10).map((p) => `- [[${p.id}]] ${p.title || ""}`).join("\n")}`,
-        );
+        const searchSection = `## 搜索结果："${searchQuery}"\n\n${results.slice(0, 10).map((p) => `- [[${p.id}]] ${p.title || ""}`).join("\n")}`;
+        const available = MAX_CONTEXT_CHARS - totalChars;
+        const trimmed = searchSection.slice(0, available);
+        parts.push(trimmed);
+        totalChars += trimmed.length;
       }
     } catch {
       // Search might fail, skip
@@ -56,6 +67,7 @@ export async function buildAgentContext(
 
 /**
  * Collect N-hop neighbors using backlinks and forward links from graph.
+ * Fetches graph only once.
  */
 async function collectNeighbors(
   engine: WikiEngine,
@@ -64,6 +76,15 @@ async function collectNeighbors(
   maxDepth: number,
 ): Promise<PageSummary[]> {
   if (maxDepth <= 0) return [];
+
+  // Fetch graph once at the start
+  let graph: GraphDto | null = null;
+  try {
+    graph = await engine.getGraph(vaultRoot);
+  } catch {
+    // Graph unavailable, skip
+    return [];
+  }
 
   const visited = new Set<string>([pageId]);
   const neighbors: PageSummary[] = [];
@@ -87,26 +108,21 @@ async function collectNeighbors(
         // Backlinks might fail, skip
       }
 
-      // Get forward links from graph
-      try {
-        const graph = await engine.getGraph(vaultRoot);
-        const edges = graph.edges.filter((e) => e.source === id);
-        for (const edge of edges) {
-          if (!visited.has(edge.target)) {
-            const node = graph.nodes.find((n) => n.id === edge.target);
-            if (node) {
-              visited.add(edge.target);
-              neighbors.push({
-                id: edge.target,
-                title: node.label,
-                type: node.type,
-              });
-              nextLevel.push(edge.target);
-            }
+      // Get forward links from graph (already fetched)
+      const edges = graph.edges.filter((e) => e.source === id);
+      for (const edge of edges) {
+        if (!visited.has(edge.target)) {
+          const node = graph.nodes.find((n) => n.id === edge.target);
+          if (node) {
+            visited.add(edge.target);
+            neighbors.push({
+              id: edge.target,
+              title: node.label,
+              type: node.type,
+            });
+            nextLevel.push(edge.target);
           }
         }
-      } catch {
-        // Graph might fail, skip
       }
     }
 

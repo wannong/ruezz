@@ -2,25 +2,35 @@ import type { AskResult, WikiEngine } from "@wikihome/engine-api";
 
 /**
  * Agent session message.
- * Compatible with Pi agent-core AgentMessage but simplified for WikiHome.
+ * Supports user messages, assistant messages with tool calls, and tool result messages.
  */
-export interface SessionMessage {
-  role: "user" | "assistant";
-  content: string;
-  timestamp: number;
-  /** Provider name (only for assistant messages) */
-  provider?: string;
-  /** Model ID (only for assistant messages) */
-  model?: string;
-  /** Tool calls made in this message */
-  toolCalls?: Array<{
-    id: string;
-    name: string;
-    args: Record<string, unknown>;
-  }>;
-  /** Sources referenced (page IDs) */
-  sources?: string[];
-}
+export type SessionMessage =
+  | {
+      role: "user";
+      content: string;
+      timestamp: number;
+    }
+  | {
+      role: "assistant";
+      content: string;
+      timestamp: number;
+      provider?: string;
+      model?: string;
+      toolCalls?: Array<{
+        id: string;
+        name: string;
+        args: Record<string, unknown>;
+      }>;
+      sources?: string[];
+    }
+  | {
+      role: "toolResult";
+      toolCallId: string;
+      toolName: string;
+      content: string;
+      isError: boolean;
+      timestamp: number;
+    };
 
 /**
  * Agent session state persisted to disk.

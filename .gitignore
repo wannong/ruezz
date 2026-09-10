@@ -1,6 +1,8 @@
 node_modules/
 dist/
 !vendor/llmwiki-core/dist/
+!vendor/pi-agent-core/dist/
+!vendor/pi-ai/dist/
 target/
 .DS_Store
 *.log

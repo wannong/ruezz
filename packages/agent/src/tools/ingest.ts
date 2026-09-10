@@ -35,6 +35,21 @@ export function createIngestFileTool(engine: WikiEngine, vaultRoot: string): Age
     }),
     async execute(toolCallId, params, signal) {
       const { filePath } = params as { filePath: string };
+      
+      // Security: reject paths outside vault
+      const path = await import("node:path");
+      const resolved = path.resolve(vaultRoot, filePath);
+      const vaultResolved = path.resolve(vaultRoot);
+      if (!resolved.startsWith(vaultResolved)) {
+        throw new Error(`文件路径必须在 vault 内：${filePath}`);
+      }
+      
+      // Prefer raw/sources/ directory
+      const sourcesDir = path.join(vaultResolved, "raw", "sources");
+      if (!resolved.startsWith(sourcesDir)) {
+        throw new Error(`入库文件应该在 raw/sources/ 目录内，实际路径：${filePath}`);
+      }
+      
       const result = await engine.ingestFile(vaultRoot, filePath);
       
       const summary = `已入库文件 ${filePath}，生成 ${result.files.length} 个页面：\n${result.files.map((f) => `- ${f}`).join("\n")}`;

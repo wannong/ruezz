@@ -15,7 +15,7 @@ export function createListPagesTool(engine: WikiEngine, vaultRoot: string): Agen
       
       return {
         content: [{ type: "text", text: summary }],
-        details: { pages, count: pages.length },
+        details: { count: pages.length, sampleIds: pages.slice(0, 50).map((p) => p.id) },
       };
     },
   };

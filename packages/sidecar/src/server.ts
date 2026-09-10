@@ -37,19 +37,80 @@ export class SidecarSession {
 
   private async getAgentRunner(): Promise<AgentRunner> {
     if (!this.agentRunner && this.settings.vaultPath) {
-      // Create Models collection with faux provider for mock mode or real provider
-      const { createModels } = await import("@earendil-works/pi-ai");
+      // Create Models collection
+      const { createModels, createProvider } = await import("@earendil-works/pi-ai");
       const models = createModels();
       
       if (this.settings.mock) {
-        // Use faux provider for testing
-        const { fauxProvider } = await import("@earendil-works/pi-ai");
-        const handle = fauxProvider();
+        // Scripted faux model: each turn calls a wiki lookup tool then answers.
+        const { fauxProvider, fauxAssistantMessage, fauxToolCall } = await import(
+          "@earendil-works/pi-ai"
+        );
+        const handle = fauxProvider({ tokensPerSecond: 0 });
         models.setProvider(handle.provider);
+        handle.setResponses(Array.from({ length: 32 }, () => mockWikiFauxStep));
+
+        function mockWikiFauxStep(context: {
+          messages: Array<{ role: string; content?: unknown }>;
+        }) {
+          const last = context.messages[context.messages.length - 1];
+          if (last?.role === "toolResult") {
+            return fauxAssistantMessage("已根据知识库工具结果作答。", { stopReason: "stop" });
+          }
+          const userText = latestUserText(context.messages);
+          if (/读|read/i.test(userText)) {
+            const linked = JSON.stringify(context.messages).match(/\[\[([^\]]+)\]\]/);
+            return fauxAssistantMessage(
+              [fauxToolCall("read_page", { id: linked?.[1] ?? "attention" })],
+              { stopReason: "toolUse" },
+            );
+          }
+          if (/search|搜索/i.test(userText)) {
+            return fauxAssistantMessage(
+              [fauxToolCall("search_pages", { query: userText.slice(0, 80) || "attention" })],
+              { stopReason: "toolUse" },
+            );
+          }
+          return fauxAssistantMessage([fauxToolCall("list_pages", {})], {
+            stopReason: "toolUse",
+          });
+        }
       } else {
-        // Use OpenAI provider (requires standard OpenAI setup)
-        const { openaiProvider } = await import("@earendil-works/pi-ai/providers/openai");
-        models.setProvider(openaiProvider());
+        // Create OpenAI-compatible provider using user settings
+        const { openAIResponsesApi } = await import("@earendil-works/pi-ai/api/openai-responses.lazy");
+        
+        const provider = createProvider({
+          id: "openai-compatible",
+          name: "OpenAI Compatible",
+          baseUrl: this.settings.apiBaseUrl,
+          auth: {
+            apiKey: {
+              name: "API Key",
+              resolve: async () => ({
+                value: this.settings.apiKey,
+                source: "settings",
+                auth: { apiKey: this.settings.apiKey },
+              }),
+            },
+          },
+          models: [
+            {
+              id: this.settings.model,
+              name: this.settings.model,
+              provider: "openai-compatible",
+              api: "openai-responses" as const,
+              baseUrl: this.settings.apiBaseUrl,
+              reasoning: false,
+              input: ["text" as const],
+              contextWindow: 128000,
+              maxTokens: 16384,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            },
+          ],
+          api: openAIResponsesApi(),
+        });
+        
+        models.setProvider(provider);
       }
       
       this.agentRunner = new AgentRunner(this.engine, this.settings.vaultPath, models);
@@ -66,9 +127,25 @@ export class SidecarSession {
   }
 
   setSettings(patch: Partial<VaultSettings>): VaultSettings {
+    const oldSettings = { ...this.settings };
     this.settings = VaultSettingsSchema.parse({ ...this.settings, ...patch });
+    
+    // Clean up old engine and agent runner
     this.engine.close?.();
     this.engine = createEngine(this.settings);
+    
+    // Force rebuild agent runner if critical settings changed
+    const needsRebuild =
+      oldSettings.vaultPath !== this.settings.vaultPath ||
+      oldSettings.mock !== this.settings.mock ||
+      oldSettings.apiBaseUrl !== this.settings.apiBaseUrl ||
+      oldSettings.apiKey !== this.settings.apiKey ||
+      oldSettings.model !== this.settings.model;
+    
+    if (needsRebuild && this.agentRunner) {
+      this.agentRunner = null;
+    }
+    
     try {
       savePersistedSettings(this.settings);
     } catch {
@@ -251,23 +328,24 @@ export class SidecarSession {
         return { session };
       }
       case "agent_list_providers": {
-        // Return available providers (hardcoded for now, based on settings)
-        return {
-          providers: [
-            {
-              name: "openai",
-              models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
-            },
-            {
-              name: "anthropic",
-              models: ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229"],
-            },
-            {
-              name: "openai-compatible",
-              models: ["custom-model"],
-            },
-          ],
-        };
+        const runner = await this.getAgentRunner();
+        const models = runner.getModels();
+        
+        // Group models by provider
+        const providerMap = new Map<string, Set<string>>();
+        for (const model of models) {
+          if (!providerMap.has(model.provider)) {
+            providerMap.set(model.provider, new Set());
+          }
+          providerMap.get(model.provider)!.add(model.id);
+        }
+        
+        const providers = Array.from(providerMap.entries()).map(([name, modelIds]) => ({
+          name,
+          models: Array.from(modelIds),
+        }));
+        
+        return { providers };
       }
       case "ping":
         return { ok: true, version: "0.1.0" };
@@ -280,4 +358,23 @@ export class SidecarSession {
     this.engine.close?.();
     this.agentRunner = null;
   }
+}
+
+function latestUserText(messages: Array<{ role: string; content?: unknown }>): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message.role !== "user") continue;
+    const content = message.content;
+    if (typeof content === "string") return content;
+    if (!Array.isArray(content)) return "";
+    return content
+      .map((block) => {
+        if (block && typeof block === "object" && "type" in block && (block as { type: string }).type === "text") {
+          return String((block as { text?: string }).text ?? "");
+        }
+        return "";
+      })
+      .join("");
+  }
+  return "";
 }

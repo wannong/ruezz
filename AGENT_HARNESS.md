@@ -9,7 +9,43 @@ WikiHome Agent 基于 `@earendil-works/pi-agent-core` 和 `@earendil-works/pi-ai
 - **Session 模型**：每个会话持久化到 `.wikihome/sessions/<session-id>.json`，包含标题、消息历史、链接的页面、模型配置
 - **工具循环**：Agent 通过 WikiEngine 工具（search、read、write、create 等）访问知识库，而非直接文件操作
 - **上下文注入**：每轮自动注入当前页面 + N 跳邻居 + 检索结果
-- **多供应商支持**：可切换 OpenAI、Anthropic 等模型（基于现有 settings.json 的 apiBaseUrl/apiKey）
+- **多供应商支持**：非 mock 时用 `settings.apiBaseUrl` / `apiKey` / `model` 构造 OpenAI 兼容 provider（含 LM Studio）
+
+## Pi 依赖如何进仓库
+
+`@earendil-works/pi-agent-core` 和 `@earendil-works/pi-ai` 以 workspace 包放在：
+
+- `vendor/pi-agent-core`（对应上游 `packages/agent` 的构建产物）
+- `vendor/pi-ai`（对应上游 `packages/ai` 的构建产物）
+
+`pnpm-workspace.yaml` 含 `vendor/*`。`packages/agent` 通过 `workspace:*` 引用它们，**不再**使用 `file:../../../my-pi/...`。发行版 / 换机器只需本仓库；不依赖本机 `D:\my-pi`。
+
+vendor 包只保留 `package.json`、`dist/`、`README.md`（与 npm `files` 字段对齐）。根目录 `.gitignore` 对 `vendor/pi-agent-core/dist/` 和 `vendor/pi-ai/dist/` 做了例外，否则全局 `dist/` 规则会把它们忽略掉。
+
+## settings 如何映射到 provider
+
+`packages/sidecar/src/server.ts` 的 `getAgentRunner()`：
+
+| 条件 | 行为 |
+| --- | --- |
+| `settings.mock === true` | `fauxProvider()`，供 smoke / 离线 |
+| 否则 | `createProvider` + `openAIResponsesApi()`，`baseUrl` = `apiBaseUrl`，密钥 = `apiKey`，模型 id = `model` |
+
+因此设置里填的 OpenAI 兼容端点（官方 API、代理、**LM Studio** 的 `http://127.0.0.1:1234/v1` 等）都会进这条循环。`Agent.prompt` 走 `models.streamSimple`，密钥和 baseUrl 来自上述 provider，而不是进程里的 `OPENAI_API_KEY`。`agent_list_providers` 返回当前 runner 里实际注册的 provider/model，不是写死的 GPT/Claude 名单。
+
+mock 模式下 faux 会排队 wiki 工具调用（`list_pages` / `read_page` / `search_pages` 之一，再给文本答复），供 smoke 覆盖工具轨迹，无需真实 LLM。
+
+更换 `vaultPath` / `mock` / `apiBaseUrl` / `apiKey` / `model` 会丢掉 `agentRunner` 并在下次 RPC 时重建，避免打到旧库或旧密钥。
+
+## Session JSON 消息类型
+
+`<vault>/.wikihome/sessions/<sess_*.json>` 的 `messages` 是联合类型，不是只有两句纯文本：
+
+- `user`：`{ role, content, timestamp }`
+- `assistant`：`{ role, content, timestamp, provider?, model?, toolCalls?: [{ id, name, args }], sources?: string[] }`
+- `toolResult`：`{ role, toolCallId, toolName, content, isError, timestamp }`
+
+重启后 `convertToAgentMessages` 会把 `toolCalls` / `toolResult` 回放给 Pi，下一轮能看见上次用过的工具。
 
 ## RPC 方法
 
@@ -236,6 +272,24 @@ Sidecar 提供以下 JSON-RPC 方法（在 `packages/sidecar/src/server.ts` 中�
     },
     {
       "role": "assistant",
+      "content": "",
+      "timestamp": 1704708005000,
+      "provider": "openai",
+      "model": "gpt-4o-mini",
+      "toolCalls": [
+        { "id": "call_1", "name": "search_pages", "args": { "query": "attention" } }
+      ]
+    },
+    {
+      "role": "toolResult",
+      "toolCallId": "call_1",
+      "toolName": "search_pages",
+      "content": "找到 1 个相关页面：\n- [[concepts/attention]]",
+      "isError": false,
+      "timestamp": 1704708008000
+    },
+    {
+      "role": "assistant",
       "content": "根据 [[concepts/attention]]...",
       "timestamp": 1704708015000,
       "provider": "openai",
@@ -321,17 +375,20 @@ Agent 可使用以下工具（封装 WikiEngine，见 `packages/agent/src/tools/
 
 ## 测试
 
-运行 `pnpm smoke` 会测试：
-1. Session 创建、列表、获取、删除
-2. Agent prompt 执行（触发工具循环）
-3. Session 落盘和重启后加载
+运行 sidecar smoke（`node dist/smoke.js` 或 `pnpm smoke`）会测试：
+1. Session 创建、列表、获取
+2. `agent_prompt` 至少使用 `search_pages` / `read_page` / `list_pages` 之一
+3. 同一 session 第二次 prompt 后，落盘含 `toolCalls` 或 `toolResult`
+4. 重启 sidecar 后能读回 session
+5. 非法 session id（如 `../../../etc/passwd`）被拒绝
+6. 更换 `vaultPath` 后 runner 不再列出旧库的 session
 
 ## 后续优化
 
 - [ ] 流式响应：`agent_prompt_stream`（通过 Tauri event channel）
 - [ ] 会话分支：fork session（类似 Pi harness 的 tree navigation）
 - [ ] 上下文压缩：自动 compaction（消息超过 token 预算时）
-- [ ] 模型动态配置：支持 Anthropic、LM Studio 等多端点
+- [ ] 模型动态配置：在 OpenAI 兼容之外再接 Anthropic 等原生 provider
 - [ ] 会话搜索：按内容、页面、时间范围过滤
 
 ## 文件清单
@@ -343,6 +400,7 @@ Agent 可使用以下工具（封装 WikiEngine，见 `packages/agent/src/tools/
 - `packages/agent/src/tools/` - WikiEngine 工具封装
 - `packages/sidecar/src/server.ts` - RPC 方法扩展
 - `packages/sidecar/src/smoke.ts` - 集成测试
+- `vendor/pi-agent-core` / `vendor/pi-ai` - 收进仓库的 Pi 底座（`package.json` + `dist` + `README.md`）
 
 ---
 

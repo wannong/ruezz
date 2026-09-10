@@ -45,6 +45,13 @@ export class AgentRunner {
   }
 
   /**
+   * Get available models from Models collection.
+   */
+  getModels() {
+    return this.models.getModels();
+  }
+
+  /**
    * Initialize storage.
    */
   async init(): Promise<void> {
@@ -84,6 +91,16 @@ export class AgentRunner {
     };
     await this.storage.save(session);
     return session;
+  }
+
+  /**
+   * Generate a short title from the first user message.
+   */
+  private generateTitle(message: string): string {
+    // Take first 50 chars, truncate at word boundary
+    const trimmed = message.trim().slice(0, 50);
+    const lastSpace = trimmed.lastIndexOf(" ");
+    return lastSpace > 20 ? trimmed.slice(0, lastSpace) + "..." : trimmed + (message.length > 50 ? "..." : "");
   }
 
   /**
@@ -133,7 +150,9 @@ export class AgentRunner {
       throw new Error(`Model not found: ${session.model.provider}/${session.model.modelId}`);
     }
 
-    // Initialize agent with session history
+    // Initialize agent with session history. Stream through the Models
+    // collection so mock faux / settings-backed providers are used (not the
+    // global pi-ai compat registry).
     const agent = new Agent({
       initialState: {
         systemPrompt: fullSystemPrompt,
@@ -141,6 +160,8 @@ export class AgentRunner {
         tools,
         messages: this.convertToAgentMessages(session.messages),
       },
+      streamFn: (streamModel, context, options) =>
+        this.models.streamSimple(streamModel, context, options),
     });
 
     // Track tools used and sources
@@ -169,43 +190,115 @@ export class AgentRunner {
     });
 
     // Execute prompt
-    await agent.prompt(message);
+    try {
+      await agent.prompt(message);
+    } catch (err) {
+      // Let Pi errors propagate to RPC layer
+      throw new Error(`Agent execution failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
 
-    // Extract assistant response
-    const lastMessage = agent.state.messages[agent.state.messages.length - 1];
+    const lastAssistant = [...agent.state.messages]
+      .reverse()
+      .find((msg) => msg.role === "assistant");
+    if (
+      lastAssistant?.role === "assistant" &&
+      (lastAssistant.stopReason === "error" || lastAssistant.stopReason === "aborted")
+    ) {
+      throw new Error(
+        lastAssistant.errorMessage || agent.state.errorMessage || "Agent execution failed",
+      );
+    }
+    if (agent.state.errorMessage) {
+      throw new Error(`Agent execution failed: ${agent.state.errorMessage}`);
+    }
+
+    // Extract assistant response and collect all messages from this turn
+    const newMessages = agent.state.messages.slice(this.convertToAgentMessages(session.messages).length);
+    
     let answer = "";
-    if (lastMessage?.role === "assistant") {
-      // Extract text content from assistant message
-      if (Array.isArray(lastMessage.content)) {
-        answer = lastMessage.content
-          .map((c: any) => (c.type === "text" ? c.text : ""))
-          .filter(Boolean)
-          .join("");
-      } else if (typeof lastMessage.content === "string") {
-        answer = lastMessage.content;
-      }
-    }
-
-    // If still no answer, provide a fallback
-    if (!answer) {
-      answer = "Agent 执行完成，但未返回文本响应。";
-    }
-
-    // Update session
-    session.messages.push({
+    const turnMessages: SessionMessage[] = [];
+    
+    // Add user message
+    turnMessages.push({
       role: "user",
       content: message,
       timestamp: Date.now(),
     });
+    
+    // Process all new messages from Pi Agent
+    for (const msg of newMessages) {
+      if (msg.role === "assistant") {
+        // Extract text content
+        const textContent = Array.isArray(msg.content)
+          ? msg.content
+              .filter((c: any) => c.type === "text")
+              .map((c: any) => c.text)
+              .join("")
+          : typeof msg.content === "string"
+            ? msg.content
+            : "";
+        
+        if (textContent) {
+          answer = textContent;
+        }
+        
+        // Extract tool calls
+        const toolCalls = Array.isArray(msg.content)
+          ? msg.content
+              .filter((c: any) => c.type === "toolCall")
+              .map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                args: (c.arguments ?? c.args ?? {}) as Record<string, unknown>,
+              }))
+          : [];
+        
+        turnMessages.push({
+          role: "assistant",
+          content: textContent,
+          timestamp: Date.now(),
+          provider: session.model.provider,
+          model: session.model.modelId,
+          toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+          sources: Array.from(sources),
+        });
+      } else if (msg.role === "toolResult") {
+        // Add tool result message
+        const resultContent = Array.isArray(msg.content)
+          ? msg.content
+              .filter((c: any) => c.type === "text")
+              .map((c: any) => c.text)
+              .join("")
+          : typeof msg.content === "string"
+            ? msg.content
+            : "";
+        
+        turnMessages.push({
+          role: "toolResult",
+          toolCallId: msg.toolCallId,
+          toolName: msg.toolName,
+          content: resultContent,
+          isError: msg.isError || false,
+          timestamp: Date.now(),
+        });
+      }
+    }
 
-    session.messages.push({
-      role: "assistant",
-      content: answer,
-      timestamp: Date.now(),
-      provider: session.model.provider,
-      model: session.model.modelId,
-      sources: Array.from(sources),
-    });
+    // If no answer after successful execution, that's unexpected but not an error
+    if (!answer) {
+      answer = "（Agent 未返回文本响应）";
+    }
+
+    // Update session with all turn messages
+    session.messages.push(...turnMessages);
+
+    // Auto-generate title from first user message if still default
+    if (session.title === "新对话" && session.messages.length >= 1) {
+      const firstUserMsg = session.messages.find((m) => m.role === "user");
+      if (firstUserMsg?.role === "user") {
+        session.title = this.generateTitle(firstUserMsg.content);
+      }
+    }
 
     // Update linked pages
     const allLinkedPages = new Set(session.linkedPageIds);
@@ -255,16 +348,40 @@ export class AgentRunner {
           content: [{ type: "text", text: msg.content }],
           timestamp: msg.timestamp,
         };
-      } else {
+      } else if (msg.role === "assistant") {
+        const content: any[] = [{ type: "text", text: msg.content }];
+        
+        // Add tool calls if present
+        if (msg.toolCalls) {
+          for (const tc of msg.toolCalls) {
+            content.push({
+              type: "toolCall",
+              id: tc.id,
+              name: tc.name,
+              arguments: tc.args,
+            });
+          }
+        }
+        
         return {
           role: "assistant",
-          content: [{ type: "text", text: msg.content }],
+          content,
           provider: msg.provider,
           model: msg.model,
           timestamp: msg.timestamp,
-          stopReason: "end_turn",
+          stopReason: msg.toolCalls && msg.toolCalls.length > 0 ? "toolUse" : "stop",
+        };
+      } else if (msg.role === "toolResult") {
+        return {
+          role: "toolResult",
+          toolCallId: msg.toolCallId,
+          toolName: msg.toolName,
+          content: [{ type: "text", text: msg.content }],
+          isError: msg.isError,
+          timestamp: msg.timestamp,
         };
       }
+      return msg;
     });
   }
 }

@@ -20,7 +20,7 @@ export class SessionStorage {
   }
 
   /**
-   * Generate a unique session ID.
+   * Generate a unique session ID with safe characters only.
    */
   generateId(): string {
     const timestamp = Date.now().toString(36);
@@ -29,19 +29,45 @@ export class SessionStorage {
   }
 
   /**
+   * Validate session ID to prevent path traversal.
+   */
+  private validateSessionId(sessionId: string): void {
+    if (!/^sess_[a-z0-9_]+$/.test(sessionId)) {
+      throw new Error(`Invalid session ID: ${sessionId}`);
+    }
+    if (sessionId.includes("..") || sessionId.includes("/") || sessionId.includes("\\")) {
+      throw new Error(`Session ID contains invalid characters: ${sessionId}`);
+    }
+  }
+
+  /**
    * Get the file path for a session ID.
    */
   private getSessionPath(sessionId: string): string {
+    this.validateSessionId(sessionId);
     return path.join(this.sessionsDir, `${sessionId}.json`);
   }
 
   /**
-   * Save a session to disk.
+   * Save a session to disk atomically (temp file + rename).
    */
   async save(session: AgentSession): Promise<void> {
     const sessionPath = this.getSessionPath(session.id);
+    const tempPath = `${sessionPath}.tmp`;
     const content = JSON.stringify(session, null, 2);
-    await fs.writeFile(sessionPath, content, "utf-8");
+    
+    try {
+      await fs.writeFile(tempPath, content, "utf-8");
+      await fs.rename(tempPath, sessionPath);
+    } catch (err) {
+      // Clean up temp file if rename failed
+      try {
+        await fs.unlink(tempPath);
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw err;
+    }
   }
 
   /**

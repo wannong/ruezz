@@ -16,8 +16,8 @@
   },
   "dependencies": {
     "@wikihome/engine-api": "workspace:*",
-    "@earendil-works/pi-agent-core": "file:../../../my-pi/packages/agent",
-    "@earendil-works/pi-ai": "file:../../../my-pi/packages/ai"
+    "@earendil-works/pi-agent-core": "workspace:*",
+    "@earendil-works/pi-ai": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.8.2"

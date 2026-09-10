@@ -209,11 +209,49 @@ async function main() {
   });
   if (agentPromptRes.error) throw new Error(`agent_prompt failed: ${agentPromptRes.error.message}`);
   const promptResult = agentPromptRes.result as any;
-  console.log("agent_prompt result:", JSON.stringify(promptResult, null, 2));
   if (!promptResult.answer) throw new Error(`expected answer from agent_prompt, got: ${JSON.stringify(promptResult)}`);
   if (!Array.isArray(promptResult.toolsUsed)) throw new Error("expected toolsUsed array");
+  
+  // Assert that at least one wiki lookup tool was used
+  const wikiTools = ["search_pages", "read_page", "list_pages"];
+  const usedWikiTool = promptResult.toolsUsed.some((t: string) => wikiTools.includes(t));
+  if (!usedWikiTool) {
+    throw new Error(`expected at least one wiki tool to be used, got: ${JSON.stringify(promptResult.toolsUsed)}`);
+  }
+
+  // Second prompt to verify tool history is preserved
+  const secondPromptRes = await session.handle({
+    id: 25,
+    method: "agent_prompt",
+    params: {
+      sessionId: createdSession.id,
+      message: "读取第一个页面的内容",
+      currentPageId: sampleId,
+    },
+  });
+  if (secondPromptRes.error) throw new Error(`second agent_prompt failed: ${secondPromptRes.error.message}`);
+  const secondResult = secondPromptRes.result as any;
+  if (!secondResult.answer) throw new Error("expected answer from second prompt");
+
+  // Verify session now has tool-related messages (not just two text messages)
+  const sessionAfterTwoPrompts = secondResult.session;
+  if (sessionAfterTwoPrompts.messages.length < 4) {
+    throw new Error(`expected at least 4 messages after two prompts, got ${sessionAfterTwoPrompts.messages.length}`);
+  }
+  
+  // Check that there are assistant messages with toolCalls or toolResult messages
+  const hasToolCalls = sessionAfterTwoPrompts.messages.some(
+    (m: any) => m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0
+  );
+  const hasToolResults = sessionAfterTwoPrompts.messages.some((m: any) => m.role === "toolResult");
+  
+  if (!hasToolCalls && !hasToolResults) {
+    throw new Error("expected session history to contain tool calls or tool results");
+  }
 
   session.close();
+
+  // Reopen and test session persistence
   const reopened = new SidecarSession({ mock: true });
   if (reopened.getSettings().vaultPath !== root) {
     throw new Error(`expected persisted vault ${root}, got ${reopened.getSettings().vaultPath}`);
@@ -231,6 +269,26 @@ async function main() {
     throw new Error(`expected messages in reloaded session, got ${reloadedSession.messages.length}`);
   }
 
+  // Test session ID validation (invalid path) — handle() returns { error }, does not throw
+  const invalidIdRes = await reopened.handle({
+    id: 26,
+    method: "agent_session_get",
+    params: { id: "../../../etc/passwd" },
+  });
+  if (!invalidIdRes.error || !String(invalidIdRes.error.message).includes("Invalid session ID")) {
+    throw new Error(`expected session ID validation error, got: ${JSON.stringify(invalidIdRes)}`);
+  }
+
+  // Changing vaultPath must rebuild the runner so it does not list the old vault's sessions
+  const otherRoot = await fs.mkdtemp(path.join(os.tmpdir(), "wikihome-smoke-other-"));
+  reopened.setSettings({ mock: true, vaultPath: otherRoot });
+  const listAfterSettingsChange = await reopened.handle({ id: 27, method: "agent_session_list", params: {} });
+  if (listAfterSettingsChange.error) throw new Error(listAfterSettingsChange.error.message);
+  const sessionsAfterSwitch = (listAfterSettingsChange.result as { sessions: Array<{ id: string }> }).sessions;
+  if (sessionsAfterSwitch.some((s) => s.id === createdSession.id)) {
+    throw new Error("agent runner still listed sessions from the previous vault after vaultPath change");
+  }
+
   reopened.close();
   console.log("smoke ok", {
     root,
@@ -238,6 +296,7 @@ async function main() {
     answerPreview: answer.slice(0, 80),
     agentSessionId: createdSession.id,
     agentMessages: reloadedSession.messages.length,
+    toolsUsed: promptResult.toolsUsed.join(","),
   });
 }
 
