@@ -1,8 +1,8 @@
 import type { AskResult, WikiEngine } from "@wikihome/engine-api";
 
 /**
- * Thin ask agent. MVP delegates to the engine's compiled-wiki ask.
- * Future: multi-step tool loop that only uses engine-api primitives.
+ * Legacy: Thin ask agent. MVP delegates to the engine's compiled-wiki ask.
+ * @deprecated Use agent-runner with tool loop instead.
  */
 export async function askQuestion(engine: WikiEngine, root: string, question: string): Promise<AskResult> {
   const trimmed = question.trim();
@@ -11,3 +11,10 @@ export async function askQuestion(engine: WikiEngine, root: string, question: st
   }
   return engine.ask(root, trimmed);
 }
+
+// Export types, storage, and runner
+export * from "./types.js";
+export { SessionStorage } from "./session-storage.js";
+export { AgentRunner } from "./agent-runner.js";
+export { buildAgentContext } from "./context-builder.js";
+export { createWikiTools } from "./tools/index.js";

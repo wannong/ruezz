@@ -15,7 +15,9 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@wikihome/engine-api": "workspace:*"
+    "@wikihome/engine-api": "workspace:*",
+    "@earendil-works/pi-agent-core": "file:../../../my-pi/packages/agent",
+    "@earendil-works/pi-ai": "file:../../../my-pi/packages/ai"
   },
   "devDependencies": {
     "typescript": "^5.8.2"

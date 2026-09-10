@@ -170,13 +170,75 @@ async function main() {
     throw new Error(`expected wiki/notes/hello.md, got ${revealPath}`);
   }
 
+  // Test agent session management
+  const createSessionRes = await session.handle({
+    id: 20,
+    method: "agent_session_create",
+    params: { title: "测试会话", currentPageId: sampleId },
+  });
+  if (createSessionRes.error) throw new Error(createSessionRes.error.message);
+  const createdSession = (createSessionRes.result as any).session;
+  if (!createdSession.id) throw new Error("expected session id");
+
+  const listSessionsRes = await session.handle({ id: 21, method: "agent_session_list", params: {} });
+  if (listSessionsRes.error) throw new Error(listSessionsRes.error.message);
+  const sessions = (listSessionsRes.result as any).sessions;
+  if (!sessions.some((s: any) => s.id === createdSession.id)) {
+    throw new Error(`expected created session in list, got ${JSON.stringify(sessions)}`);
+  }
+
+  const getSessionRes = await session.handle({
+    id: 22,
+    method: "agent_session_get",
+    params: { id: createdSession.id },
+  });
+  if (getSessionRes.error) throw new Error(getSessionRes.error.message);
+  const retrievedSession = (getSessionRes.result as any).session;
+  if (retrievedSession.id !== createdSession.id) {
+    throw new Error(`expected session ${createdSession.id}, got ${retrievedSession.id}`);
+  }
+
+  const agentPromptRes = await session.handle({
+    id: 23,
+    method: "agent_prompt",
+    params: {
+      sessionId: createdSession.id,
+      message: "列出所有页面",
+      currentPageId: sampleId,
+    },
+  });
+  if (agentPromptRes.error) throw new Error(`agent_prompt failed: ${agentPromptRes.error.message}`);
+  const promptResult = agentPromptRes.result as any;
+  console.log("agent_prompt result:", JSON.stringify(promptResult, null, 2));
+  if (!promptResult.answer) throw new Error(`expected answer from agent_prompt, got: ${JSON.stringify(promptResult)}`);
+  if (!Array.isArray(promptResult.toolsUsed)) throw new Error("expected toolsUsed array");
+
   session.close();
   const reopened = new SidecarSession({ mock: true });
   if (reopened.getSettings().vaultPath !== root) {
     throw new Error(`expected persisted vault ${root}, got ${reopened.getSettings().vaultPath}`);
   }
+
+  // Verify session persistence after restart
+  const reloadedSessionRes = await reopened.handle({
+    id: 24,
+    method: "agent_session_get",
+    params: { id: createdSession.id },
+  });
+  if (reloadedSessionRes.error) throw new Error(reloadedSessionRes.error.message);
+  const reloadedSession = (reloadedSessionRes.result as any).session;
+  if (reloadedSession.messages.length < 2) {
+    throw new Error(`expected messages in reloaded session, got ${reloadedSession.messages.length}`);
+  }
+
   reopened.close();
-  console.log("smoke ok", { root, pages: list.length, answerPreview: answer.slice(0, 80) });
+  console.log("smoke ok", {
+    root,
+    pages: list.length,
+    answerPreview: answer.slice(0, 80),
+    agentSessionId: createdSession.id,
+    agentMessages: reloadedSession.messages.length,
+  });
 }
 
 main().catch((err) => {

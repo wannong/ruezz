@@ -1,4 +1,4 @@
-import { askQuestion } from "@wikihome/agent";
+import { AgentRunner, askQuestion } from "@wikihome/agent";
 import {
   VaultSettingsSchema,
   type VaultSettings,
@@ -25,6 +25,7 @@ export type RpcResponse = {
 export class SidecarSession {
   private settings: VaultSettings;
   private engine: WikiEngine;
+  private agentRunner: AgentRunner | null = null;
 
   constructor(initial?: Partial<VaultSettings>) {
     this.settings = VaultSettingsSchema.parse({
@@ -32,6 +33,32 @@ export class SidecarSession {
       ...initial,
     });
     this.engine = createEngine(this.settings);
+  }
+
+  private async getAgentRunner(): Promise<AgentRunner> {
+    if (!this.agentRunner && this.settings.vaultPath) {
+      // Create Models collection with faux provider for mock mode or real provider
+      const { createModels } = await import("@earendil-works/pi-ai");
+      const models = createModels();
+      
+      if (this.settings.mock) {
+        // Use faux provider for testing
+        const { fauxProvider } = await import("@earendil-works/pi-ai");
+        const handle = fauxProvider();
+        models.setProvider(handle.provider);
+      } else {
+        // Use OpenAI provider (requires standard OpenAI setup)
+        const { openaiProvider } = await import("@earendil-works/pi-ai/providers/openai");
+        models.setProvider(openaiProvider());
+      }
+      
+      this.agentRunner = new AgentRunner(this.engine, this.settings.vaultPath, models);
+      await this.agentRunner.init();
+    }
+    if (!this.agentRunner) {
+      throw new Error("Agent runner not initialized: vault path not set");
+    }
+    return this.agentRunner;
   }
 
   getSettings(): VaultSettings {
@@ -164,6 +191,84 @@ export class SidecarSession {
           this.requireVault(),
           String(params.id ?? params.pageId ?? ""),
         );
+      case "agent_session_list": {
+        const runner = await this.getAgentRunner();
+        const sessions = await runner.listSessions();
+        return { sessions };
+      }
+      case "agent_session_create": {
+        const runner = await this.getAgentRunner();
+        const session = await runner.createSession({
+          title: params.title ? String(params.title) : undefined,
+          currentPageId: params.currentPageId ? String(params.currentPageId) : undefined,
+          model: params.model
+            ? {
+                provider: String((params.model as any).provider),
+                modelId: String((params.model as any).modelId),
+              }
+            : undefined,
+        });
+        return { session };
+      }
+      case "agent_session_get": {
+        const runner = await this.getAgentRunner();
+        const session = await runner.getSession(String(params.id ?? params.sessionId ?? ""));
+        if (!session) throw new Error(`Session not found: ${params.id ?? params.sessionId}`);
+        return { session };
+      }
+      case "agent_session_delete": {
+        const runner = await this.getAgentRunner();
+        const deleted = await runner.deleteSession(String(params.id ?? params.sessionId ?? ""));
+        return { ok: deleted };
+      }
+      case "agent_prompt": {
+        const runner = await this.getAgentRunner();
+        const sessionId = String(params.sessionId ?? "");
+        const message = String(params.message ?? params.question ?? "");
+        const currentPageId = params.currentPageId ? String(params.currentPageId) : undefined;
+        const graphDepth = params.graphDepth ? Number(params.graphDepth) : 1;
+
+        const result = await runner.prompt(sessionId, message, {
+          currentPageId,
+          graphDepth,
+        });
+
+        return {
+          answer: result.answer,
+          sources: result.sources,
+          linkedPageIds: result.linkedPageIds,
+          toolsUsed: result.toolsUsed,
+          session: result.session,
+        };
+      }
+      case "agent_set_model": {
+        const runner = await this.getAgentRunner();
+        const sessionId = String(params.sessionId ?? "");
+        const provider = String(params.provider ?? "");
+        const modelId = String(params.model ?? params.modelId ?? "");
+        const session = await runner.setModel(sessionId, provider, modelId);
+        if (!session) throw new Error(`Session not found: ${sessionId}`);
+        return { session };
+      }
+      case "agent_list_providers": {
+        // Return available providers (hardcoded for now, based on settings)
+        return {
+          providers: [
+            {
+              name: "openai",
+              models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+            },
+            {
+              name: "anthropic",
+              models: ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229"],
+            },
+            {
+              name: "openai-compatible",
+              models: ["custom-model"],
+            },
+          ],
+        };
+      }
       case "ping":
         return { ok: true, version: "0.1.0" };
       default:
@@ -173,5 +278,6 @@ export class SidecarSession {
 
   close(): void {
     this.engine.close?.();
+    this.agentRunner = null;
   }
 }
