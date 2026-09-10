@@ -270,10 +270,26 @@ textarea:focus {
   -webkit-app-region: drag;
 }
 
-.titlebar-label::before {
+.titlebar-label::before,
+.titlebar-session::before {
   content: "·";
   margin-right: 0.55rem;
   color: var(--line-strong);
+}
+
+.titlebar-session {
+  color: var(--muted);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 36vw;
+  app-region: drag;
+  -webkit-app-region: drag;
+}
+
+.titlebar-session::before {
+  margin-left: 0.15rem;
 }
 
 .titlebar-controls {
@@ -953,6 +969,75 @@ textarea:focus {
   flex-direction: column;
 }
 
+.agent-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.35rem;
+  flex-shrink: 0;
+  min-height: var(--pane-header-height);
+  padding: 0.2rem 0.45rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.agent-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 4px;
+}
+
+.agent-toolbar select {
+  height: 24px;
+  min-width: 0;
+  font-size: 0.75rem;
+  padding: 0 0.25rem;
+  border: 1px solid var(--line);
+  background: var(--input);
+  color: var(--ink);
+  border-radius: 4px;
+}
+
+.agent-toolbar-session {
+  flex: 1 1 7rem;
+}
+
+.agent-toolbar-model {
+  flex: 1 1 6rem;
+}
+
+.agent-toolbar-hops {
+  flex: 0 0 4.2rem;
+  width: 4.2rem;
+}
+
+.agent-toolbar-label {
+  min-width: 0;
+  flex: 1 1 6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  user-select: none;
+}
+
+.agent-filter input {
+  width: auto;
+  margin: 0;
+}
+
 .agent-model-bar {
   flex-shrink: 0;
   padding: 0.35rem 0.7rem;
@@ -986,6 +1071,42 @@ textarea:focus {
   gap: 0.5rem;
   font-weight: 600;
   font-size: 0.85rem;
+}
+
+.provider-picker {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.provider-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.provider-picker-item:last-child {
+  border-bottom: none;
+}
+
+.provider-picker-name {
+  font-weight: 600;
+}
+
+.provider-picker-meta {
+  font-size: 0.75rem;
+  color: var(--muted);
 }
 
 .provider-card {

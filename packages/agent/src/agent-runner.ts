@@ -1,11 +1,13 @@
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { Models } from "@earendil-works/pi-ai";
 import type { WikiEngine } from "@wikihome/engine-api";
+import { collectNeighborIds } from "./neighbors.js";
 import { SessionStorage } from "./session-storage.js";
 import { createWikiTools } from "./tools/index.js";
 import type {
   AgentPromptResult,
   AgentSession,
+  AgentStreamEvent,
   ContextBuildOptions,
   CreateSessionOptions,
   SessionMessage,
@@ -145,6 +147,7 @@ export class AgentRunner {
     sessionId: string,
     message: string,
     contextOptions?: ContextBuildOptions,
+    onEvent?: (event: AgentStreamEvent) => void,
   ): Promise<AgentPromptResult> {
     const session = await this.storage.load(sessionId);
     if (!session) {
@@ -152,8 +155,25 @@ export class AgentRunner {
     }
 
     const currentPageId = contextOptions?.currentPageId;
+    const graphDepth = Number.isFinite(contextOptions?.graphDepth)
+      ? Math.max(0, Math.min(3, Math.floor(contextOptions!.graphDepth!)))
+      : 0;
+    let neighborLine = "";
+    if (currentPageId && graphDepth > 0) {
+      try {
+        const graph = await this.engine.getGraph(this.vaultRoot);
+        const neighborIds = collectNeighborIds(graph, currentPageId, graphDepth);
+        if (neighborIds.length > 0) {
+          neighborLine = `\n图谱 ${graphDepth} 跳邻居（仅 ID，无正文）：${neighborIds
+            .map((id) => `[[${id}]]`)
+            .join(" ")}`;
+        }
+      } catch {
+        /* graph may be empty or not compiled yet */
+      }
+    }
     const fullSystemPrompt = currentPageId
-      ? `${SYSTEM_PROMPT}\n\n用户当前打开的页面是 [[${currentPageId}]]。需要正文、邻居或检索结果时请自行调用工具。`
+      ? `${SYSTEM_PROMPT}\n\n用户当前打开的页面是 [[${currentPageId}]]。需要正文、邻居或检索结果时请自行调用工具。${neighborLine}`
       : SYSTEM_PROMPT;
 
     // Create tools
@@ -194,8 +214,25 @@ export class AgentRunner {
     const sources = new Set<string>();
 
     agent.subscribe((event) => {
+      if (event.type === "message_update" && event.message?.role === "assistant") {
+        const text = assistantTextFromMessage(event.message);
+        if (text) emitStream(onEvent, { type: "text", text });
+      }
+      if (event.type === "tool_execution_start") {
+        emitStream(onEvent, {
+          type: "tool_start",
+          name: event.toolName,
+          id: event.toolCallId,
+        });
+      }
       if (event.type === "tool_execution_end") {
         toolsUsed.add(event.toolName);
+        emitStream(onEvent, {
+          type: "tool_end",
+          name: event.toolName,
+          id: event.toolCallId,
+          isError: Boolean(event.isError),
+        });
         // Extract sources from tool result details
         const details = event.result.details as any;
         if (details?.pageId) {
@@ -413,4 +450,26 @@ export class AgentRunner {
       return msg;
     });
   }
+}
+
+function emitStream(onEvent: ((event: AgentStreamEvent) => void) | undefined, event: AgentStreamEvent): void {
+  try {
+    onEvent?.(event);
+  } catch {
+    /* UI/transport emit must not break the agent loop */
+  }
+}
+
+function assistantTextFromMessage(message: { content?: unknown }): string {
+  const content = message.content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((block) => {
+      if (block && typeof block === "object" && (block as { type?: string }).type === "text") {
+        return String((block as { text?: string }).text ?? "");
+      }
+      return "";
+    })
+    .join("");
 }

@@ -98,4 +98,12 @@ export interface AgentPromptResult {
 export interface ContextBuildOptions {
   /** Page currently open in the editor, if any */
   currentPageId?: string;
+  /** Graph hops around the current page. 0 = current page id only; 1–3 = neighbor IDs, no bodies. */
+  graphDepth?: number;
 }
+
+/** Live events while `prompt()` is running. */
+export type AgentStreamEvent =
+  | { type: "text"; text: string }
+  | { type: "tool_start"; name: string; id: string }
+  | { type: "tool_end"; name: string; id: string; isError?: boolean };

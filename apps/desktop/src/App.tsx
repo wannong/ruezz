@@ -23,6 +23,7 @@ export default function App() {
   const [settings, setSettings] = useState<VaultSettings>(defaultSettings);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [agentTitle, setAgentTitle] = useState<string | null>(null);
 
   useEffect(() => {
     applyTheme(theme);
@@ -98,6 +99,7 @@ export default function App() {
     <div className="app-shell">
       <TitleBar
         label={settings.vaultPath ? vaultName(settings.vaultPath) : "WikiHome"}
+        sessionTitle={screen === "main" ? agentTitle : null}
         hasVault={Boolean(settings.vaultPath)}
         onNewVault={() => void chooseVault("new")}
         onOpenVault={() => void chooseVault("open")}
@@ -123,6 +125,7 @@ export default function App() {
             setError={setError}
             busy={busy}
             setBusy={setBusy}
+            onAgentTitle={setAgentTitle}
           />
         )}
       </div>

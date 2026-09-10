@@ -6,6 +6,7 @@ import { ContextMenu } from "./ContextMenu";
 
 type TitleBarProps = {
   label: string;
+  sessionTitle?: string | null;
   hasVault: boolean;
   onNewVault: () => void;
   onOpenVault: () => void;
@@ -14,6 +15,7 @@ type TitleBarProps = {
 
 export function TitleBar({
   label,
+  sessionTitle,
   hasVault,
   onNewVault,
   onOpenVault,
@@ -73,6 +75,11 @@ export function TitleBar({
         {label && label !== "WikiHome" && (
           <span className="titlebar-label" data-tauri-drag-region>
             {label}
+          </span>
+        )}
+        {sessionTitle && (
+          <span className="titlebar-session" data-tauri-drag-region title={sessionTitle}>
+            {sessionTitle}
           </span>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { AgentRunner, askQuestion } from "@wikihome/agent";
+import { AgentRunner, askQuestion, type AgentStreamEvent } from "@wikihome/agent";
 import {
   VaultSettingsSchema,
   ensureLlmProviders,
@@ -189,9 +189,12 @@ export class SidecarSession {
     return this.settings.vaultPath;
   }
 
-  async handle(req: RpcRequest): Promise<RpcResponse> {
+  async handle(
+    req: RpcRequest,
+    emit?: (event: AgentStreamEvent) => void,
+  ): Promise<RpcResponse> {
     try {
-      const result = await this.dispatch(req.method, req.params ?? {});
+      const result = await this.dispatch(req.method, req.params ?? {}, emit);
       return { id: req.id, result };
     } catch (err) {
       return {
@@ -201,7 +204,11 @@ export class SidecarSession {
     }
   }
 
-  private async dispatch(method: string, params: Record<string, unknown>): Promise<unknown> {
+  private async dispatch(
+    method: string,
+    params: Record<string, unknown>,
+    emit?: (event: AgentStreamEvent) => void,
+  ): Promise<unknown> {
     switch (method) {
       case "settings_get":
         return this.getSettings();
@@ -340,10 +347,18 @@ export class SidecarSession {
         const sessionId = String(params.sessionId ?? "");
         const message = String(params.message ?? params.question ?? "");
         const currentPageId = params.currentPageId ? String(params.currentPageId) : undefined;
+        const graphDepthRaw = Number(params.graphDepth ?? 0);
+        const graphDepth = Number.isFinite(graphDepthRaw) ? graphDepthRaw : 0;
 
-        const result = await runner.prompt(sessionId, message, {
-          currentPageId,
-        });
+        const result = await runner.prompt(
+          sessionId,
+          message,
+          {
+            currentPageId,
+            graphDepth,
+          },
+          emit,
+        );
 
         return {
           answer: result.answer,

@@ -1,5 +1,5 @@
 import { PanelRightClose } from "lucide-react";
-import type { AgentSessionMessage, GraphDto, PageSummary } from "../api";
+import type { AgentSessionMessage, AgentSessionSummary, GraphDto, PageSummary } from "../api";
 import { attachResizeX } from "../lib/pointerResize";
 import type { OutlineItem } from "../lib/outline";
 import type { Theme } from "../theme";
@@ -18,9 +18,16 @@ type RightSidebarProps = {
   messages: AgentSessionMessage[];
   linkedPageIds: string[];
   pendingUser: string | null;
+  streamingText: string;
+  streamingTools: Array<{ id: string; name: string }>;
   draft: string;
   busy: boolean;
   pages: PageSummary[];
+  sessions: AgentSessionSummary[];
+  sessionId: string | null;
+  filterLinked: boolean;
+  filterDisabled: boolean;
+  graphDepth: number;
   outline: OutlineItem[];
   pageId: string | null;
   graph: GraphDto | null;
@@ -34,6 +41,10 @@ type RightSidebarProps = {
   modelValue: string;
   modelGroups: Array<{ providerId: string; providerName: string; models: string[] }>;
   mock: boolean;
+  onNewChat: () => void;
+  onSelectSession: (id: string) => void;
+  onFilterLinked: (value: boolean) => void;
+  onGraphDepth: (depth: number) => void;
   onSwitchModel: (providerId: string, modelId: string) => void;
   onResize: (dx: number) => void;
   onCollapse: () => void;
@@ -48,9 +59,16 @@ export function RightSidebar({
   messages,
   linkedPageIds,
   pendingUser,
+  streamingText,
+  streamingTools,
   draft,
   busy,
   pages,
+  sessions,
+  sessionId,
+  filterLinked,
+  filterDisabled,
+  graphDepth,
   outline,
   pageId,
   graph,
@@ -66,6 +84,10 @@ export function RightSidebar({
   modelValue,
   modelGroups,
   mock,
+  onNewChat,
+  onSelectSession,
+  onFilterLinked,
+  onGraphDepth,
   onSwitchModel,
 }: RightSidebarProps) {
   if (collapsed) return null;
@@ -105,9 +127,16 @@ export function RightSidebar({
           messages={messages}
           linkedPageIds={linkedPageIds}
           pendingUser={pendingUser}
+          streamingText={streamingText}
+          streamingTools={streamingTools}
           draft={draft}
           busy={busy}
           pages={pages}
+          sessions={sessions}
+          sessionId={sessionId}
+          filterLinked={filterLinked}
+          filterDisabled={filterDisabled}
+          graphDepth={graphDepth}
           onDraft={onDraft}
           onSend={onSend}
           onOpen={onOpen}
@@ -116,6 +145,10 @@ export function RightSidebar({
           modelValue={modelValue}
           modelGroups={modelGroups}
           mock={mock}
+          onNewChat={onNewChat}
+          onSelectSession={onSelectSession}
+          onFilterLinked={onFilterLinked}
+          onGraphDepth={onGraphDepth}
           onSwitchModel={onSwitchModel}
         />
       )}

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   isTauriRuntime,
+  type AgentSession,
   type AgentSessionMessage,
+  type AgentSessionSummary,
   type GraphDto,
   type PageContent,
   type PageSummary,
@@ -13,7 +15,7 @@ import { parseOutline } from "../lib/outline";
 import { markdownBody } from "../lib/noteId";
 import { joinWikiId, parentWikiId, pasteDest, type WikiClip } from "../lib/fileTree";
 import { tabKey, type Tab } from "../lib/tabs";
-import { activeProviderIdOf, modelSwitchKey, providersOf, syncSettings } from "../lib/llmProviders";
+import { activeProviderIdOf, modelSwitchKey, providersOf, syncSettings, uniqueModelIds } from "../lib/llmProviders";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import type { Theme } from "../theme";
 import { PanelRightOpen } from "lucide-react";
@@ -37,6 +39,7 @@ type WorkspaceProps = {
   setError: (message: string | null) => void;
   busy: boolean;
   setBusy: (busy: boolean) => void;
+  onAgentTitle?: (title: string | null) => void;
 };
 
 const LEFT_MIN = 180;
@@ -48,6 +51,12 @@ function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
+function clampHops(n: unknown): number {
+  const value = Number(n);
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(3, Math.max(0, Math.round(value)));
+}
+
 export function Workspace({
   settings,
   onSettings,
@@ -57,6 +66,7 @@ export function Workspace({
   setError,
   busy,
   setBusy,
+  onAgentTitle,
 }: WorkspaceProps) {
   const narrow = useMediaQuery("(max-width: 960px)");
   const [pages, setPages] = useState<PageSummary[]>([]);
@@ -81,12 +91,20 @@ export function Workspace({
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [graph, setGraph] = useState<GraphDto | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<AgentSessionSummary[]>([]);
   const [messages, setMessages] = useState<AgentSessionMessage[]>([]);
   const [linkedPageIds, setLinkedPageIds] = useState<string[]>([]);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
+  const [streamingText, setStreamingText] = useState("");
+  const [streamingTools, setStreamingTools] = useState<Array<{ id: string; name: string }>>([]);
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [filterLinked, setFilterLinked] = useState(() => loadPref("agentFilterLinked", false));
+  const [graphDepth, setGraphDepth] = useState(() => clampHops(loadPref("agentGraphDepth", 0)));
+  const [runnerProviders, setRunnerProviders] = useState<Array<{ name: string; models: string[] }>>([]);
   const sendingRef = useRef(false);
+  const sessionLoadGen = useRef(0);
 
   const activeTab = tabs.find((t) => tabKey(t) === activeKey) ?? null;
   const activePageId = activeTab?.kind === "page" ? activeTab.id : null;
@@ -94,16 +112,30 @@ export function Workspace({
   const modelMissing = !settings.mock && !settings.model.trim();
   const modelProviders = providersOf(settings);
   const activeProviderId = activeProviderIdOf(settings, modelProviders);
-  const modelGroups = modelProviders
-    .map((provider) => ({
-      providerId: provider.id,
-      providerName: provider.name,
-      models:
-        provider.id === activeProviderId
-          ? [...new Set([settings.model, ...provider.models].filter(Boolean))]
-          : provider.models,
-    }))
-    .filter((group) => group.models.length > 0);
+  const modelGroups = useMemo(() => {
+    const fromSettings = modelProviders
+      .map((provider) => ({
+        providerId: provider.id,
+        providerName: provider.name,
+        models:
+          provider.id === activeProviderId
+            ? uniqueModelIds([
+                settings.model,
+                ...provider.models,
+                ...runnerProviders.flatMap((item) => item.models),
+              ])
+            : provider.models,
+      }))
+      .filter((group) => group.models.length > 0);
+    if (fromSettings.length > 0) return fromSettings;
+    return runnerProviders
+      .map((provider) => ({
+        providerId: provider.name,
+        providerName: provider.name === "openai-compatible" ? "当前端点" : provider.name,
+        models: provider.models,
+      }))
+      .filter((group) => group.models.length > 0);
+  }, [modelProviders, activeProviderId, settings.model, runnerProviders]);
   const modelValue = modelSwitchKey(activeProviderId, settings.model);
   const modelLabel = settings.mock
     ? "模型：Mock（不走 API）"
@@ -184,20 +216,67 @@ export function Workspace({
     });
   }, [loadPages, loadGraph, onError]);
 
+  const applySession = useCallback(
+    (session: AgentSession) => {
+      setSessionId(session.id);
+      setMessages(session.messages);
+      setLinkedPageIds(session.linkedPageIds);
+      setSessions((prev) => {
+        const summary: AgentSessionSummary = {
+          id: session.id,
+          title: session.title,
+          createdAt: session.createdAt,
+          updatedAt: session.updatedAt,
+          model: session.model,
+          messageCount: session.messages.length,
+          linkedPageIds: session.linkedPageIds,
+        };
+        const index = prev.findIndex((item) => item.id === session.id);
+        if (index < 0) return [summary, ...prev];
+        const next = [...prev];
+        next[index] = summary;
+        return next;
+      });
+      savePref(`agentSession:${settings.vaultPath}`, session.id);
+      onAgentTitle?.(session.title || "新对话");
+    },
+    [onAgentTitle, settings.vaultPath],
+  );
+
+  const refreshSessions = useCallback(async () => {
+    const { sessions: list } = await api.agentSessionList();
+    setSessions(list);
+    return list;
+  }, []);
+
+  const refreshRunnerProviders = useCallback(async () => {
+    try {
+      const { providers } = await api.agentListProviders();
+      setRunnerProviders(providers);
+    } catch {
+      setRunnerProviders([]);
+    }
+  }, []);
+
   useEffect(() => {
+    const gen = ++sessionLoadGen.current;
     let cancelled = false;
     void (async () => {
       try {
-        const { sessions } = await api.agentSessionList();
-        if (cancelled) return;
-        if (!sessions.length) {
+        await refreshRunnerProviders();
+        const list = await refreshSessions();
+        if (cancelled || sessionLoadGen.current !== gen) return;
+        if (!list.length) {
           setSessionId(null);
           setMessages([]);
           setLinkedPageIds([]);
+          onAgentTitle?.(null);
           return;
         }
-        const { session } = await api.agentSessionGet(sessions[0].id);
-        if (cancelled) return;
+        const saved = loadPref<string | null>(`agentSession:${settings.vaultPath}`, null);
+        const pick = list.find((item) => item.id === saved) ?? list[0];
+        const { session } = await api.agentSessionGet(pick.id);
+        if (cancelled || sessionLoadGen.current !== gen) return;
         let current = session;
         if (!settings.mock && settings.model.trim() && session.model.modelId !== settings.model) {
           const updated = await api.agentSetModel({
@@ -207,18 +286,16 @@ export function Workspace({
           });
           current = updated.session;
         }
-        if (cancelled) return;
-        setSessionId(current.id);
-        setMessages(current.messages);
-        setLinkedPageIds(current.linkedPageIds);
+        if (cancelled || sessionLoadGen.current !== gen) return;
+        applySession(current);
       } catch (e) {
-        if (!cancelled) onError(e instanceof Error ? e.message : String(e));
+        if (!cancelled && sessionLoadGen.current === gen) onError(e instanceof Error ? e.message : String(e));
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [onError, settings.mock, settings.model]);
+  }, [applySession, onAgentTitle, onError, refreshRunnerProviders, refreshSessions, settings.vaultPath]);
 
   useEffect(() => {
     if (!notice) return;
@@ -238,6 +315,12 @@ export function Workspace({
   useEffect(() => {
     savePref("rightWidth", rightWidth);
   }, [rightWidth]);
+  useEffect(() => {
+    savePref("agentFilterLinked", filterLinked);
+  }, [filterLinked]);
+  useEffect(() => {
+    savePref("agentGraphDepth", graphDepth);
+  }, [graphDepth]);
 
   useEffect(() => {
     if (!activePageId) return;
@@ -518,29 +601,44 @@ export function Workspace({
 
   async function sendMessage() {
     const text = draft.trim();
-    if (!text || busy || sendingRef.current) return;
+    if (!text || agentBusy || sendingRef.current) return;
     sendingRef.current = true;
     setDraft("");
     setPendingUser(text);
-    setBusy(true);
+    setStreamingText("");
+    setStreamingTools([]);
+    setAgentBusy(true);
     setError(null);
     try {
       let id = sessionId;
       if (!id) {
+        sessionLoadGen.current += 1;
         const created = await api.agentSessionCreate({
           currentPageId: activePageId ?? undefined,
         });
         id = created.session.id;
-        setSessionId(id);
+        applySession(created.session);
       }
-      const result = await api.agentPrompt({
-        sessionId: id,
-        message: text,
-        currentPageId: activePageId ?? undefined,
-      });
-      setSessionId(result.session.id);
-      setMessages(result.session.messages);
-      setLinkedPageIds(result.session.linkedPageIds);
+      const result = await api.agentPromptStream(
+        {
+          sessionId: id,
+          message: text,
+          currentPageId: activePageId ?? undefined,
+          graphDepth,
+        },
+        (event) => {
+          if (event.type === "text") setStreamingText(event.text);
+          if (event.type === "tool_start") {
+            setStreamingTools((tools) =>
+              tools.some((tool) => tool.id === event.id)
+                ? tools
+                : [...tools, { id: event.id, name: event.name }],
+            );
+          }
+        },
+      );
+      applySession(result.session);
+      await refreshSessions();
       await loadPages();
       await loadGraph();
     } catch (e) {
@@ -548,8 +646,35 @@ export function Workspace({
       onError(msg);
     } finally {
       setPendingUser(null);
+      setStreamingText("");
+      setStreamingTools([]);
       sendingRef.current = false;
-      setBusy(false);
+      setAgentBusy(false);
+    }
+  }
+
+  async function newChat() {
+    if (agentBusy) return;
+    sessionLoadGen.current += 1;
+    try {
+      const created = await api.agentSessionCreate({
+        currentPageId: activePageId ?? undefined,
+      });
+      applySession(created.session);
+      await refreshSessions();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function selectSession(id: string) {
+    if (agentBusy || id === sessionId) return;
+    sessionLoadGen.current += 1;
+    try {
+      const { session } = await api.agentSessionGet(id);
+      applySession(session);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -557,17 +682,21 @@ export function Workspace({
     if (!modelId.trim() || (providerId === activeProviderId && modelId === settings.model && !settings.mock)) {
       return;
     }
-    const next = { ...syncSettings(settings, modelProviders, providerId, modelId), mock: false };
+    const settingsProvider = modelProviders.some((provider) => provider.id === providerId);
     try {
-      await api.settingsSet(next);
-      onSettings(next);
+      if (settingsProvider) {
+        const next = { ...syncSettings(settings, modelProviders, providerId, modelId), mock: false };
+        await api.settingsSet(next);
+        onSettings(next);
+      }
       if (sessionId) {
         await api.agentSetModel({
           sessionId,
-          provider: "openai-compatible",
+          provider: settingsProvider ? "openai-compatible" : providerId,
           model: modelId,
         });
       }
+      await refreshRunnerProviders();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     }
@@ -590,6 +719,7 @@ export function Workspace({
           model: saved.model,
         });
       }
+      await refreshRunnerProviders();
       await loadPages();
       await loadGraph();
       setSettingsOpen(false);
@@ -678,6 +808,13 @@ export function Workspace({
       : (activePage?.body ?? "");
   const outline = outlineSource ? parseOutline(outlineSource) : [];
   const activeDirty = Boolean(activePageId && isDirty(activePageId));
+  const visibleSessions = useMemo(() => {
+    if (!filterLinked || !activePageId) return sessions;
+    const matched = sessions.filter(
+      (session) => session.linkedPageIds.includes(activePageId) || session.id === sessionId,
+    );
+    return matched;
+  }, [filterLinked, activePageId, sessions, sessionId]);
 
   const jumpHeading = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -780,9 +917,16 @@ export function Workspace({
           messages={messages}
           linkedPageIds={linkedPageIds}
           pendingUser={pendingUser}
+          streamingText={streamingText}
+          streamingTools={streamingTools}
           draft={draft}
-          busy={busy}
+          busy={agentBusy}
           pages={pages}
+          sessions={visibleSessions}
+          sessionId={sessionId}
+          filterLinked={filterLinked}
+          filterDisabled={!activePageId}
+          graphDepth={graphDepth}
           outline={outline}
           pageId={activePageId}
           graph={graph}
@@ -798,6 +942,10 @@ export function Workspace({
           modelValue={modelValue}
           modelGroups={modelGroups}
           mock={settings.mock}
+          onNewChat={() => void newChat()}
+          onSelectSession={(id) => void selectSession(id)}
+          onFilterLinked={setFilterLinked}
+          onGraphDepth={(depth) => setGraphDepth(clampHops(depth))}
           onSwitchModel={(providerId, modelId) => void switchModel(providerId, modelId)}
         />
       </div>
@@ -805,7 +953,7 @@ export function Workspace({
         vaultPath={settings.vaultPath}
         pageCount={pages.length}
         currentId={activePageId}
-        busy={busy}
+        busy={busy || agentBusy}
         notice={notice}
         dirty={activeDirty}
         saving={noteSaving}

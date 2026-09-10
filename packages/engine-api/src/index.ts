@@ -42,36 +42,48 @@ export function isPresetProviderId(id: string): boolean {
   return PRESET_LLM_PROVIDERS.some((provider) => provider.id === id);
 }
 
+function adoptPresetIdentity(provider: LlmProvider): LlmProvider {
+  const labeled = labelCustomProvider(provider);
+  const match = PRESET_LLM_PROVIDERS.find(
+    (preset) =>
+      labeled.id === preset.id ||
+      (labeled.apiBaseUrl.trim() &&
+        normalizeProviderBase(labeled.apiBaseUrl) === normalizeProviderBase(preset.apiBaseUrl)),
+  );
+  if (!match) return labeled;
+  const generic =
+    labeled.id === "default" ||
+    labeled.name === "OpenAI Compatible" ||
+    labeled.name === "未命名" ||
+    labeled.name === "自定义";
+  return {
+    ...labeled,
+    id: generic || labeled.id === match.id ? match.id : labeled.id,
+    name: generic ? match.name : labeled.name,
+    apiBaseUrl: labeled.apiBaseUrl.trim() || match.apiBaseUrl,
+  };
+}
+
+function keepProvider(provider: LlmProvider): boolean {
+  if (!isPresetProviderId(provider.id)) return true;
+  return Boolean(provider.apiKey.trim() || provider.models.length);
+}
+
+/** Keep configured vendors; drop unused empty presets. Do not inject missing catalog entries. */
 export function mergePresetProviders(existing: LlmProvider[]): {
   providers: LlmProvider[];
   idMap: Map<string, string>;
 } {
-  const remaining = existing.map((provider) => ({
-    ...provider,
-    models: uniqueModelIds(provider.models),
-  }));
   const idMap = new Map<string, string>();
-
-  const presets = PRESET_LLM_PROVIDERS.map((preset) => {
-    const byId = remaining.findIndex((row) => row.id === preset.id);
-    const byUrl = remaining.findIndex(
-      (row) => row.apiBaseUrl.trim() && normalizeProviderBase(row.apiBaseUrl) === normalizeProviderBase(preset.apiBaseUrl),
-    );
-    const idx = byId >= 0 ? byId : byUrl;
-    if (idx < 0) return { ...preset };
-    const found = remaining.splice(idx, 1)[0];
-    idMap.set(found.id, preset.id);
-    const genericName = found.name === "OpenAI Compatible" || found.name === "未命名";
-    return {
-      ...preset,
-      name: genericName ? preset.name : found.name,
-      apiBaseUrl: found.apiBaseUrl.trim() || preset.apiBaseUrl,
-      apiKey: found.apiKey,
-      models: uniqueModelIds(found.models),
-    };
-  });
-
-  return { providers: [...presets, ...remaining.map(labelCustomProvider)], idMap };
+  const providers: LlmProvider[] = [];
+  for (const raw of existing) {
+    const next = adoptPresetIdentity({ ...raw, models: uniqueModelIds(raw.models) });
+    if (next.id !== raw.id) idMap.set(raw.id, next.id);
+    if (!keepProvider(next)) continue;
+    if (providers.some((row) => row.id === next.id)) continue;
+    providers.push(next);
+  }
+  return { providers, idMap };
 }
 
 function labelCustomProvider(provider: LlmProvider): LlmProvider {
@@ -86,16 +98,35 @@ export function ensureLlmProviders(settings: VaultSettings): VaultSettings {
   const seed =
     settings.providers.length > 0
       ? settings.providers
-      : [
-          {
-            id: "default",
-            name: "OpenAI Compatible",
-            apiBaseUrl: settings.apiBaseUrl,
-            apiKey: settings.apiKey,
-            models: uniqueModelIds([settings.model]),
-          },
-        ];
-  const { providers, idMap } = mergePresetProviders(seed);
+      : settings.apiBaseUrl || settings.apiKey
+        ? [
+            {
+              id: "default",
+              name: "OpenAI Compatible",
+              apiBaseUrl: settings.apiBaseUrl,
+              apiKey: settings.apiKey,
+              models: uniqueModelIds([settings.model]),
+            },
+          ]
+        : [];
+  let { providers, idMap } = mergePresetProviders(seed);
+  if (
+    providers.length === 0 &&
+    (settings.apiBaseUrl.trim() || settings.apiKey.trim()) &&
+    settings.providers.length > 0
+  ) {
+    const fallback = mergePresetProviders([
+      {
+        id: "default",
+        name: "OpenAI Compatible",
+        apiBaseUrl: settings.apiBaseUrl,
+        apiKey: settings.apiKey,
+        models: uniqueModelIds([settings.model]),
+      },
+    ]);
+    providers = fallback.providers;
+    fallback.idMap.forEach((value, key) => idMap.set(key, value));
+  }
 
   const activeProviderId = providers.some((provider) => provider.id === settings.activeProviderId)
     ? settings.activeProviderId

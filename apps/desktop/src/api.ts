@@ -118,6 +118,15 @@ export type AgentPromptResult = {
   session: AgentSession;
 };
 
+export type AgentStreamEvent =
+  | { type: "text"; text: string }
+  | { type: "tool_start"; name: string; id: string }
+  | { type: "tool_end"; name: string; id: string; isError?: boolean };
+
+export type AgentProviderCatalog = {
+  providers: Array<{ name: string; models: string[] }>;
+};
+
 export const isTauriRuntime = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -144,6 +153,88 @@ async function rpc<T>(method: string, params: Record<string, unknown> = {}): Pro
   return httpRpc<T>(method, params);
 }
 
+type StreamTransportEvent =
+  | AgentStreamEvent
+  | { type: "result"; result: AgentPromptResult }
+  | { type: "error"; message: string };
+
+async function readNdjsonStream(
+  res: Response,
+  onEvent: (event: AgentStreamEvent) => void,
+): Promise<AgentPromptResult> {
+  if (!res.body) throw new Error("sidecar stream has no body");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let result: AgentPromptResult | undefined;
+  let error: string | undefined;
+  const consume = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    const ev = JSON.parse(trimmed) as StreamTransportEvent;
+    if (ev.type === "result") result = ev.result;
+    else if (ev.type === "error") error = ev.message;
+    else onEvent(ev);
+  };
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop() ?? "";
+    for (const line of lines) consume(line);
+  }
+  buf += decoder.decode();
+  if (buf.trim()) consume(buf);
+  if (error) throw new Error(error);
+  if (!result) throw new Error("流式响应没有返回结果");
+  return result;
+}
+
+async function httpPromptStream(
+  opts: Record<string, unknown>,
+  onEvent: (event: AgentStreamEvent) => void,
+): Promise<AgentPromptResult> {
+  const base = import.meta.env.VITE_SIDECAR_HTTP as string | undefined;
+  if (!base) throw new Error("非 Tauri 环境且未配置 VITE_SIDECAR_HTTP");
+  const res = await fetch(`${base.replace(/\/$/, "")}/rpc`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      id: Date.now(),
+      method: "agent_prompt",
+      params: { ...opts, stream: true },
+    }),
+  });
+  const ct = res.headers.get("content-type") ?? "";
+  if (ct.includes("ndjson")) {
+    return readNdjsonStream(res, onEvent);
+  }
+  const json = (await res.json()) as { result?: AgentPromptResult; error?: { message: string } };
+  if (json.error) throw new Error(json.error.message);
+  if (!json.result) throw new Error("agent_prompt 没有返回结果");
+  return json.result;
+}
+
+async function tauriPromptStream(
+  opts: Record<string, unknown>,
+  onEvent: (event: AgentStreamEvent) => void,
+): Promise<AgentPromptResult> {
+  const { listen } = await import("@tauri-apps/api/event");
+  const unlisten = await listen<AgentStreamEvent>("agent-event", (event) => {
+    const payload = event.payload;
+    if (!payload || typeof payload !== "object" || !("type" in payload)) return;
+    if (payload.type === "text" || payload.type === "tool_start" || payload.type === "tool_end") {
+      onEvent(payload);
+    }
+  });
+  try {
+    return await rpc<AgentPromptResult>("agent_prompt", opts);
+  } finally {
+    unlisten();
+  }
+}
+
 export const api = {
   settingsGet: () => rpc<VaultSettings>("settings_get"),
   settingsSet: (patch: Partial<VaultSettings>) => rpc<VaultSettings>("settings_set", patch),
@@ -156,12 +247,22 @@ export const api = {
     rpc<{ session: AgentSession }>("agent_session_create", opts ?? {}),
   agentSessionGet: (id: string) => rpc<{ session: AgentSession }>("agent_session_get", { id }),
   agentSessionDelete: (id: string) => rpc<{ ok: boolean }>("agent_session_delete", { id }),
-  agentPrompt: (opts: { sessionId: string; message: string; currentPageId?: string }) =>
-    rpc<AgentPromptResult>("agent_prompt", opts),
+  agentPrompt: (opts: {
+    sessionId: string;
+    message: string;
+    currentPageId?: string;
+    graphDepth?: number;
+  }) => rpc<AgentPromptResult>("agent_prompt", opts),
+  agentPromptStream: (
+    opts: { sessionId: string; message: string; currentPageId?: string; graphDepth?: number },
+    onEvent: (event: AgentStreamEvent) => void,
+  ) =>
+    isTauri()
+      ? tauriPromptStream(opts, onEvent)
+      : httpPromptStream(opts, onEvent),
   agentSetModel: (opts: { sessionId: string; provider: string; model: string }) =>
     rpc<{ session: AgentSession }>("agent_set_model", opts),
-  agentListProviders: () =>
-    rpc<{ providers: Array<{ name: string; models: string[] }> }>("agent_list_providers"),
+  agentListProviders: () => rpc<AgentProviderCatalog>("agent_list_providers"),
   providerListModels: (opts?: { apiBaseUrl?: string; apiKey?: string }) =>
     rpc<{ models: string[] }>("provider_list_models", opts ?? {}),
   providerTest: (opts?: { apiBaseUrl?: string; apiKey?: string; model?: string }) =>

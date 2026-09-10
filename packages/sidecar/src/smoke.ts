@@ -198,15 +198,22 @@ async function main() {
     throw new Error(`expected session ${createdSession.id}, got ${retrievedSession.id}`);
   }
 
-  const agentPromptRes = await session.handle({
-    id: 23,
-    method: "agent_prompt",
-    params: {
-      sessionId: createdSession.id,
-      message: "列出所有页面",
-      currentPageId: sampleId,
+  const streamEvents: string[] = [];
+  const agentPromptRes = await session.handle(
+    {
+      id: 23,
+      method: "agent_prompt",
+      params: {
+        sessionId: createdSession.id,
+        message: "列出所有页面",
+        currentPageId: sampleId,
+        graphDepth: 1,
+      },
     },
-  });
+    (event) => {
+      streamEvents.push(event.type);
+    },
+  );
   if (agentPromptRes.error) throw new Error(`agent_prompt failed: ${agentPromptRes.error.message}`);
   const promptResult = agentPromptRes.result as any;
   if (!promptResult.answer) throw new Error(`expected answer from agent_prompt, got: ${JSON.stringify(promptResult)}`);
@@ -217,6 +224,9 @@ async function main() {
   const usedWikiTool = promptResult.toolsUsed.some((t: string) => wikiTools.includes(t));
   if (!usedWikiTool) {
     throw new Error(`expected at least one wiki tool to be used, got: ${JSON.stringify(promptResult.toolsUsed)}`);
+  }
+  if (!streamEvents.includes("tool_start") && !streamEvents.includes("text")) {
+    throw new Error(`expected stream events during agent_prompt, got: ${JSON.stringify(streamEvents)}`);
   }
 
   // Second prompt to verify tool history is preserved

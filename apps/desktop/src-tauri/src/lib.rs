@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 struct SidecarState {
     inner: Mutex<Option<SidecarProc>>,
@@ -120,6 +120,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<SidecarProc, String> {
     let pending: Arc<Mutex<HashMap<u64, tokio::sync::oneshot::Sender<Value>>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let pending_reader = pending.clone();
+    let emit_app = app.clone();
 
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -128,6 +129,12 @@ fn spawn_sidecar(app: &AppHandle) -> Result<SidecarProc, String> {
             let Ok(val) = serde_json::from_str::<Value>(&line) else {
                 continue;
             };
+            if val.get("method").and_then(|m| m.as_str()) == Some("agent_event") {
+                if let Some(params) = val.get("params") {
+                    let _ = emit_app.emit("agent-event", params);
+                }
+                continue;
+            }
             // boot banner uses id "boot" — ignore for RPC matching
             let id = match val.get("id") {
                 Some(Value::Number(n)) => n.as_u64(),

@@ -1,21 +1,34 @@
+import { Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { AgentSessionMessage, PageSummary } from "../api";
+import type { AgentSessionMessage, AgentSessionSummary, PageSummary } from "../api";
 import { loadPref, savePref } from "../lib/prefs";
 import { attachResizeY } from "../lib/pointerResize";
+import { parseModelSwitchKey } from "../lib/llmProviders";
 import { WikilinkText } from "./WikilinkText";
 
 type AgentPaneProps = {
   messages: AgentSessionMessage[];
   linkedPageIds: string[];
   pendingUser: string | null;
+  streamingText: string;
+  streamingTools: Array<{ id: string; name: string }>;
   draft: string;
   busy: boolean;
   pages: PageSummary[];
+  sessions: AgentSessionSummary[];
+  sessionId: string | null;
+  filterLinked: boolean;
+  filterDisabled: boolean;
+  graphDepth: number;
   modelLabel: string;
   modelMissing: boolean;
   modelValue: string;
   modelGroups: Array<{ providerId: string; providerName: string; models: string[] }>;
   mock: boolean;
+  onNewChat: () => void;
+  onSelectSession: (id: string) => void;
+  onFilterLinked: (value: boolean) => void;
+  onGraphDepth: (depth: number) => void;
   onSwitchModel: (providerId: string, modelId: string) => void;
   onDraft: (value: string) => void;
   onSend: () => void;
@@ -41,14 +54,25 @@ export function AgentPane({
   messages,
   linkedPageIds,
   pendingUser,
+  streamingText,
+  streamingTools,
   draft,
   busy,
   pages,
+  sessions,
+  sessionId,
+  filterLinked,
+  filterDisabled,
+  graphDepth,
   modelLabel,
   modelMissing,
   modelValue,
   modelGroups,
   mock,
+  onNewChat,
+  onSelectSession,
+  onFilterLinked,
+  onGraphDepth,
   onSwitchModel,
   onDraft,
   onSend,
@@ -67,40 +91,87 @@ export function AgentPane({
     const el = listRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages, pendingUser, busy]);
+  }, [messages, pendingUser, busy, streamingText, streamingTools]);
 
-  const empty = messages.length === 0 && !pendingUser;
+  const empty = messages.length === 0 && !pendingUser && !busy;
 
   return (
     <div className="agent-pane">
-      <div className={`agent-model-bar${modelMissing ? " agent-model-bar-warn" : ""}`}>
+      <div className={`agent-toolbar${modelMissing ? " agent-model-bar-warn" : ""}`}>
+        <button
+          type="button"
+          className="agent-toolbar-btn"
+          title="新对话"
+          aria-label="新对话"
+          disabled={busy}
+          onClick={onNewChat}
+        >
+          <Plus size={14} />
+        </button>
+        <select
+          className="agent-toolbar-session"
+          value={sessionId ?? ""}
+          disabled={busy || sessions.length === 0}
+          title="对话"
+          onChange={(e) => {
+            if (e.target.value) onSelectSession(e.target.value);
+          }}
+        >
+          {sessions.length === 0 && <option value="">无对话</option>}
+          {sessions.map((session) => (
+            <option key={session.id} value={session.id}>
+              {session.title || "新对话"}
+            </option>
+          ))}
+        </select>
+        <label className="agent-filter" title="只看关联当前笔记的对话">
+          <input
+            type="checkbox"
+            checked={filterLinked}
+            disabled={busy || filterDisabled}
+            onChange={(e) => onFilterLinked(e.target.checked)}
+          />
+          关联
+        </label>
         {mock || modelGroups.length === 0 ? (
-          <span>{modelLabel}</span>
+          <span className="agent-toolbar-label" title={modelLabel}>
+            {modelLabel}
+          </span>
         ) : (
-          <label className="agent-model-select">
-            <span>模型</span>
-            <select
-              value={modelValue}
-              disabled={busy}
-              onChange={(e) => {
-                const value = e.target.value;
-                const sep = value.indexOf("::");
-                if (sep <= 0) return;
-                onSwitchModel(value.slice(0, sep), value.slice(sep + 2));
-              }}
-            >
-              {modelGroups.map((group) => (
-                <optgroup key={group.providerId} label={group.providerName}>
-                  {group.models.map((id) => (
-                    <option key={`${group.providerId}::${id}`} value={`${group.providerId}::${id}`}>
-                      {id}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
+          <select
+            className="agent-toolbar-model"
+            value={modelValue}
+            disabled={busy}
+            title="模型"
+            onChange={(e) => {
+              const parsed = parseModelSwitchKey(e.target.value);
+              if (!parsed) return;
+              onSwitchModel(parsed.providerId, parsed.modelId);
+            }}
+          >
+            {modelGroups.map((group) => (
+              <optgroup key={group.providerId} label={group.providerName}>
+                {group.models.map((id) => (
+                  <option key={`${group.providerId}::${id}`} value={`${group.providerId}::${id}`}>
+                    {id}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
         )}
+        <select
+          className="agent-toolbar-hops"
+          value={String(graphDepth)}
+          disabled={busy}
+          title="图谱跳数"
+          onChange={(e) => onGraphDepth(Number(e.target.value))}
+        >
+          <option value="0">0 跳</option>
+          <option value="1">1 跳</option>
+          <option value="2">2 跳</option>
+          <option value="3">3 跳</option>
+        </select>
       </div>
       <div className="message-list" ref={listRef}>
         {empty && (
@@ -120,9 +191,24 @@ export function AgentPane({
           </div>
         )}
         {busy && (
-          <div className="msg msg-system">
+          <div className="msg msg-assistant msg-streaming">
             <div className="msg-role">Agent</div>
-            <div className="msg-body">正在查询知识库…</div>
+            <div className="msg-body">
+              {streamingText ? (
+                <WikilinkText text={streamingText} pages={pages} onOpen={onOpen} />
+              ) : (
+                "正在查询知识库…"
+              )}
+            </div>
+            {streamingTools.length > 0 && (
+              <div className="msg-tools">
+                {streamingTools.map((tool) => (
+                  <span key={tool.id} className="tool-chip">
+                    {tool.name}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

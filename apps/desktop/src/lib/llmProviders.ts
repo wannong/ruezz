@@ -24,31 +24,43 @@ export function isPresetProviderId(id: string): boolean {
   return PRESET_PROVIDERS.some((provider) => provider.id === id);
 }
 
-export function mergePresetProviders(existing: LlmProvider[]): LlmProvider[] {
-  const remaining = existing.map((provider) => ({
-    ...provider,
-    models: uniqueModelIds(provider.models),
-  }));
+function adoptPresetIdentity(provider: LlmProvider): LlmProvider {
+  const labeled = labelCustomProvider(provider);
+  const match = PRESET_PROVIDERS.find(
+    (preset) =>
+      labeled.id === preset.id ||
+      (labeled.apiBaseUrl.trim() &&
+        normalizeProviderBase(labeled.apiBaseUrl) === normalizeProviderBase(preset.apiBaseUrl)),
+  );
+  if (!match) return labeled;
+  const generic =
+    labeled.id === "default" ||
+    labeled.name === "OpenAI Compatible" ||
+    labeled.name === "未命名" ||
+    labeled.name === "自定义";
+  return {
+    ...labeled,
+    id: generic || labeled.id === match.id ? match.id : labeled.id,
+    name: generic ? match.name : labeled.name,
+    apiBaseUrl: labeled.apiBaseUrl.trim() || match.apiBaseUrl,
+  };
+}
 
-  const presets = PRESET_PROVIDERS.map((preset) => {
-    const byId = remaining.findIndex((row) => row.id === preset.id);
-    const byUrl = remaining.findIndex(
-      (row) => row.apiBaseUrl.trim() && normalizeProviderBase(row.apiBaseUrl) === normalizeProviderBase(preset.apiBaseUrl),
-    );
-    const idx = byId >= 0 ? byId : byUrl;
-    if (idx < 0) return { ...preset };
-    const found = remaining.splice(idx, 1)[0];
-    const genericName = found.name === "OpenAI Compatible" || found.name === "未命名";
-    return {
-      ...preset,
-      name: genericName ? preset.name : found.name,
-      apiBaseUrl: found.apiBaseUrl.trim() || preset.apiBaseUrl,
-      apiKey: found.apiKey,
-      models: uniqueModelIds(found.models),
-    };
-  });
+function keepProvider(provider: LlmProvider): boolean {
+  if (!isPresetProviderId(provider.id)) return true;
+  return Boolean(provider.apiKey.trim() || provider.models.length);
+}
 
-  return [...presets, ...remaining.map(labelCustomProvider)];
+export function pruneEmptyPresets(providers: LlmProvider[]): LlmProvider[] {
+  const seen = new Set<string>();
+  const out: LlmProvider[] = [];
+  for (const raw of providers) {
+    const next = adoptPresetIdentity({ ...raw, models: uniqueModelIds(raw.models) });
+    if (!keepProvider(next) || seen.has(next.id)) continue;
+    seen.add(next.id);
+    out.push(next);
+  }
+  return out;
 }
 
 function labelCustomProvider(provider: LlmProvider): LlmProvider {
@@ -71,10 +83,12 @@ export function defaultProviderFrom(settings: Pick<VaultSettings, "apiBaseUrl" |
 export function providersOf(settings: VaultSettings): LlmProvider[] {
   const existing = settings.providers?.length
     ? settings.providers
-    : settings.apiBaseUrl || settings.apiKey
+    : settings.apiKey
       ? [defaultProviderFrom(settings)]
       : [];
-  return mergePresetProviders(existing);
+  return existing.map((provider) =>
+    adoptPresetIdentity({ ...provider, models: uniqueModelIds(provider.models) }),
+  );
 }
 
 export function activeProviderIdOf(settings: VaultSettings, providers: LlmProvider[]): string {
@@ -85,7 +99,7 @@ export function activeProviderIdOf(settings: VaultSettings, providers: LlmProvid
 }
 
 export function hydrateProviders(settings: VaultSettings): VaultSettings {
-  const providers = providersOf(settings);
+  const providers = pruneEmptyPresets(providersOf(settings));
   return syncSettings(settings, providers, activeProviderIdOf(settings, providers), settings.model);
 }
 

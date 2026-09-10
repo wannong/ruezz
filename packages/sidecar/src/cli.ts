@@ -16,7 +16,13 @@ rl.on("line", async (line) => {
     process.stdout.write(`${JSON.stringify({ id: null, error: { message: "invalid json" } })}\n`);
     return;
   }
-  const res = await session.handle(req);
+  const emit =
+    req.method === "agent_prompt"
+      ? (event: { type: string }) => {
+          process.stdout.write(`${JSON.stringify({ method: "agent_event", params: event })}\n`);
+        }
+      : undefined;
+  const res = await session.handle(req, emit);
   process.stdout.write(`${JSON.stringify(res)}\n`);
 });
 

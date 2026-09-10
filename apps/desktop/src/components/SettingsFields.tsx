@@ -2,8 +2,8 @@ import { useState } from "react";
 import { api, type LlmProvider, type VaultSettings } from "../api";
 import {
   activeProviderIdOf,
-  isPresetProviderId,
   newProviderId,
+  PRESET_PROVIDERS,
   providersOf,
   syncSettings,
   uniqueModelIds,
@@ -31,6 +31,7 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [draftModel, setDraftModel] = useState<Record<string, string>>({});
   const [openId, setOpenId] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   function commit(nextProviders: LlmProvider[], nextActiveId = activeId, model = settings.model) {
     onChange(syncSettings(settings, nextProviders, nextActiveId, model));
@@ -40,8 +41,9 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
     commit(providers.map((provider) => (provider.id === id ? { ...provider, ...patch } : provider)));
   }
 
-  function addProvider() {
+  function addCustomProvider() {
     const id = newProviderId();
+    setPickerOpen(false);
     setOpenId(id);
     commit(
       [
@@ -59,11 +61,25 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
     );
   }
 
+  function addPresetProvider(preset: (typeof PRESET_PROVIDERS)[number]) {
+    setPickerOpen(false);
+    const existing = providers.find((provider) => provider.id === preset.id);
+    if (existing) {
+      setOpenId(existing.id);
+      return;
+    }
+    setOpenId(preset.id);
+    commit(
+      [...providers, { ...preset, apiKey: "", models: [] }],
+      preset.id,
+      "",
+    );
+  }
+
   function removeProvider(id: string) {
-    if (isPresetProviderId(id)) return;
     const next = providers.filter((provider) => provider.id !== id);
     if (openId === id) setOpenId(null);
-    const nextActive = id === activeId ? next[0].id : activeId;
+    const nextActive = id === activeId ? next[0]?.id ?? "" : activeId;
     const active = next.find((provider) => provider.id === nextActive) ?? next[0];
     commit(next, nextActive, active?.models[0] ?? "");
   }
@@ -147,17 +163,40 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
 
       <div className="settings-section-head">
         <span>模型服务商</span>
-        <button type="button" onClick={addProvider}>
-          添加自定义
+        <button type="button" aria-expanded={pickerOpen} onClick={() => setPickerOpen((open) => !open)}>
+          {pickerOpen ? "收起" : "新建服务商"}
         </button>
       </div>
-      <p className="hint">已预填 OpenAI、DeepSeek、GLM、Kimi 地址。粘贴 API Key 后点拉取模型；点条目可展开改地址或选模型。</p>
+      <p className="hint">从列表选择厂商，地址会自动填好；粘贴 API Key 后拉取模型。</p>
+      {pickerOpen && (
+        <div className="provider-picker" role="listbox" aria-label="选择服务商">
+          {PRESET_PROVIDERS.map((preset) => {
+            const added = providers.some((provider) => provider.id === preset.id);
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                className="provider-picker-item"
+                role="option"
+                aria-selected={added}
+                onClick={() => addPresetProvider(preset)}
+              >
+                <span className="provider-picker-name">{preset.name}</span>
+                <span className="provider-picker-meta">{added ? "已添加" : hostLabel(preset.apiBaseUrl)}</span>
+              </button>
+            );
+          })}
+          <button type="button" className="provider-picker-item" onClick={addCustomProvider}>
+            <span className="provider-picker-name">自定义</span>
+            <span className="provider-picker-meta">自己填写 Base URL</span>
+          </button>
+        </div>
+      )}
 
       {providers.map((provider) => {
         const busy = providerBusy?.startsWith(`${provider.id}:`) ?? false;
         const isActive = provider.id === activeId;
         const open = provider.id === openId;
-        const preset = isPresetProviderId(provider.id);
         const modelLabel = provider.models.length ? `${provider.models.length} 个模型` : "无模型";
         return (
           <section
@@ -193,11 +232,9 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
                 />
               )}
               {isActive && <span className="provider-badge">当前</span>}
-              {!preset && (
-                <button type="button" className="ghost" onClick={() => removeProvider(provider.id)}>
-                  删除
-                </button>
-              )}
+              <button type="button" className="ghost" onClick={() => removeProvider(provider.id)}>
+                删除
+              </button>
             </div>
             {!open && (
               <div className="provider-quick">

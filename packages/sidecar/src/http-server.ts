@@ -35,6 +35,25 @@ export function startHttpServer(port = Number(process.env.WIKIHOME_HTTP_PORT ?? 
       res.end(JSON.stringify({ error: { message: "invalid json" } }));
       return;
     }
+    const params = parsed.params ?? {};
+    const stream = parsed.method === "agent_prompt" && params.stream === true;
+    if (stream) {
+      res.writeHead(200, {
+        "content-type": "application/x-ndjson; charset=utf-8",
+        "cache-control": "no-cache",
+        "x-accel-buffering": "no",
+      });
+      const result = await session.handle(parsed, (event) => {
+        res.write(`${JSON.stringify(event)}\n`);
+      });
+      if (result.error) {
+        res.write(`${JSON.stringify({ type: "error", message: result.error.message })}\n`);
+      } else {
+        res.write(`${JSON.stringify({ type: "result", result: result.result })}\n`);
+      }
+      res.end();
+      return;
+    }
     const result = await session.handle(parsed);
     res.writeHead(200, { "content-type": "application/json" });
     res.end(JSON.stringify(result));
