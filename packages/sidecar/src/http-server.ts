@@ -43,13 +43,21 @@ export function startHttpServer(port = Number(process.env.WIKIHOME_HTTP_PORT ?? 
         "cache-control": "no-cache",
         "x-accel-buffering": "no",
       });
-      const result = await session.handle(parsed, (event) => {
-        res.write(`${JSON.stringify(event)}\n`);
-      });
-      if (result.error) {
-        res.write(`${JSON.stringify({ type: "error", message: result.error.message })}\n`);
-      } else {
-        res.write(`${JSON.stringify({ type: "result", result: result.result })}\n`);
+      const abortOnClose = () => {
+        if (!res.writableEnded) session.abortPrompt();
+      };
+      req.on("close", abortOnClose);
+      try {
+        const result = await session.handle(parsed, (event) => {
+          res.write(`${JSON.stringify(event)}\n`);
+        });
+        if (result.error) {
+          res.write(`${JSON.stringify({ type: "error", message: result.error.message })}\n`);
+        } else {
+          res.write(`${JSON.stringify({ type: "result", result: result.result })}\n`);
+        }
+      } finally {
+        req.off("close", abortOnClose);
       }
       res.end();
       return;

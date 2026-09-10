@@ -93,17 +93,16 @@ export function Workspace({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<AgentSessionSummary[]>([]);
   const [messages, setMessages] = useState<AgentSessionMessage[]>([]);
-  const [linkedPageIds, setLinkedPageIds] = useState<string[]>([]);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState("");
   const [streamingTools, setStreamingTools] = useState<Array<{ id: string; name: string }>>([]);
   const [draft, setDraft] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
-  const [filterLinked, setFilterLinked] = useState(() => loadPref("agentFilterLinked", false));
-  const [graphDepth, setGraphDepth] = useState(() => clampHops(loadPref("agentGraphDepth", 0)));
+  const graphDepth = clampHops(loadPref("agentGraphDepth", 0));
   const [runnerProviders, setRunnerProviders] = useState<Array<{ name: string; models: string[] }>>([]);
   const sendingRef = useRef(false);
+  const abortingRef = useRef(false);
   const sessionLoadGen = useRef(0);
 
   const activeTab = tabs.find((t) => tabKey(t) === activeKey) ?? null;
@@ -220,7 +219,6 @@ export function Workspace({
     (session: AgentSession) => {
       setSessionId(session.id);
       setMessages(session.messages);
-      setLinkedPageIds(session.linkedPageIds);
       setSessions((prev) => {
         const summary: AgentSessionSummary = {
           id: session.id,
@@ -269,7 +267,6 @@ export function Workspace({
         if (!list.length) {
           setSessionId(null);
           setMessages([]);
-          setLinkedPageIds([]);
           onAgentTitle?.(null);
           return;
         }
@@ -315,12 +312,6 @@ export function Workspace({
   useEffect(() => {
     savePref("rightWidth", rightWidth);
   }, [rightWidth]);
-  useEffect(() => {
-    savePref("agentFilterLinked", filterLinked);
-  }, [filterLinked]);
-  useEffect(() => {
-    savePref("agentGraphDepth", graphDepth);
-  }, [graphDepth]);
 
   useEffect(() => {
     if (!activePageId) return;
@@ -599,18 +590,43 @@ export function Workspace({
     }
   }
 
+  function isAbortError(error: unknown): boolean {
+    if (!error) return false;
+    if (error instanceof DOMException && error.name === "AbortError") return true;
+    if (error instanceof Error && (error.name === "AbortError" || /abort/i.test(error.message))) {
+      return true;
+    }
+    return false;
+  }
+
+  async function reloadSession(id: string) {
+    const { session } = await api.agentSessionGet(id);
+    applySession(session);
+  }
+
+  async function stopGeneration() {
+    if (!agentBusy) return;
+    abortingRef.current = true;
+    try {
+      await api.agentAbort();
+    } catch {
+      /* stop is best-effort; the in-flight prompt still settles */
+    }
+  }
+
   async function sendMessage() {
     const text = draft.trim();
     if (!text || agentBusy || sendingRef.current) return;
     sendingRef.current = true;
+    abortingRef.current = false;
     setDraft("");
     setPendingUser(text);
     setStreamingText("");
     setStreamingTools([]);
     setAgentBusy(true);
     setError(null);
+    let id = sessionId;
     try {
-      let id = sessionId;
       if (!id) {
         sessionLoadGen.current += 1;
         const created = await api.agentSessionCreate({
@@ -642,13 +658,24 @@ export function Workspace({
       await loadPages();
       await loadGraph();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      onError(msg);
+      if (abortingRef.current || isAbortError(e)) {
+        if (id) {
+          try {
+            await reloadSession(id);
+            await refreshSessions();
+          } catch {
+            /* session may not have been persisted yet */
+          }
+        }
+      } else {
+        onError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setPendingUser(null);
       setStreamingText("");
       setStreamingTools([]);
       sendingRef.current = false;
+      abortingRef.current = false;
       setAgentBusy(false);
     }
   }
@@ -808,13 +835,6 @@ export function Workspace({
       : (activePage?.body ?? "");
   const outline = outlineSource ? parseOutline(outlineSource) : [];
   const activeDirty = Boolean(activePageId && isDirty(activePageId));
-  const visibleSessions = useMemo(() => {
-    if (!filterLinked || !activePageId) return sessions;
-    const matched = sessions.filter(
-      (session) => session.linkedPageIds.includes(activePageId) || session.id === sessionId,
-    );
-    return matched;
-  }, [filterLinked, activePageId, sessions, sessionId]);
 
   const jumpHeading = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -915,24 +935,21 @@ export function Workspace({
           collapsed={rightCollapsed}
           overlay={narrow}
           messages={messages}
-          linkedPageIds={linkedPageIds}
           pendingUser={pendingUser}
           streamingText={streamingText}
           streamingTools={streamingTools}
           draft={draft}
           busy={agentBusy}
           pages={pages}
-          sessions={visibleSessions}
+          sessions={sessions}
           sessionId={sessionId}
-          filterLinked={filterLinked}
-          filterDisabled={!activePageId}
-          graphDepth={graphDepth}
           outline={outline}
           pageId={activePageId}
           graph={graph}
           theme={theme}
           onDraft={setDraft}
           onSend={() => void sendMessage()}
+          onStop={() => void stopGeneration()}
           onOpen={openPage}
           onJump={jumpHeading}
           onResize={(dx) => setRightWidth((w) => clamp(w + dx, RIGHT_MIN, RIGHT_MAX))}
@@ -944,8 +961,6 @@ export function Workspace({
           mock={settings.mock}
           onNewChat={() => void newChat()}
           onSelectSession={(id) => void selectSession(id)}
-          onFilterLinked={setFilterLinked}
-          onGraphDepth={(depth) => setGraphDepth(clampHops(depth))}
           onSwitchModel={(providerId, modelId) => void switchModel(providerId, modelId)}
         />
       </div>

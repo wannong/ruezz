@@ -80,6 +80,7 @@ export type AgentSessionMessage =
       model?: string;
       toolCalls?: AgentToolCall[];
       sources?: string[];
+      usage?: { input: number; output: number; totalTokens: number };
     }
   | {
       role: "toolResult";
@@ -121,7 +122,8 @@ export type AgentPromptResult = {
 export type AgentStreamEvent =
   | { type: "text"; text: string }
   | { type: "tool_start"; name: string; id: string }
-  | { type: "tool_end"; name: string; id: string; isError?: boolean };
+  | { type: "tool_end"; name: string; id: string; isError?: boolean }
+  | { type: "usage"; input: number; output: number; totalTokens: number };
 
 export type AgentProviderCatalog = {
   providers: Array<{ name: string; models: string[] }>;
@@ -194,6 +196,7 @@ async function readNdjsonStream(
 async function httpPromptStream(
   opts: Record<string, unknown>,
   onEvent: (event: AgentStreamEvent) => void,
+  signal?: AbortSignal,
 ): Promise<AgentPromptResult> {
   const base = import.meta.env.VITE_SIDECAR_HTTP as string | undefined;
   if (!base) throw new Error("非 Tauri 环境且未配置 VITE_SIDECAR_HTTP");
@@ -205,6 +208,7 @@ async function httpPromptStream(
       method: "agent_prompt",
       params: { ...opts, stream: true },
     }),
+    signal,
   });
   const ct = res.headers.get("content-type") ?? "";
   if (ct.includes("ndjson")) {
@@ -224,7 +228,7 @@ async function tauriPromptStream(
   const unlisten = await listen<AgentStreamEvent>("agent-event", (event) => {
     const payload = event.payload;
     if (!payload || typeof payload !== "object" || !("type" in payload)) return;
-    if (payload.type === "text" || payload.type === "tool_start" || payload.type === "tool_end") {
+    if (payload.type === "text" || payload.type === "tool_start" || payload.type === "tool_end" || payload.type === "usage") {
       onEvent(payload);
     }
   });
@@ -256,10 +260,12 @@ export const api = {
   agentPromptStream: (
     opts: { sessionId: string; message: string; currentPageId?: string; graphDepth?: number },
     onEvent: (event: AgentStreamEvent) => void,
+    signal?: AbortSignal,
   ) =>
     isTauri()
       ? tauriPromptStream(opts, onEvent)
-      : httpPromptStream(opts, onEvent),
+      : httpPromptStream(opts, onEvent, signal),
+  agentAbort: () => rpc<{ ok: boolean }>("agent_abort"),
   agentSetModel: (opts: { sessionId: string; provider: string; model: string }) =>
     rpc<{ session: AgentSession }>("agent_set_model", opts),
   agentListProviders: () => rpc<AgentProviderCatalog>("agent_list_providers"),

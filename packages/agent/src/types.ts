@@ -22,6 +22,11 @@ export type SessionMessage =
         args: Record<string, unknown>;
       }>;
       sources?: string[];
+      usage?: {
+        input: number;
+        output: number;
+        totalTokens: number;
+      };
     }
   | {
       role: "toolResult";
@@ -106,4 +111,5 @@ export interface ContextBuildOptions {
 export type AgentStreamEvent =
   | { type: "text"; text: string }
   | { type: "tool_start"; name: string; id: string }
-  | { type: "tool_end"; name: string; id: string; isError?: boolean };
+  | { type: "tool_end"; name: string; id: string; isError?: boolean }
+  | { type: "usage"; input: number; output: number; totalTokens: number };

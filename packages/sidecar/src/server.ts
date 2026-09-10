@@ -184,7 +184,11 @@ export class SidecarSession {
     return this.getSettings();
   }
 
-  private requireVault(): string {
+  abortPrompt(): boolean {
+    return this.agentRunner?.abort() ?? false;
+  }
+
+  requireVault(): string {
     if (!this.settings.vaultPath) throw new Error("尚未设置知识库路径");
     return this.settings.vaultPath;
   }
@@ -368,6 +372,8 @@ export class SidecarSession {
           session: result.session,
         };
       }
+      case "agent_abort":
+        return { ok: this.abortPrompt() };
       case "agent_set_model": {
         const runner = await this.getAgentRunner();
         const sessionId = String(params.sessionId ?? "");

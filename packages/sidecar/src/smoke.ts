@@ -198,6 +198,12 @@ async function main() {
     throw new Error(`expected session ${createdSession.id}, got ${retrievedSession.id}`);
   }
 
+  const idleAbort = await session.handle({ id: 221, method: "agent_abort" });
+  if (idleAbort.error) throw new Error(`idle agent_abort failed: ${idleAbort.error.message}`);
+  if ((idleAbort.result as { ok?: boolean }).ok !== false) {
+    throw new Error(`expected idle agent_abort ok:false, got: ${JSON.stringify(idleAbort.result)}`);
+  }
+
   const streamEvents: string[] = [];
   const agentPromptRes = await session.handle(
     {

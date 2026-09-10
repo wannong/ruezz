@@ -16,7 +16,6 @@ type RightSidebarProps = {
   collapsed: boolean;
   overlay: boolean;
   messages: AgentSessionMessage[];
-  linkedPageIds: string[];
   pendingUser: string | null;
   streamingText: string;
   streamingTools: Array<{ id: string; name: string }>;
@@ -25,15 +24,13 @@ type RightSidebarProps = {
   pages: PageSummary[];
   sessions: AgentSessionSummary[];
   sessionId: string | null;
-  filterLinked: boolean;
-  filterDisabled: boolean;
-  graphDepth: number;
   outline: OutlineItem[];
   pageId: string | null;
   graph: GraphDto | null;
   theme: Theme;
   onDraft: (value: string) => void;
   onSend: () => void;
+  onStop: () => void;
   onOpen: (id: string) => void;
   onJump: (id: string) => void;
   modelLabel: string;
@@ -43,8 +40,6 @@ type RightSidebarProps = {
   mock: boolean;
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
-  onFilterLinked: (value: boolean) => void;
-  onGraphDepth: (depth: number) => void;
   onSwitchModel: (providerId: string, modelId: string) => void;
   onResize: (dx: number) => void;
   onCollapse: () => void;
@@ -57,7 +52,6 @@ export function RightSidebar({
   collapsed,
   overlay,
   messages,
-  linkedPageIds,
   pendingUser,
   streamingText,
   streamingTools,
@@ -66,15 +60,13 @@ export function RightSidebar({
   pages,
   sessions,
   sessionId,
-  filterLinked,
-  filterDisabled,
-  graphDepth,
   outline,
   pageId,
   graph,
   theme,
   onDraft,
   onSend,
+  onStop,
   onOpen,
   onJump,
   onResize,
@@ -86,8 +78,6 @@ export function RightSidebar({
   mock,
   onNewChat,
   onSelectSession,
-  onFilterLinked,
-  onGraphDepth,
   onSwitchModel,
 }: RightSidebarProps) {
   if (collapsed) return null;
@@ -125,7 +115,6 @@ export function RightSidebar({
       {view === "agent" && (
         <AgentPane
           messages={messages}
-          linkedPageIds={linkedPageIds}
           pendingUser={pendingUser}
           streamingText={streamingText}
           streamingTools={streamingTools}
@@ -134,11 +123,9 @@ export function RightSidebar({
           pages={pages}
           sessions={sessions}
           sessionId={sessionId}
-          filterLinked={filterLinked}
-          filterDisabled={filterDisabled}
-          graphDepth={graphDepth}
           onDraft={onDraft}
           onSend={onSend}
+          onStop={onStop}
           onOpen={onOpen}
           modelLabel={modelLabel}
           modelMissing={modelMissing}
@@ -147,8 +134,6 @@ export function RightSidebar({
           mock={mock}
           onNewChat={onNewChat}
           onSelectSession={onSelectSession}
-          onFilterLinked={onFilterLinked}
-          onGraphDepth={onGraphDepth}
           onSwitchModel={onSwitchModel}
         />
       )}

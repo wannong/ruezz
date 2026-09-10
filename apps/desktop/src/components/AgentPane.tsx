@@ -1,14 +1,21 @@
-import { Plus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowUp, Gauge, History, Plus, Square } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentSessionMessage, AgentSessionSummary, PageSummary } from "../api";
+import wikihomeIcon from "../assets/wikihome-icon.svg";
+import { parseModelSwitchKey } from "../lib/llmProviders";
 import { loadPref, savePref } from "../lib/prefs";
 import { attachResizeY } from "../lib/pointerResize";
-import { parseModelSwitchKey } from "../lib/llmProviders";
 import { WikilinkText } from "./WikilinkText";
+
+const COMPOSER_MIN = 88;
+const COMPOSER_MAX = 360;
+
+function clampComposer(n: number): number {
+  return Math.min(COMPOSER_MAX, Math.max(COMPOSER_MIN, Math.round(n)));
+}
 
 type AgentPaneProps = {
   messages: AgentSessionMessage[];
-  linkedPageIds: string[];
   pendingUser: string | null;
   streamingText: string;
   streamingTools: Array<{ id: string; name: string }>;
@@ -17,9 +24,6 @@ type AgentPaneProps = {
   pages: PageSummary[];
   sessions: AgentSessionSummary[];
   sessionId: string | null;
-  filterLinked: boolean;
-  filterDisabled: boolean;
-  graphDepth: number;
   modelLabel: string;
   modelMissing: boolean;
   modelValue: string;
@@ -27,21 +31,12 @@ type AgentPaneProps = {
   mock: boolean;
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
-  onFilterLinked: (value: boolean) => void;
-  onGraphDepth: (depth: number) => void;
   onSwitchModel: (providerId: string, modelId: string) => void;
   onDraft: (value: string) => void;
   onSend: () => void;
+  onStop: () => void;
   onOpen: (id: string) => void;
 };
-
-const COMPOSER_MIN = 72;
-const COMPOSER_MAX = 360;
-const COMPOSER_DEFAULT = 108;
-
-function clampComposer(n: number): number {
-  return Math.min(COMPOSER_MAX, Math.max(COMPOSER_MIN, n));
-}
 
 function messageKey(message: AgentSessionMessage, index: number): string {
   if (message.role === "toolResult") {
@@ -50,9 +45,41 @@ function messageKey(message: AgentSessionMessage, index: number): string {
   return `${index}-${message.role}-${message.timestamp}`;
 }
 
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 10_000) return `${Math.round(n / 1000)}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
+function formatSessionTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (date.toDateString() === now.toDateString()) return time;
+  return `${date.getMonth() + 1}/${date.getDate()} ${time}`;
+}
+
+function sessionUsage(messages: AgentSessionMessage[]): {
+  input: number;
+  output: number;
+  totalTokens: number;
+} {
+  let input = 0;
+  let output = 0;
+  let totalTokens = 0;
+  for (const message of messages) {
+    if (message.role !== "assistant" || !message.usage) continue;
+    input += message.usage.input;
+    output += message.usage.output;
+    totalTokens = message.usage.totalTokens || totalTokens;
+  }
+  return { input, output, totalTokens: totalTokens || input + output };
+}
+
 export function AgentPane({
   messages,
-  linkedPageIds,
   pendingUser,
   streamingText,
   streamingTools,
@@ -61,9 +88,6 @@ export function AgentPane({
   pages,
   sessions,
   sessionId,
-  filterLinked,
-  filterDisabled,
-  graphDepth,
   modelLabel,
   modelMissing,
   modelValue,
@@ -71,186 +95,290 @@ export function AgentPane({
   mock,
   onNewChat,
   onSelectSession,
-  onFilterLinked,
-  onGraphDepth,
   onSwitchModel,
   onDraft,
   onSend,
+  onStop,
   onOpen,
 }: AgentPaneProps) {
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [modelOpen, setModelOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
   const [composerHeight, setComposerHeight] = useState(() =>
-    clampComposer(loadPref("composerHeight", COMPOSER_DEFAULT)),
+    clampComposer(loadPref("agentComposerHeight", COMPOSER_MIN)),
   );
 
-  useEffect(() => {
-    savePref("composerHeight", composerHeight);
-  }, [composerHeight]);
+  const empty = messages.length === 0 && !pendingUser && !busy;
+  const usage = useMemo(() => sessionUsage(messages), [messages]);
+  const modelName = modelValue.includes("::") ? modelValue.slice(modelValue.indexOf("::") + 2) : modelValue;
+  const canSend = Boolean(draft.trim()) && !busy && !modelMissing;
 
   useEffect(() => {
     const el = listRef.current;
-    if (!el) return;
+    if (!el || historyOpen) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages, pendingUser, busy, streamingText, streamingTools]);
+  }, [messages, pendingUser, busy, streamingText, streamingTools, historyOpen]);
 
-  const empty = messages.length === 0 && !pendingUser && !busy;
+  useEffect(() => {
+    savePref("agentComposerHeight", composerHeight);
+  }, [composerHeight]);
+
+  useEffect(() => {
+    if (!modelOpen && !usageOpen) return;
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (!target.closest(".agent-model-wrap") && !target.closest(".agent-usage-wrap")) {
+        setModelOpen(false);
+        setUsageOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [modelOpen, usageOpen]);
 
   return (
-    <div className="agent-pane">
-      <div className={`agent-toolbar${modelMissing ? " agent-model-bar-warn" : ""}`}>
+    <div className="agent-pane agent-chat">
+      <div className="agent-chat-header">
         <button
           type="button"
-          className="agent-toolbar-btn"
+          className={`agent-round-btn${historyOpen ? " active" : ""}`}
+          title="会话记录"
+          aria-label="会话记录"
+          onClick={() => {
+            setHistoryOpen((open) => !open);
+            setModelOpen(false);
+            setUsageOpen(false);
+          }}
+        >
+          <History size={16} />
+        </button>
+        <button
+          type="button"
+          className="agent-round-btn"
           title="新对话"
           aria-label="新对话"
           disabled={busy}
-          onClick={onNewChat}
-        >
-          <Plus size={14} />
-        </button>
-        <select
-          className="agent-toolbar-session"
-          value={sessionId ?? ""}
-          disabled={busy || sessions.length === 0}
-          title="对话"
-          onChange={(e) => {
-            if (e.target.value) onSelectSession(e.target.value);
+          onClick={() => {
+            onNewChat();
+            setHistoryOpen(false);
+            setModelOpen(false);
+            setUsageOpen(false);
           }}
         >
-          {sessions.length === 0 && <option value="">无对话</option>}
-          {sessions.map((session) => (
-            <option key={session.id} value={session.id}>
-              {session.title || "新对话"}
-            </option>
-          ))}
-        </select>
-        <label className="agent-filter" title="只看关联当前笔记的对话">
-          <input
-            type="checkbox"
-            checked={filterLinked}
-            disabled={busy || filterDisabled}
-            onChange={(e) => onFilterLinked(e.target.checked)}
-          />
-          关联
-        </label>
-        {mock || modelGroups.length === 0 ? (
-          <span className="agent-toolbar-label" title={modelLabel}>
-            {modelLabel}
-          </span>
-        ) : (
-          <select
-            className="agent-toolbar-model"
-            value={modelValue}
-            disabled={busy}
-            title="模型"
-            onChange={(e) => {
-              const parsed = parseModelSwitchKey(e.target.value);
-              if (!parsed) return;
-              onSwitchModel(parsed.providerId, parsed.modelId);
-            }}
-          >
-            {modelGroups.map((group) => (
-              <optgroup key={group.providerId} label={group.providerName}>
-                {group.models.map((id) => (
-                  <option key={`${group.providerId}::${id}`} value={`${group.providerId}::${id}`}>
-                    {id}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        )}
-        <select
-          className="agent-toolbar-hops"
-          value={String(graphDepth)}
-          disabled={busy}
-          title="图谱跳数"
-          onChange={(e) => onGraphDepth(Number(e.target.value))}
-        >
-          <option value="0">0 跳</option>
-          <option value="1">1 跳</option>
-          <option value="2">2 跳</option>
-          <option value="3">3 跳</option>
-        </select>
+          <Plus size={16} />
+        </button>
       </div>
-      <div className="message-list" ref={listRef}>
-        {empty && (
-          <div className="empty-center subtle">
-            {modelMissing ? "当前没有可用模型。请在设置中填写 API，并拉取或输入模型名。" : "向 Agent 提问，答案会出现在这里"}
-          </div>
-        )}
-        {messages.map((m, index) => (
-          <SessionMessageView key={messageKey(m, index)} message={m} pages={pages} onOpen={onOpen} />
-        ))}
-        {pendingUser && (
-          <div className="msg msg-user msg-pending">
-            <div className="msg-role">你</div>
-            <div className="msg-body">
-              <WikilinkText text={pendingUser} pages={pages} onOpen={onOpen} />
+
+      <div className="agent-chat-main">
+        {historyOpen && (
+          <div className="agent-session-sheet" role="dialog" aria-label="会话记录">
+            <div className="agent-session-sheet-head">
+              <span>会话</span>
+            </div>
+            <div className="agent-session-list">
+              {sessions.length === 0 && <div className="agent-session-empty">还没有对话</div>}
+              {sessions.map((session) => (
+                <button
+                  key={session.id}
+                  type="button"
+                  className={`agent-session-item${session.id === sessionId ? " active" : ""}`}
+                  disabled={busy && session.id !== sessionId}
+                  onClick={() => {
+                    onSelectSession(session.id);
+                    setHistoryOpen(false);
+                  }}
+                >
+                  <span className="agent-session-title">{session.title || "新对话"}</span>
+                  <span className="agent-session-meta">{formatSessionTime(session.updatedAt)}</span>
+                </button>
+              ))}
             </div>
           </div>
         )}
-        {busy && (
-          <div className="msg msg-assistant msg-streaming">
-            <div className="msg-role">Agent</div>
-            <div className="msg-body">
-              {streamingText ? (
-                <WikilinkText text={streamingText} pages={pages} onOpen={onOpen} />
-              ) : (
-                "正在查询知识库…"
-              )}
-            </div>
-            {streamingTools.length > 0 && (
-              <div className="msg-tools">
-                {streamingTools.map((tool) => (
-                  <span key={tool.id} className="tool-chip">
-                    {tool.name}
-                  </span>
-                ))}
+        <div className="agent-chat-view" ref={listRef}>
+            {empty && (
+              <div className="agent-welcome">
+                <div className="agent-welcome-icon">
+                  <img src={wikihomeIcon} alt="" width={64} height={64} />
+                </div>
+                {modelMissing ? (
+                  <p>当前没有可用模型。请在设置中填写 API，并拉取或输入模型名。</p>
+                ) : (
+                  <p className="agent-welcome-hi">Hi there!</p>
+                )}
+              </div>
+            )}
+            {messages.map((m, index) => (
+              <SessionMessageView key={messageKey(m, index)} message={m} pages={pages} onOpen={onOpen} />
+            ))}
+            {pendingUser && (
+              <div className="msg msg-user msg-pending">
+                <div className="msg-role">你</div>
+                <div className="msg-body">
+                  <WikilinkText text={pendingUser} pages={pages} onOpen={onOpen} />
+                </div>
+              </div>
+            )}
+            {busy && (
+              <div className="msg msg-assistant msg-streaming">
+                <div className="msg-role">Agent</div>
+                <div className="msg-body">
+                  {streamingText ? (
+                    <WikilinkText text={streamingText} pages={pages} onOpen={onOpen} />
+                  ) : (
+                    "正在查询知识库…"
+                  )}
+                </div>
+                {streamingTools.length > 0 && (
+                  <div className="msg-tools">
+                    {streamingTools.map((tool) => (
+                      <span key={tool.id} className="tool-chip">
+                        {tool.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
-      </div>
-      {linkedPageIds.length > 0 && (
-        <div className="agent-linked" aria-label="相关页面">
-          {linkedPageIds.map((id) => (
-            <button key={id} type="button" className="source-chip" onClick={() => onOpen(id)}>
-              {id}
-            </button>
-          ))}
         </div>
-      )}
-      <div className="agent-composer">
-        <div
-          className="composer-resize"
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label="调整输入框高度"
-          title="拖拽调整输入框高度"
-          onPointerDown={(e) =>
-            attachResizeY(e, (dy) => setComposerHeight((h) => clampComposer(h - dy)))
-          }
-        />
-        <textarea
-          value={draft}
-          onChange={(e) => onDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              onSend();
-            }
-          }}
-          placeholder="输入消息，Enter 发送，Shift+Enter 换行"
-          disabled={busy}
-          style={{ height: composerHeight }}
-        />
-        <div className="composer-actions">
-          <button className="primary" type="button" disabled={busy || !draft.trim()} onClick={onSend}>
-            {busy ? "发送中…" : "发送"}
-          </button>
-        </div>
-      </div>
+
+        <div className="agent-input-panel">
+            <div
+              className="composer-resize"
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="调整输入框高度"
+              title="拖拽调整输入框高度"
+              onPointerDown={(e) =>
+                attachResizeY(e, (dy) => setComposerHeight((h) => clampComposer(h - dy)))
+              }
+            />
+            <div className="agent-model-wrap">
+              <button
+                type="button"
+                className={`agent-model-name${modelMissing ? " warn" : ""}`}
+                disabled={mock || modelGroups.length === 0}
+                title={modelLabel}
+                onClick={() => {
+                  setModelOpen((open) => !open);
+                  setUsageOpen(false);
+                }}
+              >
+                {mock || modelGroups.length === 0 ? modelLabel : modelName || "选择模型"}
+              </button>
+              {modelOpen && modelGroups.length > 0 && (
+                <div className="agent-model-menu" role="listbox">
+                  {modelGroups.map((group) => (
+                    <div key={group.providerId} className="agent-model-group">
+                      <div className="agent-model-group-label">{group.providerName}</div>
+                      {group.models.map((id) => {
+                        const value = `${group.providerId}::${id}`;
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            className={value === modelValue ? "active" : ""}
+                            onClick={() => {
+                              const parsed = parseModelSwitchKey(value);
+                              if (!parsed) return;
+                              onSwitchModel(parsed.providerId, parsed.modelId);
+                              setModelOpen(false);
+                            }}
+                          >
+                            {id}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="agent-input-row">
+              <textarea
+                ref={inputRef}
+                value={draft}
+                onChange={(e) => onDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!busy) onSend();
+                  }
+                }}
+                placeholder="发送消息"
+                rows={3}
+                style={{ height: composerHeight }}
+              />
+              <div className="agent-input-actions">
+                <div className="agent-usage-wrap">
+                  <button
+                    type="button"
+                    className="agent-round-btn"
+                    title="上下文用量"
+                    aria-label="上下文用量"
+                    onClick={() => {
+                      setUsageOpen((open) => !open);
+                      setModelOpen(false);
+                    }}
+                  >
+                    <Gauge size={16} />
+                    {usage.totalTokens > 0 && (
+                      <span className="agent-usage-badge">{formatTokens(usage.totalTokens)}</span>
+                    )}
+                  </button>
+                  {usageOpen && (
+                    <div className="agent-usage-pop">
+                      {usage.totalTokens > 0 ? (
+                        <>
+                          <div>
+                            <span>上下文</span>
+                            <b>{usage.totalTokens.toLocaleString()}</b>
+                          </div>
+                          <div>
+                            <span>输入</span>
+                            <b>{usage.input.toLocaleString()}</b>
+                          </div>
+                          <div>
+                            <span>输出</span>
+                            <b>{usage.output.toLocaleString()}</b>
+                          </div>
+                        </>
+                      ) : (
+                        <p>暂无用量（发送后统计）</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                {busy ? (
+                  <button
+                    type="button"
+                    className="agent-round-btn agent-send-btn stop"
+                    title="停止"
+                    aria-label="停止生成"
+                    onClick={onStop}
+                  >
+                    <Square size={13} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="agent-round-btn agent-send-btn"
+                    title="发送"
+                    aria-label="发送"
+                    disabled={!canSend}
+                    onClick={onSend}
+                  >
+                    <ArrowUp size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
     </div>
   );
 }

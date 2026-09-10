@@ -44,6 +44,7 @@ export class AgentRunner {
   private engine: WikiEngine;
   private vaultRoot: string;
   private models: Models;
+  private activeAgent: Agent | null = null;
 
   constructor(engine: WikiEngine, vaultRoot: string, models: Models) {
     this.engine = engine;
@@ -138,6 +139,15 @@ export class AgentRunner {
    */
   async deleteSession(sessionId: string): Promise<boolean> {
     return this.storage.delete(sessionId);
+  }
+
+  /**
+   * Stop the in-flight prompt, if any.
+   */
+  abort(): boolean {
+    if (!this.activeAgent) return false;
+    this.activeAgent.abort();
+    return true;
   }
 
   /**
@@ -251,26 +261,35 @@ export class AgentRunner {
       }
     });
 
-    // Execute prompt
+    this.activeAgent = agent;
+    let aborted = false;
     try {
       await agent.prompt(message);
     } catch (err) {
-      // Let Pi errors propagate to RPC layer
-      throw new Error(`Agent execution failed: ${err instanceof Error ? err.message : String(err)}`);
+      aborted = Boolean(agent.signal?.aborted) || /abort/i.test(String(err));
+      if (!aborted) {
+        throw new Error(`Agent execution failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    } finally {
+      if (this.activeAgent === agent) this.activeAgent = null;
     }
 
     const lastAssistant = [...agent.state.messages]
       .reverse()
       .find((msg) => msg.role === "assistant");
+    aborted =
+      aborted ||
+      (lastAssistant?.role === "assistant" && lastAssistant.stopReason === "aborted");
     if (
+      !aborted &&
       lastAssistant?.role === "assistant" &&
-      (lastAssistant.stopReason === "error" || lastAssistant.stopReason === "aborted")
+      lastAssistant.stopReason === "error"
     ) {
       throw new Error(
         lastAssistant.errorMessage || agent.state.errorMessage || "Agent execution failed",
       );
     }
-    if (agent.state.errorMessage) {
+    if (!aborted && agent.state.errorMessage) {
       throw new Error(`Agent execution failed: ${agent.state.errorMessage}`);
     }
 
@@ -323,7 +342,10 @@ export class AgentRunner {
           model: session.model.modelId,
           toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
           sources: Array.from(sources),
+          usage: usageFromAssistant(msg),
         });
+        const usage = usageFromAssistant(msg);
+        if (usage) emitStream(onEvent, { type: "usage", ...usage });
       } else if (msg.role === "toolResult") {
         // Add tool result message
         const resultContent = Array.isArray(msg.content)
@@ -346,9 +368,20 @@ export class AgentRunner {
       }
     }
 
-    // If no answer after successful execution, that's unexpected but not an error
     if (!answer) {
-      answer = "（Agent 未返回文本响应）";
+      answer = aborted ? "（已停止）" : "（Agent 未返回文本响应）";
+      const lastTurnAssistant = [...turnMessages].reverse().find((msg) => msg.role === "assistant");
+      if (lastTurnAssistant?.role === "assistant" && !lastTurnAssistant.content.trim()) {
+        lastTurnAssistant.content = answer;
+      } else if (aborted) {
+        turnMessages.push({
+          role: "assistant",
+          content: answer,
+          timestamp: Date.now(),
+          provider: session.model.provider,
+          model: session.model.modelId,
+        });
+      }
     }
 
     // Update session with all turn messages
@@ -435,7 +468,14 @@ export class AgentRunner {
           stopReason: msg.toolCalls && msg.toolCalls.length > 0 ? "toolUse" : "stop",
           // Pi streamSimple estimates context from assistant.usage.totalTokens.
           // Older session JSON omitted usage; missing it crashes real (non-mock) calls.
-          usage: EMPTY_USAGE,
+          usage: msg.usage
+            ? {
+                ...EMPTY_USAGE,
+                input: msg.usage.input,
+                output: msg.usage.output,
+                totalTokens: msg.usage.totalTokens,
+              }
+            : EMPTY_USAGE,
         };
       } else if (msg.role === "toolResult") {
         return {
@@ -458,6 +498,20 @@ function emitStream(onEvent: ((event: AgentStreamEvent) => void) | undefined, ev
   } catch {
     /* UI/transport emit must not break the agent loop */
   }
+}
+
+function usageFromAssistant(message: { usage?: { input?: number; output?: number; totalTokens?: number } }): {
+  input: number;
+  output: number;
+  totalTokens: number;
+} | undefined {
+  const usage = message.usage;
+  if (!usage) return undefined;
+  const input = Number(usage.input) || 0;
+  const output = Number(usage.output) || 0;
+  const totalTokens = Number(usage.totalTokens) || input + output;
+  if (!input && !output && !totalTokens) return undefined;
+  return { input, output, totalTokens };
 }
 
 function assistantTextFromMessage(message: { content?: unknown }): string {
