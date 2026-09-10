@@ -1,17 +1,25 @@
 import type { PageSummary } from "../api";
 import { attachResizeX } from "../lib/pointerResize";
+import type { WikiClip } from "../lib/fileTree";
 import { FileTree } from "./FileTree";
 import { SearchPane } from "./SearchPane";
 
 type LeftSidebarProps = {
   view: "files" | "search";
   pages: PageSummary[];
+  folders: string[];
   activeId: string | null;
+  clipboard: WikiClip | null;
+  busy: boolean;
   width: number;
   collapsed: boolean;
   overlay: boolean;
   onOpen: (id: string) => void;
-  onNewNote?: () => void;
+  onCopy: (clip: WikiClip) => void;
+  onPaste: (folderId: string) => void;
+  onRename: (kind: "page" | "folder", fromId: string, name: string) => void;
+  onCreateNote: (folderId: string, name: string) => void;
+  onCreateFolder: (folderId: string, name: string) => void;
   onError: (message: string) => void;
   onResize: (dx: number) => void;
 };
@@ -19,12 +27,19 @@ type LeftSidebarProps = {
 export function LeftSidebar({
   view,
   pages,
+  folders,
   activeId,
+  clipboard,
+  busy,
   width,
   collapsed,
   overlay,
   onOpen,
-  onNewNote,
+  onCopy,
+  onPaste,
+  onRename,
+  onCreateNote,
+  onCreateFolder,
   onError,
   onResize,
 }: LeftSidebarProps) {
@@ -37,14 +52,21 @@ export function LeftSidebar({
     >
       <div className="sidebar-header">
         <span>{view === "files" ? "文件" : "搜索"}</span>
-        {view === "files" && onNewNote && (
-          <button type="button" className="icon-btn sidebar-new" title="新建笔记" onClick={onNewNote}>
-            +
-          </button>
-        )}
       </div>
       {view === "files" ? (
-        <FileTree pages={pages} activeId={activeId} onOpen={onOpen} />
+        <FileTree
+          pages={pages}
+          folders={folders}
+          activeId={activeId}
+          clipboard={clipboard}
+          disabled={busy}
+          onOpen={onOpen}
+          onCopy={onCopy}
+          onPaste={onPaste}
+          onRename={onRename}
+          onCreateNote={onCreateNote}
+          onCreateFolder={onCreateFolder}
+        />
       ) : (
         <SearchPane onOpen={onOpen} onError={onError} />
       )}

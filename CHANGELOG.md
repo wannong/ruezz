@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-10
+
+### Added
+
+- File tree context menu: copy, paste, rename, new note, and new folder (empty folders persist under `wiki/`)
+
+### Changed
+
+- Removed new-note buttons from the left sidebar header and the ribbon; use the file-tree context menu, Ctrl+N, or the command palette
+- UI accent, links, and graph node colors are grayscale (black / white / gray)
+
 ## [0.1.3] - 2026-09-10
 
 ### Added
@@ -56,7 +67,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/wikihome/wikihome/releases/tag/v0.1.4
 [0.1.3]: https://github.com/wikihome/wikihome/releases/tag/v0.1.3
 [0.1.2]: https://github.com/wikihome/wikihome/releases/tag/v0.1.2
 [0.1.1]: https://github.com/wikihome/wikihome/releases/tag/v0.1.1

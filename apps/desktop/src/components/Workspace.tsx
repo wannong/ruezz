@@ -10,6 +10,7 @@ import {
 import { loadPref, savePref } from "../lib/prefs";
 import { parseOutline } from "../lib/outline";
 import { markdownBody } from "../lib/noteId";
+import { joinWikiId, parentWikiId, pasteDest, type WikiClip } from "../lib/fileTree";
 import { tabKey, type Tab } from "../lib/tabs";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import type { Theme } from "../theme";
@@ -57,6 +58,8 @@ export function Workspace({
 }: WorkspaceProps) {
   const narrow = useMediaQuery("(max-width: 960px)");
   const [pages, setPages] = useState<PageSummary[]>([]);
+  const [folders, setFolders] = useState<string[]>([]);
+  const [clip, setClip] = useState<WikiClip | null>(null);
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [pageCache, setPageCache] = useState<Record<string, PageContent>>({});
@@ -89,8 +92,9 @@ export function Workspace({
   );
 
   const loadPages = useCallback(async () => {
-    const list = await api.vaultListPages();
+    const [list, folderList] = await Promise.all([api.vaultListPages(), api.vaultListFolders()]);
     setPages(list);
+    setFolders(folderList);
     return list;
   }, []);
 
@@ -238,6 +242,72 @@ export function Workspace({
     [activeKey, isDirty],
   );
 
+  const remapPageId = useCallback((oldId: string, newId: string) => {
+    if (oldId === newId) return;
+    setTabs((prev) => prev.map((t) => (t.id === oldId ? { ...t, id: newId } : t)));
+    setActiveKey((key) => (key === `page:${oldId}` ? `page:${newId}` : key));
+    setPageCache((c) => {
+      if (!(oldId in c)) return c;
+      const next = { ...c };
+      next[newId] = { ...next[oldId], id: newId };
+      delete next[oldId];
+      return next;
+    });
+    setNoteDrafts((d) => {
+      if (!(oldId in d)) return d;
+      const next = { ...d };
+      next[newId] = next[oldId];
+      delete next[oldId];
+      return next;
+    });
+    setMissingIds((m) => {
+      if (!(oldId in m)) return m;
+      const next = { ...m };
+      delete next[oldId];
+      return next;
+    });
+  }, []);
+
+  const remapFolderPrefix = useCallback((from: string, to: string) => {
+    if (from === to) return;
+    const mapId = (id: string) => (id.startsWith(`${from}/`) ? `${to}${id.slice(from.length)}` : id);
+    setTabs((prev) => prev.map((t) => ({ ...t, id: mapId(t.id) })));
+    setActiveKey((key) => {
+      if (!key?.startsWith("page:")) return key;
+      return `page:${mapId(key.slice(5))}`;
+    });
+    setPageCache((c) => {
+      const next: Record<string, PageContent> = {};
+      for (const [id, page] of Object.entries(c)) {
+        const nid = mapId(id);
+        next[nid] = nid === id ? page : { ...page, id: nid };
+      }
+      return next;
+    });
+    setNoteDrafts((d) => {
+      const next: Record<string, string> = {};
+      for (const [id, text] of Object.entries(d)) next[mapId(id)] = text;
+      return next;
+    });
+    setMissingIds((m) => {
+      const next: Record<string, true> = {};
+      for (const id of Object.keys(m)) next[mapId(id)] = true;
+      return next;
+    });
+    setClip((cur) => {
+      if (!cur) return cur;
+      if (cur.kind === "folder" && cur.id === from) return { ...cur, id: to };
+      return { ...cur, id: mapId(cur.id) };
+    });
+  }, []);
+
+  const takenIds = useMemo(() => {
+    const set = new Set<string>();
+    for (const page of pages) set.add(page.id);
+    for (const folder of folders) set.add(folder);
+    return set;
+  }, [pages, folders]);
+
   const titleFor = useCallback(
     (id: string) => pages.find((p) => p.id === id)?.title ?? pageCache[id]?.title ?? id.split("/").pop() ?? id,
     [pages, pageCache],
@@ -254,6 +324,71 @@ export function Workspace({
       openPage(created.id);
       setNoteMode("edit");
       setNewNoteOpen(false);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createNoteIn(folderId: string, name: string) {
+    await createNote(joinWikiId(folderId, name), name);
+  }
+
+  async function createFolderIn(folderId: string, name: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.vaultCreateFolder(joinWikiId(folderId, name));
+      await loadPages();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function renameEntry(kind: "page" | "folder", fromId: string, name: string) {
+    const dest = joinWikiId(parentWikiId(fromId), name);
+    if (dest === fromId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (kind === "page") {
+        const page = await api.vaultRenamePage(fromId, dest);
+        remapPageId(fromId, page.id);
+        setPageCache((c) => ({ ...c, [page.id]: page }));
+        setClip((cur) => (cur?.kind === "page" && cur.id === fromId ? { ...cur, id: page.id } : cur));
+      } else {
+        const folder = await api.vaultRenameFolder(fromId, dest);
+        remapFolderPrefix(fromId, folder.id);
+      }
+      await loadPages();
+      await loadGraph();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pasteInto(folderId: string) {
+    if (!clip) return;
+    const dest = pasteDest(clip.id, folderId, takenIds);
+    setBusy(true);
+    setError(null);
+    try {
+      if (clip.kind === "page") {
+        const page = await api.vaultCopyPage(clip.id, dest);
+        setPageCache((c) => ({ ...c, [page.id]: page }));
+        await loadPages();
+        await loadGraph();
+        openPage(page.id);
+      } else {
+        await api.vaultCopyFolder(clip.id, dest);
+        await loadPages();
+        await loadGraph();
+      }
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -436,19 +571,25 @@ export function Workspace({
           onFiles={toggleLeftFiles}
           onSearch={toggleLeftSearch}
           onGraph={openGraph}
-          onNewNote={() => setNewNoteOpen(true)}
           onIngest={() => setIngestOpen(true)}
           onSettings={() => setSettingsOpen(true)}
         />
         <LeftSidebar
           view={leftView}
           pages={pages}
+          folders={folders}
           activeId={activePageId}
+          clipboard={clip}
+          busy={busy}
           width={leftWidth}
           collapsed={leftCollapsed}
           overlay={narrow}
           onOpen={openPage}
-          onNewNote={() => setNewNoteOpen(true)}
+          onCopy={setClip}
+          onPaste={(folderId) => void pasteInto(folderId)}
+          onRename={(kind, fromId, name) => void renameEntry(kind, fromId, name)}
+          onCreateNote={(folderId, name) => void createNoteIn(folderId, name)}
+          onCreateFolder={(folderId, name) => void createFolderIn(folderId, name)}
           onError={onError}
           onResize={(dx) => setLeftWidth((w) => clamp(w + dx, LEFT_MIN, LEFT_MAX))}
         />

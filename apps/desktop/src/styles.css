@@ -18,10 +18,10 @@ html:not([data-theme]) {
   --line-strong: #3f3f3f;
   --hover: rgba(255, 255, 255, 0.06);
   --active: rgba(255, 255, 255, 0.1);
-  --accent: #7f6df2;
-  --accent-ink: #ffffff;
+  --accent: #d8d8d8;
+  --accent-ink: #111111;
   --danger: #e24c4c;
-  --link: #a88bfa;
+  --link: #d0d0d0;
   --user-bg: #2a2a2a;
   --agent-bg: #252525;
   --status: #161616;
@@ -42,10 +42,10 @@ html[data-theme="light"] {
   --line-strong: #d0d0d0;
   --hover: rgba(0, 0, 0, 0.05);
   --active: rgba(0, 0, 0, 0.08);
-  --accent: #6c56d6;
+  --accent: #222222;
   --accent-ink: #ffffff;
   --danger: #c53030;
-  --link: #5b4bc4;
+  --link: #333333;
   --user-bg: #f0f0f0;
   --agent-bg: #fafafa;
   --status: #f4f4f4;
@@ -353,7 +353,7 @@ textarea:focus {
 }
 
 .sidebar-header {
-  padding: 0.35rem 0.45rem 0.35rem 0.75rem;
+  padding: 0.55rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -361,18 +361,6 @@ textarea:focus {
   color: var(--muted);
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.35rem;
-}
-
-.sidebar-new {
-  width: 28px;
-  height: 28px;
-  font-size: 1rem;
-  line-height: 1;
-  text-transform: none;
 }
 
 .sidebar-tabs {
@@ -723,12 +711,18 @@ textarea:focus {
   color: var(--muted);
 }
 
+.file-tree-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .file-tree {
   list-style: none;
   margin: 0;
   padding: 0.25rem 0 0.75rem;
-  overflow: auto;
-  flex: 1;
 }
 
 .file-tree ul {
@@ -784,6 +778,53 @@ textarea:focus {
 
 .tree-label.folder {
   color: var(--muted);
+}
+
+.tree-rename {
+  flex: 1;
+  min-width: 0;
+  margin: 0 0.35rem 0 0.1rem;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.8rem;
+  border-radius: 3px;
+}
+
+.ctx-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 168px;
+  padding: 0.25rem;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}
+
+.ctx-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.ctx-item:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.ctx-item:disabled {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.ctx-sep {
+  height: 1px;
+  margin: 0.25rem 0.35rem;
+  background: var(--line);
 }
 
 .tree-label.search-hit {

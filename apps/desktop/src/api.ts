@@ -88,6 +88,13 @@ export const api = {
   vaultWritePage: (id: string, raw: string) => rpc<PageContent>("vault_write_page", { id, raw }),
   vaultCreatePage: (id: string, title?: string) =>
     rpc<PageContent>("vault_create_page", title ? { id, title } : { id }),
+  vaultCopyPage: (from: string, to: string) => rpc<PageContent>("vault_copy_page", { from, to }),
+  vaultRenamePage: (from: string, to: string) => rpc<PageContent>("vault_rename_page", { from, to }),
+  vaultListFolders: () => rpc<string[]>("vault_list_folders"),
+  vaultCreateFolder: (id: string) => rpc<{ id: string }>("vault_create_folder", { id }),
+  vaultCopyFolder: (from: string, to: string) => rpc<{ id: string }>("vault_copy_folder", { from, to }),
+  vaultRenameFolder: (from: string, to: string) =>
+    rpc<{ id: string }>("vault_rename_folder", { from, to }),
   vaultLint: () => rpc("vault_lint"),
   vaultSearch: (query: string) => rpc<PageSummary[]>("vault_search", { query }),
   vaultGraph: () => rpc<GraphDto>("vault_graph"),

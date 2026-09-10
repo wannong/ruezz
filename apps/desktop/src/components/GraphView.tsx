@@ -17,21 +17,34 @@ type GraphViewProps = {
   compact?: boolean;
 };
 
-const TYPE_COLOR: Record<string, string> = {
-  concept: "#7f6df2",
-  entity: "#63b3ed",
-  source: "#68d391",
-  overview: "#f6ad55",
-  query: "#f687b3",
-  comparison: "#4fd1c5",
-  synthesis: "#fc8181",
-  archive: "#a0aec0",
-  missing: "#718096",
+const TYPE_COLOR: Record<"dark" | "light", Record<string, string>> = {
+  dark: {
+    concept: "#e6e6e6",
+    entity: "#cfcfcf",
+    source: "#b8b8b8",
+    overview: "#a3a3a3",
+    query: "#d4d4d4",
+    comparison: "#adadad",
+    synthesis: "#c2c2c2",
+    archive: "#8a8a8a",
+    missing: "#666666",
+  },
+  light: {
+    concept: "#1a1a1a",
+    entity: "#333333",
+    source: "#4d4d4d",
+    overview: "#666666",
+    query: "#2a2a2a",
+    comparison: "#404040",
+    synthesis: "#555555",
+    archive: "#7a7a7a",
+    missing: "#999999",
+  },
 };
 
 const THEME_PALETTE = {
-  dark: { bg: "#1e1e1e", ink: "#dcddde", line: "#3f3f3f", accent: "#7f6df2" },
-  light: { bg: "#ffffff", ink: "#222222", line: "#d0d0d0", accent: "#6c56d6" },
+  dark: { bg: "#1e1e1e", ink: "#dcddde", line: "#3f3f3f", accent: "#e6e6e6" },
+  light: { bg: "#ffffff", ink: "#222222", line: "#d0d0d0", accent: "#222222" },
 };
 
 export function GraphView({ graph, theme, onOpen, focusId = null, compact = false }: GraphViewProps) {
@@ -105,7 +118,7 @@ export function GraphView({ graph, theme, onOpen, focusId = null, compact = fals
             const r = (focused ? 6 : 4) + Math.min(compact ? 5 : 8, n.degree * 0.35);
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
-            ctx.fillStyle = TYPE_COLOR[n.type] ?? "#a0aec0";
+            ctx.fillStyle = TYPE_COLOR[theme][n.type] ?? (theme === "dark" ? "#a0a0a0" : "#808080");
             ctx.fill();
             if (focused) {
               ctx.strokeStyle = colors.accent;

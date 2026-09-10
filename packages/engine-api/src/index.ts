@@ -90,6 +90,12 @@ export interface WikiEngine {
   readPage(root: string, idOrPath: string): Promise<PageContent | null>;
   writePage(root: string, idOrPath: string, raw: string): Promise<PageContent>;
   createPage(root: string, id: string, title?: string): Promise<PageContent>;
+  copyPage(root: string, fromId: string, toId: string): Promise<PageContent>;
+  renamePage(root: string, fromId: string, toId: string): Promise<PageContent>;
+  listFolders(root: string): Promise<string[]>;
+  createFolder(root: string, id: string): Promise<{ id: string }>;
+  copyFolder(root: string, fromId: string, toId: string): Promise<{ id: string }>;
+  renameFolder(root: string, fromId: string, toId: string): Promise<{ id: string }>;
   lint(root: string): Promise<LintIssue[]>;
   ask(root: string, question: string): Promise<AskResult>;
   getGraph(root: string): Promise<GraphDto>;

@@ -44,6 +44,60 @@ function isInsideDir(dir: string, file: string): boolean {
   return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
 }
 
+function wikiDir(root: string): string {
+  return path.join(path.resolve(root), "wiki");
+}
+
+function pageFile(root: string, id: string): string {
+  const parts = id.split("/");
+  const file = `${parts[parts.length - 1]}.md`;
+  return path.join(wikiDir(root), ...parts.slice(0, -1), file);
+}
+
+function folderDir(root: string, id: string): string {
+  return path.join(wikiDir(root), ...id.split("/"));
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  try {
+    await fs.access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function dirHasMarkdown(abs: string): Promise<boolean> {
+  const entries = await fs.readdir(abs, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) return true;
+    if (entry.isDirectory() && (await dirHasMarkdown(path.join(abs, entry.name)))) return true;
+  }
+  return false;
+}
+
+function assertInsideWiki(root: string, target: string): void {
+  if (!isInsideDir(wikiDir(root), target)) {
+    throw new Error("只能操作 wiki/ 下的路径");
+  }
+}
+
+function assertNotIntoSelf(fromId: string, toId: string): void {
+  if (toId === fromId || toId.startsWith(`${fromId}/`)) {
+    throw new Error("不能移动到自身内部");
+  }
+}
+
+const STOCK_WIKI_DIRS = new Set([
+  "entities",
+  "concepts",
+  "sources",
+  "queries",
+  "comparisons",
+  "synthesis",
+  "archive",
+]);
+
 export interface LlmWikiEngineOptions {
   settings: Pick<VaultSettings, "apiBaseUrl" | "apiKey" | "model" | "mock">;
 }
@@ -175,10 +229,7 @@ export class LlmWikiEngine implements WikiEngine {
     if (!existing) throw new Error(`页面不存在：${id}`);
 
     const absFile = path.resolve(absRoot, existing.path);
-    const wikiDir = path.join(absRoot, "wiki");
-    if (!isInsideDir(wikiDir, absFile)) {
-      throw new Error("只能写入 wiki/ 下的页面");
-    }
+    assertInsideWiki(absRoot, absFile);
 
     const content = raw.endsWith("\n") ? raw : `${raw}\n`;
     await fs.writeFile(absFile, content, "utf8");
@@ -191,11 +242,8 @@ export class LlmWikiEngine implements WikiEngine {
   async createPage(root: string, idOrPath: string, title?: string): Promise<PageContent> {
     const absRoot = path.resolve(root);
     const id = normalizePageId(idOrPath);
-    const wikiDir = path.join(absRoot, "wiki");
-    const absFile = path.resolve(wikiDir, `${id}.md`);
-    if (!isInsideDir(wikiDir, absFile)) {
-      throw new Error("只能在 wiki/ 下创建页面");
-    }
+    const absFile = pageFile(absRoot, id);
+    assertInsideWiki(absRoot, absFile);
 
     try {
       await fs.access(absFile);
@@ -220,6 +268,111 @@ updated: ${day}
     const created = await this.readPage(absRoot, id);
     if (!created) throw new Error("创建后无法读取页面");
     return created;
+  }
+
+  async copyPage(root: string, fromId: string, toId: string): Promise<PageContent> {
+    const absRoot = path.resolve(root);
+    const srcId = normalizePageId(fromId);
+    const destId = normalizePageId(toId);
+    const src = await this.readPage(absRoot, srcId);
+    if (!src) throw new Error(`页面不存在：${srcId}`);
+    const srcFile = path.resolve(absRoot, src.path);
+    const destFile = pageFile(absRoot, destId);
+    assertInsideWiki(absRoot, srcFile);
+    assertInsideWiki(absRoot, destFile);
+    if (await pathExists(destFile)) throw new Error(`页面已存在：${destId}`);
+    await fs.mkdir(path.dirname(destFile), { recursive: true });
+    await fs.copyFile(srcFile, destFile);
+    await this.getWiki(absRoot).reindex();
+    const copied = await this.readPage(absRoot, destId);
+    if (!copied) throw new Error("复制后无法读取页面");
+    return copied;
+  }
+
+  async renamePage(root: string, fromId: string, toId: string): Promise<PageContent> {
+    const absRoot = path.resolve(root);
+    const srcId = normalizePageId(fromId);
+    const destId = normalizePageId(toId);
+    if (srcId === destId) {
+      const same = await this.readPage(absRoot, srcId);
+      if (!same) throw new Error(`页面不存在：${srcId}`);
+      return same;
+    }
+    const src = await this.readPage(absRoot, srcId);
+    if (!src) throw new Error(`页面不存在：${srcId}`);
+    const srcFile = path.resolve(absRoot, src.path);
+    const destFile = pageFile(absRoot, destId);
+    assertInsideWiki(absRoot, srcFile);
+    assertInsideWiki(absRoot, destFile);
+    if (await pathExists(destFile)) throw new Error(`页面已存在：${destId}`);
+    await fs.mkdir(path.dirname(destFile), { recursive: true });
+    await fs.rename(srcFile, destFile);
+    await this.getWiki(absRoot).reindex();
+    const renamed = await this.readPage(absRoot, destId);
+    if (!renamed) throw new Error("重命名后无法读取页面");
+    return renamed;
+  }
+
+  async listFolders(root: string): Promise<string[]> {
+    const dir = wikiDir(root);
+    if (!(await pathExists(dir))) return [];
+    const out: string[] = [];
+    const walk = async (abs: string, rel: string): Promise<void> => {
+      const entries = await fs.readdir(abs, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+        const id = rel ? `${rel}/${entry.name}` : entry.name;
+        const childAbs = path.join(abs, entry.name);
+        if (!(await dirHasMarkdown(childAbs)) && !STOCK_WIKI_DIRS.has(id)) out.push(id);
+        await walk(childAbs, id);
+      }
+    };
+    await walk(dir, "");
+    return out;
+  }
+
+  async createFolder(root: string, idOrPath: string): Promise<{ id: string }> {
+    const absRoot = path.resolve(root);
+    const id = normalizePageId(idOrPath);
+    const dest = folderDir(absRoot, id);
+    assertInsideWiki(absRoot, dest);
+    if (await pathExists(dest)) throw new Error(`文件夹已存在：${id}`);
+    await fs.mkdir(dest, { recursive: true });
+    return { id };
+  }
+
+  async copyFolder(root: string, fromId: string, toId: string): Promise<{ id: string }> {
+    const absRoot = path.resolve(root);
+    const srcId = normalizePageId(fromId);
+    const destId = normalizePageId(toId);
+    const src = folderDir(absRoot, srcId);
+    const dest = folderDir(absRoot, destId);
+    assertInsideWiki(absRoot, src);
+    assertInsideWiki(absRoot, dest);
+    if (!(await pathExists(src))) throw new Error(`文件夹不存在：${srcId}`);
+    if (await pathExists(dest)) throw new Error(`文件夹已存在：${destId}`);
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.cp(src, dest, { recursive: true });
+    await this.getWiki(absRoot).reindex();
+    return { id: destId };
+  }
+
+  async renameFolder(root: string, fromId: string, toId: string): Promise<{ id: string }> {
+    const absRoot = path.resolve(root);
+    const srcId = normalizePageId(fromId);
+    const destId = normalizePageId(toId);
+    if (srcId === destId) return { id: destId };
+    assertNotIntoSelf(srcId, destId);
+    const src = folderDir(absRoot, srcId);
+    const dest = folderDir(absRoot, destId);
+    assertInsideWiki(absRoot, src);
+    assertInsideWiki(absRoot, dest);
+    if (!(await pathExists(src))) throw new Error(`文件夹不存在：${srcId}`);
+    if (await pathExists(dest)) throw new Error(`文件夹已存在：${destId}`);
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.rename(src, dest);
+    await this.getWiki(absRoot).reindex();
+    return { id: destId };
   }
 
   async lint(root: string): Promise<LintIssue[]> {

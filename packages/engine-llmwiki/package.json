@@ -1,6 +1,6 @@
 {
   "name": "@wikihome/engine-llmwiki",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "llmwiki-core adapter implementing @wikihome/engine-api",
   "type": "module",
   "main": "./dist/index.js",

@@ -91,6 +91,62 @@ async function main() {
     throw new Error(`expected new page in list, got ${JSON.stringify(after)}`);
   }
 
+  const folder = await session.handle({
+    id: 12,
+    method: "vault_create_folder",
+    params: { id: "drafts" },
+  });
+  if (folder.error) throw new Error(folder.error.message);
+
+  const folders = await session.handle({ id: 13, method: "vault_list_folders", params: {} });
+  if (folders.error) throw new Error(folders.error.message);
+  const folderIds = folders.result as string[];
+  if (!folderIds.includes("drafts")) {
+    throw new Error(`expected drafts folder, got ${JSON.stringify(folderIds)}`);
+  }
+
+  const copied = await session.handle({
+    id: 14,
+    method: "vault_copy_page",
+    params: { from: "notes/hello", to: "drafts/hello" },
+  });
+  if (copied.error) throw new Error(copied.error.message);
+  const copiedPage = copied.result as { id: string };
+  if (copiedPage.id !== "drafts/hello") {
+    throw new Error(`expected drafts/hello, got ${JSON.stringify(copiedPage)}`);
+  }
+
+  const renamed = await session.handle({
+    id: 15,
+    method: "vault_rename_page",
+    params: { from: "drafts/hello", to: "drafts/renamed" },
+  });
+  if (renamed.error) throw new Error(renamed.error.message);
+  if ((renamed.result as { id: string }).id !== "drafts/renamed") {
+    throw new Error(`expected drafts/renamed, got ${JSON.stringify(renamed.result)}`);
+  }
+
+  const copiedFolder = await session.handle({
+    id: 16,
+    method: "vault_copy_folder",
+    params: { from: "drafts", to: "inbox" },
+  });
+  if (copiedFolder.error) throw new Error(copiedFolder.error.message);
+
+  const renamedFolder = await session.handle({
+    id: 17,
+    method: "vault_rename_folder",
+    params: { from: "inbox", to: "stash" },
+  });
+  if (renamedFolder.error) throw new Error(renamedFolder.error.message);
+
+  const afterMove = await session.handle({ id: 18, method: "vault_list_pages", params: {} });
+  if (afterMove.error) throw new Error(afterMove.error.message);
+  const moved = afterMove.result as Array<{ id: string }>;
+  if (!moved.some((p) => p.id === "stash/renamed") || moved.some((p) => p.id === "drafts/hello")) {
+    throw new Error(`folder copy/rename mismatch: ${JSON.stringify(moved)}`);
+  }
+
   const backlinks = await session.handle({
     id: 11,
     method: "vault_backlinks",

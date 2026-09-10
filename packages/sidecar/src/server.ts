@@ -101,6 +101,34 @@ export class SidecarSession {
           String(params.id ?? params.path ?? ""),
           params.title == null ? undefined : String(params.title),
         );
+      case "vault_copy_page":
+        return this.engine.copyPage(
+          this.requireVault(),
+          String(params.from ?? params.id ?? ""),
+          String(params.to ?? ""),
+        );
+      case "vault_rename_page":
+        return this.engine.renamePage(
+          this.requireVault(),
+          String(params.from ?? params.id ?? ""),
+          String(params.to ?? ""),
+        );
+      case "vault_list_folders":
+        return this.engine.listFolders(this.requireVault());
+      case "vault_create_folder":
+        return this.engine.createFolder(this.requireVault(), String(params.id ?? params.path ?? ""));
+      case "vault_copy_folder":
+        return this.engine.copyFolder(
+          this.requireVault(),
+          String(params.from ?? params.id ?? ""),
+          String(params.to ?? ""),
+        );
+      case "vault_rename_folder":
+        return this.engine.renameFolder(
+          this.requireVault(),
+          String(params.from ?? params.id ?? ""),
+          String(params.to ?? ""),
+        );
       case "vault_lint":
         return this.engine.lint(this.requireVault());
       case "vault_read_index":
