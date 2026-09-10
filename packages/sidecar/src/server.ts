@@ -34,11 +34,12 @@ export class SidecarSession {
     const persisted = loadPersistedSettings();
     const env = settingsFromEnv();
     const hasPersisted = Object.keys(persisted).length > 0;
-    // Saved settings beat env (so 启动脚本里的 WIKIHOME_MOCK=1 不会盖掉用户关掉的 Mock).
-    // Smoke / tests still win via `initial`.
+    // Faux LLM is smoke-only (`initial.mock` or WIKIHOME_MOCK=1 with no saved settings).
+    // Never restore mock from disk — it used to leave the desktop stuck on canned replies.
+    const { mock: _persistedMock, ...persistedRest } = persisted;
     this.settings = ensureLlmProviders(
       VaultSettingsSchema.parse({
-        ...(hasPersisted ? persisted : env),
+        ...(hasPersisted ? persistedRest : env),
         ...initial,
       }),
     );
@@ -339,11 +340,9 @@ export class SidecarSession {
         const sessionId = String(params.sessionId ?? "");
         const message = String(params.message ?? params.question ?? "");
         const currentPageId = params.currentPageId ? String(params.currentPageId) : undefined;
-        const graphDepth = params.graphDepth ? Number(params.graphDepth) : 1;
 
         const result = await runner.prompt(sessionId, message, {
           currentPageId,
-          graphDepth,
         });
 
         return {

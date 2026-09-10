@@ -105,7 +105,7 @@ export function AgentPane({
       <div className="message-list" ref={listRef}>
         {empty && (
           <div className="empty-center subtle">
-            {modelMissing ? "当前没有可用模型。请在设置中填写 API、拉取或输入模型名，并取消 Mock。" : "向 Agent 提问，答案会出现在这里"}
+            {modelMissing ? "当前没有可用模型。请在设置中填写 API，并拉取或输入模型名。" : "向 Agent 提问，答案会出现在这里"}
           </div>
         )}
         {messages.map((m, index) => (

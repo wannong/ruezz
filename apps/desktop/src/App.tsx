@@ -11,7 +11,7 @@ const defaultSettings: VaultSettings = {
   apiBaseUrl: "https://api.openai.com/v1",
   apiKey: "",
   model: "gpt-4o-mini",
-  mock: true,
+  mock: false,
   providers: [],
   activeProviderId: "",
 };
@@ -60,7 +60,7 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const next = await api.settingsSet({ ...settings, vaultPath: root });
+      const next = await api.settingsSet({ ...settings, vaultPath: root, mock: false });
       await api.vaultInit(root);
       setSettings(next);
       setScreen("main");

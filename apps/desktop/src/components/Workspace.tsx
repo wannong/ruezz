@@ -578,15 +578,16 @@ export function Workspace({
     setError(null);
     try {
       const vaultChanged = Boolean(next.vaultPath && next.vaultPath !== settings.vaultPath);
-      await api.settingsSet(next);
-      onSettings(next);
+      const saved = { ...next, mock: false };
+      await api.settingsSet(saved);
+      onSettings(saved);
       if (vaultChanged) {
-        await api.vaultInit(next.vaultPath);
-      } else if (sessionId && (next.mock || next.model.trim())) {
+        await api.vaultInit(saved.vaultPath);
+      } else if (sessionId && saved.model.trim()) {
         await api.agentSetModel({
           sessionId,
-          provider: next.mock ? "faux" : "openai-compatible",
-          model: next.mock ? "faux-1" : next.model,
+          provider: "openai-compatible",
+          model: saved.model,
         });
       }
       await loadPages();

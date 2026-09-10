@@ -1,7 +1,6 @@
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { Models } from "@earendil-works/pi-ai";
 import type { WikiEngine } from "@wikihome/engine-api";
-import { buildAgentContext } from "./context-builder.js";
 import { SessionStorage } from "./session-storage.js";
 import { createWikiTools } from "./tools/index.js";
 import type {
@@ -21,7 +20,7 @@ const EMPTY_USAGE = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
-const SYSTEM_PROMPT = `你是 WikiHome 本地知识库助手。你可以使用以下工具访问和修改用户的 wiki：
+const SYSTEM_PROMPT = `你是 WikiHome 本地知识库助手。对话里不会预先放入页面正文；需要知识库内容时，请主动调用工具：
 
 - search_pages：搜索页面
 - read_page：读取页面内容
@@ -33,9 +32,7 @@ const SYSTEM_PROMPT = `你是 WikiHome 本地知识库助手。你可以使用�
 - ingest_text：入库文本内容
 - ingest_file：入库文件
 
-引用页面时使用 [[page-id]] 格式。所有写入操作必须在 wiki/ 目录内。
-
-请根据用户的问题，使用合适的工具完成任务。`;
+引用页面时使用 [[page-id]] 格式。所有写入操作必须在 wiki/ 目录内。`;
 
 /**
  * Agent runner that manages sessions and executes prompts using Pi agent-core.
@@ -154,9 +151,10 @@ export class AgentRunner {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
-    // Build context
-    const contextInfo = await buildAgentContext(this.engine, this.vaultRoot, contextOptions);
-    const fullSystemPrompt = contextInfo ? `${SYSTEM_PROMPT}\n\n${contextInfo}` : SYSTEM_PROMPT;
+    const currentPageId = contextOptions?.currentPageId;
+    const fullSystemPrompt = currentPageId
+      ? `${SYSTEM_PROMPT}\n\n用户当前打开的页面是 [[${currentPageId}]]。需要正文、邻居或检索结果时请自行调用工具。`
+      : SYSTEM_PROMPT;
 
     // Create tools
     const tools = createWikiTools(this.engine, this.vaultRoot);

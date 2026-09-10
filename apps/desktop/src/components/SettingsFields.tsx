@@ -13,12 +13,25 @@ type SettingsFieldsProps = {
   onChange: (next: VaultSettings) => void;
 };
 
+function hostLabel(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return "未填地址";
+  try {
+    return new URL(trimmed).host || trimmed;
+  } catch {
+    return trimmed.replace(/^https?:\/\//i, "").split("/")[0] || trimmed;
+  }
+}
+
 export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
   const providers = providersOf(settings);
   const activeId = activeProviderIdOf(settings, providers);
   const [providerBusy, setProviderBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [draftModel, setDraftModel] = useState<Record<string, string>>({});
+  const [openId, setOpenId] = useState<string | null>(activeId);
+
+  const expandedId = providers.some((provider) => provider.id === openId) ? openId : activeId;
 
   function commit(nextProviders: LlmProvider[], nextActiveId = activeId, model = settings.model) {
     onChange(syncSettings(settings, nextProviders, nextActiveId, model));
@@ -30,6 +43,7 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
 
   function addProvider() {
     const id = newProviderId();
+    setOpenId(id);
     commit(
       [
         ...providers,
@@ -49,6 +63,7 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
   function removeProvider(id: string) {
     const next = providers.filter((provider) => provider.id !== id);
     if (!next.length) {
+      setOpenId("default");
       commit(
         [
           {
@@ -66,6 +81,7 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
     }
     const nextActive = id === activeId ? next[0].id : activeId;
     const active = next.find((provider) => provider.id === nextActive) ?? next[0];
+    setOpenId(active.id);
     commit(next, nextActive, active.models[0] ?? "");
   }
 
@@ -151,91 +167,118 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
           添加服务商
         </button>
       </div>
-      <p className="hint">每个服务商独立填写地址和密钥。拉取后的模型会列在下面，可在 Agent 对话里切换。</p>
+      <p className="hint">点击条目展开填写；折叠后只显示摘要，方便添加多个服务商。模型可在 Agent 对话里切换。</p>
 
       {providers.map((provider) => {
         const busy = providerBusy?.startsWith(`${provider.id}:`) ?? false;
         const isActive = provider.id === activeId;
+        const open = provider.id === expandedId;
+        const modelLabel = provider.models.length ? `${provider.models.length} 个模型` : "无模型";
         return (
           <section
             key={provider.id}
-            className={`provider-card${isActive ? " provider-card-active" : ""}`}
+            className={`provider-card${isActive ? " provider-card-active" : ""}${open ? "" : " provider-card-collapsed"}`}
           >
             <div className="provider-card-head">
-              <input
-                className="provider-name"
-                value={provider.name}
-                onChange={(e) => patchProvider(provider.id, { name: e.target.value || "未命名" })}
-                aria-label="服务商名称"
-              />
+              <button
+                type="button"
+                className={`provider-fold${open ? " provider-fold-open" : ""}`}
+                aria-expanded={open}
+                aria-label={open ? `收起 ${provider.name}` : `展开 ${provider.name}`}
+                onClick={() => setOpenId(open ? null : provider.id)}
+              >
+                <span className="provider-chevron" aria-hidden>
+                  {open ? "▾" : "▸"}
+                </span>
+                {!open && (
+                  <>
+                    <span className="provider-fold-title">{provider.name}</span>
+                    <span className="provider-summary">
+                      {hostLabel(provider.apiBaseUrl)} · {modelLabel}
+                    </span>
+                  </>
+                )}
+              </button>
+              {open && (
+                <input
+                  className="provider-name"
+                  value={provider.name}
+                  onChange={(e) => patchProvider(provider.id, { name: e.target.value || "未命名" })}
+                  aria-label="服务商名称"
+                />
+              )}
               {isActive && <span className="provider-badge">当前</span>}
               <button type="button" className="ghost" onClick={() => removeProvider(provider.id)}>
                 删除
               </button>
             </div>
-            <label className="label">
-              API Base URL
-              <input
-                value={provider.apiBaseUrl}
-                onChange={(e) => patchProvider(provider.id, { apiBaseUrl: e.target.value })}
-                placeholder="http://127.0.0.1:1234/v1"
-              />
-              <span className="hint">需包含 /v1</span>
-            </label>
-            <label className="label">
-              API Key
-              <input
-                type="password"
-                value={provider.apiKey}
-                onChange={(e) => patchProvider(provider.id, { apiKey: e.target.value })}
-                placeholder="本地服务可留空"
-              />
-            </label>
-            <div className="settings-provider-actions">
-              <button type="button" disabled={busy} onClick={() => void listModels(provider)}>
-                {providerBusy === `${provider.id}:list` ? "拉取中…" : "拉取模型"}
-              </button>
-              <button type="button" disabled={busy} onClick={() => void testConnection(provider)}>
-                {providerBusy === `${provider.id}:test` ? "测试中…" : "测试连接"}
-              </button>
-            </div>
-            <div className="model-list" role="listbox" aria-label={`${provider.name} 模型`}>
-              {provider.models.length === 0 ? (
-                <div className="model-list-empty">尚未拉取或添加模型</div>
-              ) : (
-                provider.models.map((id) => {
-                  const selected = isActive && settings.model === id;
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      role="option"
-                      aria-selected={selected}
-                      className={`model-chip${selected ? " active" : ""}`}
-                      onClick={() => commit(providers, provider.id, id)}
-                    >
-                      {id}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-            <div className="row">
-              <input
-                value={draftModel[provider.id] ?? ""}
-                onChange={(e) => setDraftModel((d) => ({ ...d, [provider.id]: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addManualModel(provider);
-                  }
-                }}
-                placeholder="手动输入模型名后回车"
-              />
-              <button type="button" onClick={() => addManualModel(provider)}>
-                添加
-              </button>
-            </div>
+            {open && (
+              <div className="provider-card-body">
+                <label className="label">
+                  API Base URL
+                  <input
+                    value={provider.apiBaseUrl}
+                    onChange={(e) => patchProvider(provider.id, { apiBaseUrl: e.target.value })}
+                    placeholder="http://127.0.0.1:1234/v1"
+                  />
+                  <span className="hint">需包含 /v1</span>
+                </label>
+                <label className="label">
+                  API Key
+                  <input
+                    type="password"
+                    value={provider.apiKey}
+                    onChange={(e) => patchProvider(provider.id, { apiKey: e.target.value })}
+                    placeholder="本地服务可留空"
+                  />
+                </label>
+                <div className="settings-provider-actions">
+                  <button type="button" disabled={busy} onClick={() => void listModels(provider)}>
+                    {providerBusy === `${provider.id}:list` ? "拉取中…" : "拉取模型"}
+                  </button>
+                  <button type="button" disabled={busy} onClick={() => void testConnection(provider)}>
+                    {providerBusy === `${provider.id}:test` ? "测试中…" : "测试连接"}
+                  </button>
+                </div>
+                <div className="model-list" role="listbox" aria-label={`${provider.name} 模型`}>
+                  {provider.models.length === 0 ? (
+                    <div className="model-list-empty">尚未拉取或添加模型</div>
+                  ) : (
+                    provider.models.map((id) => {
+                      const selected = isActive && settings.model === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          className={`model-chip${selected ? " active" : ""}`}
+                          onClick={() => commit(providers, provider.id, id)}
+                        >
+                          {id}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <div className="row">
+                  <input
+                    value={draftModel[provider.id] ?? ""}
+                    onChange={(e) => setDraftModel((d) => ({ ...d, [provider.id]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addManualModel(provider);
+                      }
+                    }}
+                    placeholder="手动输入模型名后回车"
+                  />
+                  <button type="button" onClick={() => addManualModel(provider)}>
+                    添加
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
         );
       })}
@@ -245,15 +288,6 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
           {status.text}
         </div>
       )}
-
-      <label className="row">
-        <input
-          type="checkbox"
-          checked={settings.mock}
-          onChange={(e) => onChange({ ...settings, mock: e.target.checked })}
-        />
-        使用 Mock LLM（勾选后不走上面的 API）
-      </label>
     </div>
   );
 }

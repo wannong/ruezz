@@ -94,14 +94,8 @@ export interface AgentPromptResult {
   session: AgentSession;
 }
 
-/**
- * Context for building transformContext.
- */
+/** Per-turn UI state passed into a prompt (not wiki body). */
 export interface ContextBuildOptions {
-  /** Current page ID being viewed */
+  /** Page currently open in the editor, if any */
   currentPageId?: string;
-  /** Number of graph hops to include neighbors (default: 1) */
-  graphDepth?: number;
-  /** Additional search keywords */
-  searchQuery?: string;
 }

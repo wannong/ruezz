@@ -16,5 +16,4 @@ export async function askQuestion(engine: WikiEngine, root: string, question: st
 export * from "./types.js";
 export { SessionStorage } from "./session-storage.js";
 export { AgentRunner } from "./agent-runner.js";
-export { buildAgentContext } from "./context-builder.js";
 export { createWikiTools } from "./tools/index.js";

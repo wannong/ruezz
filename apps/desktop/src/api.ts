@@ -156,7 +156,7 @@ export const api = {
     rpc<{ session: AgentSession }>("agent_session_create", opts ?? {}),
   agentSessionGet: (id: string) => rpc<{ session: AgentSession }>("agent_session_get", { id }),
   agentSessionDelete: (id: string) => rpc<{ ok: boolean }>("agent_session_delete", { id }),
-  agentPrompt: (opts: { sessionId: string; message: string; currentPageId?: string; graphDepth?: number }) =>
+  agentPrompt: (opts: { sessionId: string; message: string; currentPageId?: string }) =>
     rpc<AgentPromptResult>("agent_prompt", opts),
   agentSetModel: (opts: { sessionId: string; provider: string; model: string }) =>
     rpc<{ session: AgentSession }>("agent_set_model", opts),

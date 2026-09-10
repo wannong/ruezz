@@ -988,6 +988,11 @@ textarea:focus {
   background: var(--bg);
 }
 
+.provider-card-collapsed {
+  padding: 0.35rem 0.55rem;
+  gap: 0;
+}
+
 .provider-card-active {
   border-color: var(--accent);
 }
@@ -996,6 +1001,58 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  min-width: 0;
+}
+
+.provider-fold {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0.2rem 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.provider-fold-open {
+  flex: 0 0 auto;
+}
+
+.provider-chevron {
+  flex-shrink: 0;
+  width: 0.9em;
+  color: var(--muted);
+}
+
+.provider-fold-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-summary {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 55%;
+  font-size: 0.72rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-card-body {
+  display: grid;
+  gap: 0.55rem;
 }
 
 .provider-name {
