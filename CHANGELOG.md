@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-09-10
+
+### Added
+
+- Vertical Agent chat: session history, model picker, context token usage, and send/stop
+- Empty chats greet with the WikiHome mark and italic “Hi there!”
+
+### Changed
+
+- New conversation sits next to the session-history button
+- Agent composer height can be dragged from the input panel again
+
 ## [0.1.9] - 2026-09-10
 
 ### Fixed
