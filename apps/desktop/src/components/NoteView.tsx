@@ -30,7 +30,7 @@ export function NoteView({
   onOpen,
 }: NoteViewProps) {
   return (
-    <div className={`note-view${mode === "edit" ? " editing" : ""}`}>
+    <div className="note-view">
       <div className="note-header">
         <div>
           <h1 className="note-title">{page.title ?? page.id}</h1>
@@ -74,7 +74,9 @@ export function NoteView({
           </div>
         </div>
       ) : (
-        <MarkdownPreview markdown={page.body} pages={pages} onOpen={onOpen} />
+        <div className="note-read">
+          <MarkdownPreview markdown={page.body} pages={pages} onOpen={onOpen} />
+        </div>
       )}
     </div>
   );

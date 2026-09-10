@@ -611,7 +611,7 @@ export function Workspace({
             onSelect={setActiveKey}
             onClose={closeTab}
           />
-          <div className={`center-body${noteMode === "edit" ? " editing" : ""}`}>
+          <div className="center-body">
             {!activeTab && (
               <div className="empty-center">
                 打开笔记，或按 {modHint()}P 快速打开
