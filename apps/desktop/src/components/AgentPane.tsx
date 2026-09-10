@@ -1,4 +1,7 @@
+import { useEffect, useState } from "react";
 import type { PageSummary } from "../api";
+import { loadPref, savePref } from "../lib/prefs";
+import { attachResizeY } from "../lib/pointerResize";
 import { WikilinkText } from "./WikilinkText";
 
 export type ChatMessage = {
@@ -18,6 +21,14 @@ type AgentPaneProps = {
   onOpen: (id: string) => void;
 };
 
+const COMPOSER_MIN = 72;
+const COMPOSER_MAX = 360;
+const COMPOSER_DEFAULT = 108;
+
+function clampComposer(n: number): number {
+  return Math.min(COMPOSER_MAX, Math.max(COMPOSER_MIN, n));
+}
+
 export function AgentPane({
   messages,
   draft,
@@ -27,6 +38,14 @@ export function AgentPane({
   onSend,
   onOpen,
 }: AgentPaneProps) {
+  const [composerHeight, setComposerHeight] = useState(() =>
+    clampComposer(loadPref("composerHeight", COMPOSER_DEFAULT)),
+  );
+
+  useEffect(() => {
+    savePref("composerHeight", composerHeight);
+  }, [composerHeight]);
+
   return (
     <div className="agent-pane">
       <div className="message-list">
@@ -54,6 +73,16 @@ export function AgentPane({
         ))}
       </div>
       <div className="agent-composer">
+        <div
+          className="composer-resize"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="调整输入框高度"
+          title="拖拽调整输入框高度"
+          onPointerDown={(e) =>
+            attachResizeY(e, (dy) => setComposerHeight((h) => clampComposer(h - dy)))
+          }
+        />
         <textarea
           value={draft}
           onChange={(e) => onDraft(e.target.value)}
@@ -64,8 +93,8 @@ export function AgentPane({
             }
           }}
           placeholder="输入消息，Enter 发送，Shift+Enter 换行"
-          rows={3}
           disabled={busy}
+          style={{ height: composerHeight }}
         />
         <div className="composer-actions">
           <button className="primary" type="button" disabled={busy || !draft.trim()} onClick={onSend}>

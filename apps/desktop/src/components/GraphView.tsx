@@ -13,6 +13,8 @@ type GraphViewProps = {
   graph: GraphDto | null;
   theme: "dark" | "light";
   onOpen: (id: string) => void;
+  focusId?: string | null;
+  compact?: boolean;
 };
 
 const TYPE_COLOR: Record<string, string> = {
@@ -28,11 +30,11 @@ const TYPE_COLOR: Record<string, string> = {
 };
 
 const THEME_PALETTE = {
-  dark: { bg: "#1e1e1e", ink: "#dcddde", line: "#3f3f3f" },
-  light: { bg: "#ffffff", ink: "#222222", line: "#d0d0d0" },
+  dark: { bg: "#1e1e1e", ink: "#dcddde", line: "#3f3f3f", accent: "#7f6df2" },
+  light: { bg: "#ffffff", ink: "#222222", line: "#d0d0d0", accent: "#6c56d6" },
 };
 
-export function GraphView({ graph, theme, onOpen }: GraphViewProps) {
+export function GraphView({ graph, theme, onOpen, focusId = null, compact = false }: GraphViewProps) {
   const wrap = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const colors = THEME_PALETTE[theme];
@@ -81,31 +83,40 @@ export function GraphView({ graph, theme, onOpen }: GraphViewProps) {
     <div className="graph-wrap" ref={wrap}>
       {size.width > 0 && size.height > 0 && (
         <ForceGraph2D
-          key={theme}
+          key={`${theme}:${focusId ?? ""}:${data.nodes.length}`}
           width={size.width}
           height={size.height}
           backgroundColor={colors.bg}
           graphData={data}
           nodeId="id"
           nodeLabel="label"
+          cooldownTicks={compact ? 60 : 120}
+          d3AlphaDecay={compact ? 0.04 : 0.0228}
           linkColor={() => colors.line}
-          linkDirectionalArrowLength={4}
+          linkWidth={compact ? 1.2 : 1}
+          linkDirectionalArrowLength={compact ? 3 : 4}
           linkDirectionalArrowRelPos={1}
           nodeCanvasObjectMode={() => "replace"}
           nodeCanvasObject={(node, ctx, globalScale) => {
             const n = node as GraphNode & { x?: number; y?: number };
             const x = n.x ?? 0;
             const y = n.y ?? 0;
-            const r = 4 + Math.min(8, n.degree * 0.35);
+            const focused = Boolean(focusId && n.id === focusId);
+            const r = (focused ? 6 : 4) + Math.min(compact ? 5 : 8, n.degree * 0.35);
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
             ctx.fillStyle = TYPE_COLOR[n.type] ?? "#a0aec0";
             ctx.fill();
-            if (globalScale > 1.1) {
+            if (focused) {
+              ctx.strokeStyle = colors.accent;
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            }
+            if (compact || globalScale > 1.1) {
               const fontSize = 12 / globalScale;
-              ctx.font = `${fontSize}px sans-serif`;
+              ctx.font = `${focused ? "600 " : ""}${fontSize}px sans-serif`;
               ctx.fillStyle = colors.ink;
-              ctx.fillText(n.label, x + r + 2, y + fontSize / 3);
+              ctx.fillText(n.label, x + r + 3, y + fontSize / 3);
             }
           }}
           nodePointerAreaPaint={(node, color, ctx) => {

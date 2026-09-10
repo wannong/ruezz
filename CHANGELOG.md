@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-10
+
+### Changed
+
+- Right sidebar “反链” is now “图谱”: a one-hop graph of the current note (ribbon / Ctrl+G)
+- Full-vault graph no longer opens as a center tab
+
+### Added
+
+- Agent message box height can be dragged and is remembered
+
 ## [0.1.1] - 2026-09-10
 
 ### Added
@@ -39,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/wikihome/wikihome/releases/tag/v0.1.2
 [0.1.1]: https://github.com/wikihome/wikihome/releases/tag/v0.1.1
 [0.1.0]: https://github.com/wikihome/wikihome/releases/tag/v0.1.0

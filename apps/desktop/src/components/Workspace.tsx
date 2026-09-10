@@ -13,7 +13,6 @@ import { tabKey, type Tab } from "../lib/tabs";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import type { Theme } from "../theme";
 import { CommandPalette, type PaletteCommand, type PaletteMode } from "./CommandPalette";
-import { GraphView } from "./GraphView";
 import { IngestModal } from "./IngestModal";
 import { LeftSidebar } from "./LeftSidebar";
 import { NoteView } from "./NoteView";
@@ -71,14 +70,13 @@ export function Workspace({
   const [ingestOpen, setIngestOpen] = useState(false);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [graph, setGraph] = useState<GraphDto | null>(null);
-  const [backlinks, setBacklinks] = useState<PageSummary[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
 
   const activeTab = tabs.find((t) => tabKey(t) === activeKey) ?? null;
   const activePageId = activeTab?.kind === "page" ? activeTab.id : null;
   const activePage = activePageId ? (pageCache[activePageId] ?? null) : null;
-  const graphOpen = activeTab?.kind === "graph";
+  const graphOpen = !rightCollapsed && rightView === "graph";
 
   const onError = useCallback(
     (message: string) => setError(message),
@@ -143,25 +141,6 @@ export function Workspace({
     };
   }, [activePageId, onError]);
 
-  useEffect(() => {
-    if (!activePageId) {
-      setBacklinks([]);
-      return;
-    }
-    let cancelled = false;
-    api
-      .vaultBacklinks(activePageId)
-      .then((list) => {
-        if (!cancelled) setBacklinks(list);
-      })
-      .catch(() => {
-        if (!cancelled) setBacklinks([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activePageId]);
-
   const openPage = useCallback(
     (id: string) => {
       setTabs((prev) => {
@@ -175,10 +154,12 @@ export function Workspace({
   );
 
   const openGraph = useCallback(() => {
-    setTabs((prev) => (prev.some((t) => t.kind === "graph") ? prev : [...prev, { kind: "graph" }]));
-    setActiveKey("graph");
-    void loadGraph();
-  }, [loadGraph]);
+    if (!rightCollapsed && rightView === "graph") setRightCollapsed(true);
+    else {
+      setRightCollapsed(false);
+      setRightView("graph");
+    }
+  }, [rightCollapsed, rightView]);
 
   const closeTab = useCallback(
     (key: string) => {
@@ -301,14 +282,14 @@ export function Workspace({
     () => [
       { id: "files", label: "显示文件列表", hint: "Ctrl+[", run: () => { setLeftCollapsed(false); setLeftView("files"); } },
       { id: "search", label: "搜索", run: () => { setLeftCollapsed(false); setLeftView("search"); } },
-      { id: "graph", label: "打开图谱", hint: "Ctrl+G", run: openGraph },
+      { id: "graph", label: "打开图谱", hint: "Ctrl+G", run: () => { setRightCollapsed(false); setRightView("graph"); } },
       { id: "ingest", label: "入库…", run: () => setIngestOpen(true) },
       { id: "settings", label: "打开设置", run: () => setSettingsOpen(true) },
       { id: "theme", label: "切换深浅色", run: onToggleTheme },
       { id: "left", label: "折叠/展开左栏", hint: "Ctrl+[", run: () => setLeftCollapsed((v) => !v) },
       { id: "right", label: "折叠/展开右栏", hint: "Ctrl+]", run: () => setRightCollapsed((v) => !v) },
     ],
-    [openGraph, onToggleTheme],
+    [onToggleTheme],
   );
 
   useEffect(() => {
@@ -327,7 +308,8 @@ export function Workspace({
         setPalette(e.shiftKey ? "commands" : "quick");
       } else if (key === "g") {
         e.preventDefault();
-        openGraph();
+        setRightCollapsed(false);
+        setRightView("graph");
       } else if (e.key === "[") {
         e.preventDefault();
         setLeftCollapsed((v) => !v);
@@ -338,7 +320,7 @@ export function Workspace({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [openGraph]);
+  }, []);
 
   const outline = activePage ? parseOutline(activePage.body) : [];
 
@@ -385,13 +367,13 @@ export function Workspace({
                 打开笔记，或按 {modHint()}P 快速打开
               </div>
             )}
-            {activeTab?.kind === "page" && missingIds[activeTab.id] && (
+            {activeTab && missingIds[activeTab.id] && (
               <div className="empty-center">页面不存在或尚未编译：{activeTab.id}</div>
             )}
-            {activeTab?.kind === "page" && !activePage && !missingIds[activeTab.id] && (
+            {activeTab && !activePage && !missingIds[activeTab.id] && (
               <div className="empty-center">加载中…</div>
             )}
-            {activeTab?.kind === "page" && activePage && (
+            {activeTab && activePage && (
               <NoteView
                 page={activePage}
                 pages={pages}
@@ -400,7 +382,6 @@ export function Workspace({
                 onOpen={openPage}
               />
             )}
-            {activeTab?.kind === "graph" && <GraphView graph={graph} theme={theme} onOpen={openPage} />}
           </div>
         </section>
         <RightSidebar
@@ -415,7 +396,8 @@ export function Workspace({
           pages={pages}
           outline={outline}
           pageId={activePageId}
-          backlinks={backlinks}
+          graph={graph}
+          theme={theme}
           onDraft={setDraft}
           onSend={() => void sendMessage()}
           onOpen={openPage}

@@ -1,5 +1,5 @@
-import type { PointerEvent as ReactPointerEvent } from "react";
 import type { PageSummary } from "../api";
+import { attachResizeX } from "../lib/pointerResize";
 import { FileTree } from "./FileTree";
 import { SearchPane } from "./SearchPane";
 
@@ -41,29 +41,8 @@ export function LeftSidebar({
       )}
       <div
         className="resize-handle"
-        onPointerDown={(e) => attachResize(e, onResize)}
+        onPointerDown={(e) => attachResizeX(e, onResize)}
       />
     </aside>
   );
-}
-
-export function attachResize(
-  e: ReactPointerEvent<HTMLDivElement>,
-  onDelta: (dx: number) => void,
-): void {
-  e.preventDefault();
-  const el = e.currentTarget;
-  el.setPointerCapture(e.pointerId);
-  let last = e.clientX;
-  const move = (ev: globalThis.PointerEvent) => {
-    onDelta(ev.clientX - last);
-    last = ev.clientX;
-  };
-  const up = () => {
-    el.releasePointerCapture(e.pointerId);
-    el.removeEventListener("pointermove", move);
-    el.removeEventListener("pointerup", up);
-  };
-  el.addEventListener("pointermove", move);
-  el.addEventListener("pointerup", up);
 }

@@ -782,13 +782,36 @@ textarea:focus {
 }
 
 .agent-composer {
-  padding: 0.55rem 0.7rem 0.7rem;
+  position: relative;
+  padding: 0.7rem 0.7rem 0.7rem;
   border-top: 1px solid var(--line);
   background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.composer-resize {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  z-index: 5;
+  touch-action: none;
+}
+
+.composer-resize:hover,
+.composer-resize:active {
+  background: var(--accent);
+  opacity: 0.35;
 }
 
 .agent-composer textarea {
   min-height: 72px;
+  max-height: 360px;
+  resize: none;
 }
 
 .composer-actions {
@@ -825,6 +848,17 @@ textarea:focus {
   height: 100%;
   overflow: hidden;
   background: var(--panel);
+}
+
+.local-graph {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.local-graph .graph-wrap {
+  background: var(--sidebar);
 }
 
 .empty,

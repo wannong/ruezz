@@ -1,11 +1,12 @@
-import type { PageSummary } from "../api";
+import type { GraphDto, PageSummary } from "../api";
+import { attachResizeX } from "../lib/pointerResize";
 import type { OutlineItem } from "../lib/outline";
-import { attachResize } from "./LeftSidebar";
+import type { Theme } from "../theme";
 import { AgentPane, type ChatMessage } from "./AgentPane";
-import { BacklinksPane } from "./BacklinksPane";
+import { LocalGraphPane } from "./LocalGraphPane";
 import { OutlinePane } from "./OutlinePane";
 
-export type RightView = "agent" | "outline" | "backlinks";
+export type RightView = "agent" | "outline" | "graph";
 
 type RightSidebarProps = {
   view: RightView;
@@ -19,7 +20,8 @@ type RightSidebarProps = {
   pages: PageSummary[];
   outline: OutlineItem[];
   pageId: string | null;
-  backlinks: PageSummary[];
+  graph: GraphDto | null;
+  theme: Theme;
   onDraft: (value: string) => void;
   onSend: () => void;
   onOpen: (id: string) => void;
@@ -39,7 +41,8 @@ export function RightSidebar({
   pages,
   outline,
   pageId,
-  backlinks,
+  graph,
+  theme,
   onDraft,
   onSend,
   onOpen,
@@ -52,7 +55,7 @@ export function RightSidebar({
     <aside className={`sidebar sidebar-right${overlay ? " overlay" : ""}`} style={{ width }}>
       <div
         className="resize-handle resize-handle-left"
-        onPointerDown={(e) => attachResize(e, (dx) => onResize(-dx))}
+        onPointerDown={(e) => attachResizeX(e, (dx) => onResize(-dx))}
       />
       <div className="sidebar-tabs">
         <button type="button" className={view === "agent" ? "active" : ""} onClick={() => onView("agent")}>
@@ -65,12 +68,8 @@ export function RightSidebar({
         >
           大纲
         </button>
-        <button
-          type="button"
-          className={view === "backlinks" ? "active" : ""}
-          onClick={() => onView("backlinks")}
-        >
-          反链
+        <button type="button" className={view === "graph" ? "active" : ""} onClick={() => onView("graph")}>
+          图谱
         </button>
       </div>
       {view === "agent" && (
@@ -85,7 +84,9 @@ export function RightSidebar({
         />
       )}
       {view === "outline" && <OutlinePane items={outline} onJump={onJump} />}
-      {view === "backlinks" && <BacklinksPane pageId={pageId} links={backlinks} onOpen={onOpen} />}
+      {view === "graph" && (
+        <LocalGraphPane graph={graph} pageId={pageId} theme={theme} onOpen={onOpen} />
+      )}
     </aside>
   );
 }
