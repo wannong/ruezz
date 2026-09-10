@@ -3,6 +3,7 @@ import { api, type VaultSettings } from "./api";
 import { Onboarding } from "./components/Onboarding";
 import { TitleBar } from "./components/TitleBar";
 import { Workspace } from "./components/Workspace";
+import { vaultName } from "./lib/fileTree";
 import { hydrateProviders } from "./lib/llmProviders";
 import { applyTheme, loadTheme, type Theme } from "./theme";
 
