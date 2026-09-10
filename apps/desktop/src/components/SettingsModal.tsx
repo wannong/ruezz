@@ -14,7 +14,7 @@ export function SettingsModal({ settings, busy, onClose, onSave }: SettingsModal
   const [draft, setDraft] = useState(settings);
 
   return (
-    <Modal title="设置" onClose={onClose}>
+    <Modal title="设置" onClose={onClose} wide>
       <SettingsFields settings={draft} onChange={setDraft} />
       <div className="modal-actions">
         <button type="button" onClick={onClose}>

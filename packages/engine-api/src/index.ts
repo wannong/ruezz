@@ -1,14 +1,70 @@
 import { z } from "zod";
 
+export const LlmProviderSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  apiBaseUrl: z.string().default(""),
+  apiKey: z.string().default(""),
+  models: z.array(z.string()).default([]),
+});
+
+export type LlmProvider = z.infer<typeof LlmProviderSchema>;
+
 export const VaultSettingsSchema = z.object({
   vaultPath: z.string().default(""),
   apiBaseUrl: z.string().default("https://api.openai.com/v1"),
   apiKey: z.string().default(""),
   model: z.string().default("gpt-4o-mini"),
   mock: z.boolean().default(false),
+  providers: z.array(LlmProviderSchema).default([]),
+  activeProviderId: z.string().default(""),
 });
 
 export type VaultSettings = z.infer<typeof VaultSettingsSchema>;
+
+function uniqueModelIds(ids: string[]): string[] {
+  return [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+}
+
+/** Fill providers from the legacy single endpoint, and keep active URL/key/model in sync. */
+export function ensureLlmProviders(settings: VaultSettings): VaultSettings {
+  const providers = (
+    settings.providers.length > 0
+      ? settings.providers
+      : [
+          {
+            id: "default",
+            name: "OpenAI Compatible",
+            apiBaseUrl: settings.apiBaseUrl,
+            apiKey: settings.apiKey,
+            models: uniqueModelIds([settings.model]),
+          },
+        ]
+  ).map((provider) => ({ ...provider, models: uniqueModelIds(provider.models) }));
+
+  const activeProviderId = providers.some((provider) => provider.id === settings.activeProviderId)
+    ? settings.activeProviderId
+    : providers[0]?.id ?? "";
+  const active = providers.find((provider) => provider.id === activeProviderId) ?? providers[0];
+  if (!active) {
+    return { ...settings, providers, activeProviderId };
+  }
+
+  const model = settings.model.trim() || active.models[0] || "";
+  const models = uniqueModelIds([model, ...active.models]);
+  const nextProviders = providers.map((provider) =>
+    provider.id === active.id ? { ...provider, models } : provider,
+  );
+
+  return {
+    ...settings,
+    providers: nextProviders,
+    activeProviderId: active.id,
+    apiBaseUrl: active.apiBaseUrl,
+    apiKey: active.apiKey,
+    model,
+  };
+}
 
 export const PageSummarySchema = z.object({
   id: z.string(),

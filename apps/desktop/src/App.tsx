@@ -12,6 +12,8 @@ const defaultSettings: VaultSettings = {
   apiKey: "",
   model: "gpt-4o-mini",
   mock: true,
+  providers: [],
+  activeProviderId: "",
 };
 
 export default function App() {

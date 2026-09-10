@@ -29,6 +29,12 @@ type RightSidebarProps = {
   onSend: () => void;
   onOpen: (id: string) => void;
   onJump: (id: string) => void;
+  modelLabel: string;
+  modelMissing: boolean;
+  modelValue: string;
+  modelGroups: Array<{ providerId: string; providerName: string; models: string[] }>;
+  mock: boolean;
+  onSwitchModel: (providerId: string, modelId: string) => void;
   onResize: (dx: number) => void;
   onCollapse: () => void;
 };
@@ -55,6 +61,12 @@ export function RightSidebar({
   onJump,
   onResize,
   onCollapse,
+  modelLabel,
+  modelMissing,
+  modelValue,
+  modelGroups,
+  mock,
+  onSwitchModel,
 }: RightSidebarProps) {
   if (collapsed) return null;
 
@@ -99,6 +111,12 @@ export function RightSidebar({
           onDraft={onDraft}
           onSend={onSend}
           onOpen={onOpen}
+          modelLabel={modelLabel}
+          modelMissing={modelMissing}
+          modelValue={modelValue}
+          modelGroups={modelGroups}
+          mock={mock}
+          onSwitchModel={onSwitchModel}
         />
       )}
       {view === "outline" && <OutlinePane items={outline} onJump={onJump} />}

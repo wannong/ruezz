@@ -1,6 +1,7 @@
 import { AgentRunner, askQuestion } from "@wikihome/agent";
 import {
   VaultSettingsSchema,
+  ensureLlmProviders,
   type VaultSettings,
   type WikiEngine,
 } from "@wikihome/engine-api";
@@ -8,7 +9,8 @@ import { createEngine } from "@wikihome/engine-llmwiki";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { revealInExplorer } from "./reveal.js";
-import { loadPersistedSettings, savePersistedSettings } from "./settings-store.js";
+import { listOpenAiModels, testOpenAiConnection } from "./openai-compat.js";
+import { loadPersistedSettings, savePersistedSettings, settingsFromEnv } from "./settings-store.js";
 
 export type RpcRequest = {
   id: string | number;
@@ -26,12 +28,20 @@ export class SidecarSession {
   private settings: VaultSettings;
   private engine: WikiEngine;
   private agentRunner: AgentRunner | null = null;
+  private listedModelIds: string[] = [];
 
   constructor(initial?: Partial<VaultSettings>) {
-    this.settings = VaultSettingsSchema.parse({
-      ...loadPersistedSettings(),
-      ...initial,
-    });
+    const persisted = loadPersistedSettings();
+    const env = settingsFromEnv();
+    const hasPersisted = Object.keys(persisted).length > 0;
+    // Saved settings beat env (so 启动脚本里的 WIKIHOME_MOCK=1 不会盖掉用户关掉的 Mock).
+    // Smoke / tests still win via `initial`.
+    this.settings = ensureLlmProviders(
+      VaultSettingsSchema.parse({
+        ...(hasPersisted ? persisted : env),
+        ...initial,
+      }),
+    );
     this.engine = createEngine(this.settings);
   }
 
@@ -76,9 +86,20 @@ export class SidecarSession {
           });
         }
       } else {
-        // Create OpenAI-compatible provider using user settings
-        const { openAIResponsesApi } = await import("@earendil-works/pi-ai/api/openai-responses.lazy");
-        
+        // Most OpenAI-compatible servers (LM Studio, 代理、国产网关) speak
+        // /v1/chat/completions, not the newer /v1/responses API.
+        const { openAICompletionsApi } = await import(
+          "@earendil-works/pi-ai/api/openai-completions.lazy"
+        );
+        const active = this.settings.providers.find((p) => p.id === this.settings.activeProviderId);
+        const modelIds = [
+          ...new Set(
+            [this.settings.model, ...(active?.models ?? []), ...this.listedModelIds].filter(Boolean),
+          ),
+        ];
+        if (modelIds.length === 0) {
+          throw new Error("当前没有可用模型。请在设置中填写 API 并拉取模型。");
+        }
         const provider = createProvider({
           id: "openai-compatible",
           name: "OpenAI Compatible",
@@ -86,30 +107,30 @@ export class SidecarSession {
           auth: {
             apiKey: {
               name: "API Key",
-              resolve: async () => ({
-                value: this.settings.apiKey,
-                source: "settings",
-                auth: { apiKey: this.settings.apiKey },
-              }),
+              resolve: async () => {
+                const key = this.settings.apiKey.trim();
+                return {
+                  source: "settings",
+                  auth: key ? { apiKey: key } : {},
+                };
+              },
             },
           },
-          models: [
-            {
-              id: this.settings.model,
-              name: this.settings.model,
-              provider: "openai-compatible",
-              api: "openai-responses" as const,
-              baseUrl: this.settings.apiBaseUrl,
-              reasoning: false,
-              input: ["text" as const],
-              contextWindow: 128000,
-              maxTokens: 16384,
-              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-            },
-          ],
-          api: openAIResponsesApi(),
+          models: modelIds.map((id) => ({
+            id,
+            name: id,
+            provider: "openai-compatible",
+            api: "openai-completions" as const,
+            baseUrl: this.settings.apiBaseUrl,
+            reasoning: false,
+            input: ["text" as const],
+            contextWindow: 128000,
+            maxTokens: 16384,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          })),
+          api: openAICompletionsApi(),
         });
-        
+
         models.setProvider(provider);
       }
       
@@ -128,7 +149,9 @@ export class SidecarSession {
 
   setSettings(patch: Partial<VaultSettings>): VaultSettings {
     const oldSettings = { ...this.settings };
-    this.settings = VaultSettingsSchema.parse({ ...this.settings, ...patch });
+    this.settings = ensureLlmProviders(
+      VaultSettingsSchema.parse({ ...this.settings, ...patch }),
+    );
     
     // Clean up old engine and agent runner
     this.engine.close?.();
@@ -140,7 +163,13 @@ export class SidecarSession {
       oldSettings.mock !== this.settings.mock ||
       oldSettings.apiBaseUrl !== this.settings.apiBaseUrl ||
       oldSettings.apiKey !== this.settings.apiKey ||
-      oldSettings.model !== this.settings.model;
+      oldSettings.model !== this.settings.model ||
+      oldSettings.activeProviderId !== this.settings.activeProviderId ||
+      JSON.stringify(oldSettings.providers) !== JSON.stringify(this.settings.providers);
+
+    if (oldSettings.apiBaseUrl !== this.settings.apiBaseUrl) {
+      this.listedModelIds = [];
+    }
     
     if (needsRebuild && this.agentRunner) {
       this.agentRunner = null;
@@ -275,15 +304,22 @@ export class SidecarSession {
       }
       case "agent_session_create": {
         const runner = await this.getAgentRunner();
+        const requested = params.model
+          ? {
+              provider: String((params.model as { provider?: string }).provider ?? ""),
+              modelId: String(
+                (params.model as { modelId?: string; model?: string }).modelId ??
+                  (params.model as { model?: string }).model ??
+                  "",
+              ),
+            }
+          : !this.settings.mock && this.settings.model
+            ? { provider: "openai-compatible", modelId: this.settings.model }
+            : undefined;
         const session = await runner.createSession({
           title: params.title ? String(params.title) : undefined,
           currentPageId: params.currentPageId ? String(params.currentPageId) : undefined,
-          model: params.model
-            ? {
-                provider: String((params.model as any).provider),
-                modelId: String((params.model as any).modelId),
-              }
-            : undefined,
+          model: requested,
         });
         return { session };
       }
@@ -346,6 +382,20 @@ export class SidecarSession {
         }));
         
         return { providers };
+      }
+      case "provider_list_models": {
+        const apiBaseUrl = String(params.apiBaseUrl ?? this.settings.apiBaseUrl ?? "");
+        const apiKey = String(params.apiKey ?? this.settings.apiKey ?? "");
+        const models = await listOpenAiModels(apiBaseUrl, apiKey);
+        this.listedModelIds = models;
+        this.agentRunner = null;
+        return { models };
+      }
+      case "provider_test": {
+        const apiBaseUrl = String(params.apiBaseUrl ?? this.settings.apiBaseUrl ?? "");
+        const apiKey = String(params.apiKey ?? this.settings.apiKey ?? "");
+        const model = String(params.model ?? this.settings.model ?? "");
+        return testOpenAiConnection(apiBaseUrl, apiKey, model);
       }
       case "ping":
         return { ok: true, version: "0.1.0" };

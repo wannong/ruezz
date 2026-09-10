@@ -1,12 +1,22 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 
+export type LlmProvider = {
+  id: string;
+  name: string;
+  apiBaseUrl: string;
+  apiKey: string;
+  models: string[];
+};
+
 export type VaultSettings = {
   vaultPath: string;
   apiBaseUrl: string;
   apiKey: string;
   model: string;
   mock: boolean;
+  providers: LlmProvider[];
+  activeProviderId: string;
 };
 
 export type PageSummary = {
@@ -152,6 +162,10 @@ export const api = {
     rpc<{ session: AgentSession }>("agent_set_model", opts),
   agentListProviders: () =>
     rpc<{ providers: Array<{ name: string; models: string[] }> }>("agent_list_providers"),
+  providerListModels: (opts?: { apiBaseUrl?: string; apiKey?: string }) =>
+    rpc<{ models: string[] }>("provider_list_models", opts ?? {}),
+  providerTest: (opts?: { apiBaseUrl?: string; apiKey?: string; model?: string }) =>
+    rpc<{ ok: true; reply: string }>("provider_test", opts ?? {}),
   vaultListPages: () => rpc<PageSummary[]>("vault_list_pages"),
   vaultReadPage: (id: string) => rpc<PageContent | null>("vault_read_page", { id }),
   vaultWritePage: (id: string, raw: string) => rpc<PageContent>("vault_write_page", { id, raw }),

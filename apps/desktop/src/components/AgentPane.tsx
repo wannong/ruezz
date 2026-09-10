@@ -11,6 +11,12 @@ type AgentPaneProps = {
   draft: string;
   busy: boolean;
   pages: PageSummary[];
+  modelLabel: string;
+  modelMissing: boolean;
+  modelValue: string;
+  modelGroups: Array<{ providerId: string; providerName: string; models: string[] }>;
+  mock: boolean;
+  onSwitchModel: (providerId: string, modelId: string) => void;
   onDraft: (value: string) => void;
   onSend: () => void;
   onOpen: (id: string) => void;
@@ -38,6 +44,12 @@ export function AgentPane({
   draft,
   busy,
   pages,
+  modelLabel,
+  modelMissing,
+  modelValue,
+  modelGroups,
+  mock,
+  onSwitchModel,
   onDraft,
   onSend,
   onOpen,
@@ -61,8 +73,41 @@ export function AgentPane({
 
   return (
     <div className="agent-pane">
+      <div className={`agent-model-bar${modelMissing ? " agent-model-bar-warn" : ""}`}>
+        {mock || modelGroups.length === 0 ? (
+          <span>{modelLabel}</span>
+        ) : (
+          <label className="agent-model-select">
+            <span>模型</span>
+            <select
+              value={modelValue}
+              disabled={busy}
+              onChange={(e) => {
+                const value = e.target.value;
+                const sep = value.indexOf("::");
+                if (sep <= 0) return;
+                onSwitchModel(value.slice(0, sep), value.slice(sep + 2));
+              }}
+            >
+              {modelGroups.map((group) => (
+                <optgroup key={group.providerId} label={group.providerName}>
+                  {group.models.map((id) => (
+                    <option key={`${group.providerId}::${id}`} value={`${group.providerId}::${id}`}>
+                      {id}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
       <div className="message-list" ref={listRef}>
-        {empty && <div className="empty-center subtle">向 Agent 提问，答案会出现在这里</div>}
+        {empty && (
+          <div className="empty-center subtle">
+            {modelMissing ? "当前没有可用模型。请在设置中填写 API、拉取或输入模型名，并取消 Mock。" : "向 Agent 提问，答案会出现在这里"}
+          </div>
+        )}
         {messages.map((m, index) => (
           <SessionMessageView key={messageKey(m, index)} message={m} pages={pages} onOpen={onOpen} />
         ))}

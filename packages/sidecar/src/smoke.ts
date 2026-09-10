@@ -289,6 +289,24 @@ async function main() {
     throw new Error("agent runner still listed sessions from the previous vault after vaultPath change");
   }
 
+  const emptyBase = await reopened.handle({
+    id: 28,
+    method: "provider_list_models",
+    params: { apiBaseUrl: "", apiKey: "" },
+  });
+  if (!emptyBase.error || !String(emptyBase.error.message).includes("API Base URL")) {
+    throw new Error(`expected empty base url error, got ${JSON.stringify(emptyBase)}`);
+  }
+
+  const emptyModel = await reopened.handle({
+    id: 29,
+    method: "provider_test",
+    params: { apiBaseUrl: "http://127.0.0.1:9/v1", apiKey: "", model: "" },
+  });
+  if (!emptyModel.error || !String(emptyModel.error.message).includes("模型")) {
+    throw new Error(`expected missing model error, got ${JSON.stringify(emptyModel)}`);
+  }
+
   reopened.close();
   console.log("smoke ok", {
     root,

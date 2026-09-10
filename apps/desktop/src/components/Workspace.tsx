@@ -13,6 +13,7 @@ import { parseOutline } from "../lib/outline";
 import { markdownBody } from "../lib/noteId";
 import { joinWikiId, parentWikiId, pasteDest, type WikiClip } from "../lib/fileTree";
 import { tabKey, type Tab } from "../lib/tabs";
+import { activeProviderIdOf, modelSwitchKey, providersOf, syncSettings } from "../lib/llmProviders";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import type { Theme } from "../theme";
 import { PanelRightOpen } from "lucide-react";
@@ -90,6 +91,25 @@ export function Workspace({
   const activeTab = tabs.find((t) => tabKey(t) === activeKey) ?? null;
   const activePageId = activeTab?.kind === "page" ? activeTab.id : null;
   const activePage = activePageId ? (pageCache[activePageId] ?? null) : null;
+  const modelMissing = !settings.mock && !settings.model.trim();
+  const modelProviders = providersOf(settings);
+  const activeProviderId = activeProviderIdOf(settings, modelProviders);
+  const modelGroups = modelProviders
+    .map((provider) => ({
+      providerId: provider.id,
+      providerName: provider.name,
+      models:
+        provider.id === activeProviderId
+          ? [...new Set([settings.model, ...provider.models].filter(Boolean))]
+          : provider.models,
+    }))
+    .filter((group) => group.models.length > 0);
+  const modelValue = modelSwitchKey(activeProviderId, settings.model);
+  const modelLabel = settings.mock
+    ? "模型：Mock（不走 API）"
+    : modelMissing
+      ? "未选择模型 — 请在设置中填写 API 并拉取或输入模型名"
+      : `模型：${settings.model}`;
   const agentOpen = !rightCollapsed && rightView === "agent";
   const graphOpen = !rightCollapsed && rightView === "graph";
 
@@ -178,9 +198,19 @@ export function Workspace({
         }
         const { session } = await api.agentSessionGet(sessions[0].id);
         if (cancelled) return;
-        setSessionId(session.id);
-        setMessages(session.messages);
-        setLinkedPageIds(session.linkedPageIds);
+        let current = session;
+        if (!settings.mock && settings.model.trim() && session.model.modelId !== settings.model) {
+          const updated = await api.agentSetModel({
+            sessionId: session.id,
+            provider: "openai-compatible",
+            model: settings.model,
+          });
+          current = updated.session;
+        }
+        if (cancelled) return;
+        setSessionId(current.id);
+        setMessages(current.messages);
+        setLinkedPageIds(current.linkedPageIds);
       } catch (e) {
         if (!cancelled) onError(e instanceof Error ? e.message : String(e));
       }
@@ -188,7 +218,7 @@ export function Workspace({
     return () => {
       cancelled = true;
     };
-  }, [onError]);
+  }, [onError, settings.mock, settings.model]);
 
   useEffect(() => {
     if (!notice) return;
@@ -523,14 +553,41 @@ export function Workspace({
     }
   }
 
+  async function switchModel(providerId: string, modelId: string) {
+    if (!modelId.trim() || (providerId === activeProviderId && modelId === settings.model && !settings.mock)) {
+      return;
+    }
+    const next = { ...syncSettings(settings, modelProviders, providerId, modelId), mock: false };
+    try {
+      await api.settingsSet(next);
+      onSettings(next);
+      if (sessionId) {
+        await api.agentSetModel({
+          sessionId,
+          provider: "openai-compatible",
+          model: modelId,
+        });
+      }
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   async function saveSettings(next: VaultSettings) {
     setBusy(true);
     setError(null);
     try {
+      const vaultChanged = Boolean(next.vaultPath && next.vaultPath !== settings.vaultPath);
       await api.settingsSet(next);
       onSettings(next);
-      if (next.vaultPath && next.vaultPath !== settings.vaultPath) {
+      if (vaultChanged) {
         await api.vaultInit(next.vaultPath);
+      } else if (sessionId && (next.mock || next.model.trim())) {
+        await api.agentSetModel({
+          sessionId,
+          provider: next.mock ? "faux" : "openai-compatible",
+          model: next.mock ? "faux-1" : next.model,
+        });
       }
       await loadPages();
       await loadGraph();
@@ -735,6 +792,12 @@ export function Workspace({
           onJump={jumpHeading}
           onResize={(dx) => setRightWidth((w) => clamp(w + dx, RIGHT_MIN, RIGHT_MAX))}
           onCollapse={() => setRightCollapsed(true)}
+          modelLabel={modelLabel}
+          modelMissing={modelMissing}
+          modelValue={modelValue}
+          modelGroups={modelGroups}
+          mock={settings.mock}
+          onSwitchModel={(providerId, modelId) => void switchModel(providerId, modelId)}
         />
       </div>
       <StatusBar

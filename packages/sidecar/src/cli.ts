@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 import readline from "node:readline";
 import { SidecarSession, type RpcRequest } from "./server.js";
-import { settingsFromEnv } from "./settings-store.js";
 
-const session = new SidecarSession(settingsFromEnv());
+const session = new SidecarSession();
 
 const rl = readline.createInterface({ input: process.stdin, terminal: false });
 

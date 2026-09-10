@@ -166,7 +166,7 @@ textarea:focus {
 }
 
 .onboarding-card {
-  width: min(520px, 100%);
+  width: min(720px, 100%);
   background: var(--panel);
   border: 1px solid var(--line-strong);
   border-radius: 8px;
@@ -944,6 +944,128 @@ textarea:focus {
   flex-direction: column;
 }
 
+.agent-model-bar {
+  flex-shrink: 0;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.agent-model-select {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.agent-model-select span {
+  flex-shrink: 0;
+}
+
+.agent-model-select select {
+  min-width: 0;
+  flex: 1;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.35rem;
+}
+
+.settings-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.provider-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.provider-card-active {
+  border-color: var(--accent);
+}
+
+.provider-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.provider-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.provider-badge {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 0.05rem 0.4rem;
+}
+
+.model-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  max-height: 160px;
+  overflow: auto;
+  padding: 0.2rem 0;
+}
+
+.model-list-empty {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.model-chip {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-chip.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+
+button.ghost {
+  background: transparent;
+}
+
+.agent-model-bar-warn {
+  color: var(--danger);
+}
+
+.settings-provider-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.settings-status {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.settings-status-err {
+  color: var(--danger);
+}
+
 .message-list {
   flex: 1;
   min-height: 0;
@@ -1212,7 +1334,7 @@ textarea:focus {
 }
 
 .modal-wide {
-  width: min(640px, 100%);
+  width: min(720px, 100%);
 }
 
 .modal-header {
@@ -1232,6 +1354,8 @@ textarea:focus {
   padding: 0.9rem;
   display: grid;
   gap: 0.85rem;
+  max-height: min(72vh, 680px);
+  overflow: auto;
 }
 
 .modal-actions {

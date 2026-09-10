@@ -12,6 +12,15 @@ import type {
   SessionMessage,
 } from "./types.js";
 
+const EMPTY_USAGE = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  totalTokens: 0,
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+};
+
 const SYSTEM_PROMPT = `你是 WikiHome 本地知识库助手。你可以使用以下工具访问和修改用户的 wiki：
 
 - search_pages：搜索页面
@@ -59,27 +68,35 @@ export class AgentRunner {
   }
 
   /**
+   * Map a session's stored provider/id onto the current catalog.
+   * Exact match, then same model id on another provider, then the first model.
+   */
+  private resolveSessionModel(wanted?: { provider: string; modelId: string }): {
+    provider: string;
+    modelId: string;
+  } | null {
+    const available = this.models.getModels();
+    if (available.length === 0) return null;
+    if (wanted) {
+      const exact = this.models.getModel(wanted.provider, wanted.modelId);
+      if (exact) return { provider: exact.provider, modelId: exact.id };
+      const byId = available.find((model) => model.id === wanted.modelId);
+      if (byId) return { provider: byId.provider, modelId: byId.id };
+    }
+    const first = available[0];
+    return { provider: first.provider, modelId: first.id };
+  }
+
+  /**
    * Create a new session.
    */
   async createSession(options: CreateSessionOptions = {}): Promise<AgentSession> {
     const now = new Date().toISOString();
-    
-    // Determine default model based on available models
-    let defaultModel = options.model || { provider: "openai", modelId: "gpt-4o-mini" };
-    
-    // Check if model is available, fallback to first available if not
-    const availableModels = this.models.getModels();
-    if (availableModels.length > 0) {
-      const modelExists = this.models.getModel(defaultModel.provider, defaultModel.modelId);
-      if (!modelExists) {
-        // Use first available model
-        defaultModel = {
-          provider: availableModels[0].provider,
-          modelId: availableModels[0].id,
-        };
-      }
+    const defaultModel = this.resolveSessionModel(options.model);
+    if (!defaultModel) {
+      throw new Error("当前没有可用模型。请在设置中填写 API 并拉取模型。");
     }
-    
+
     const session: AgentSession = {
       id: this.storage.generateId(),
       title: options.title || "新对话",
@@ -144,10 +161,20 @@ export class AgentRunner {
     // Create tools
     const tools = createWikiTools(this.engine, this.vaultRoot);
 
-    // Get model from Models collection
-    const model = this.models.getModel(session.model.provider, session.model.modelId);
+    const resolved = this.resolveSessionModel(session.model);
+    if (!resolved) {
+      throw new Error("当前没有可用模型。请在设置中填写 API 并拉取模型。");
+    }
+    if (
+      resolved.provider !== session.model.provider ||
+      resolved.modelId !== session.model.modelId
+    ) {
+      session.model = resolved;
+      await this.storage.save(session);
+    }
+    const model = this.models.getModel(resolved.provider, resolved.modelId);
     if (!model) {
-      throw new Error(`Model not found: ${session.model.provider}/${session.model.modelId}`);
+      throw new Error("当前没有可用模型。请在设置中填写 API 并拉取模型。");
     }
 
     // Initialize agent with session history. Stream through the Models
@@ -366,10 +393,14 @@ export class AgentRunner {
         return {
           role: "assistant",
           content,
-          provider: msg.provider,
-          model: msg.model,
+          api: "openai-completions",
+          provider: msg.provider || "openai-compatible",
+          model: msg.model || "unknown",
           timestamp: msg.timestamp,
           stopReason: msg.toolCalls && msg.toolCalls.length > 0 ? "toolUse" : "stop",
+          // Pi streamSimple estimates context from assistant.usage.totalTokens.
+          // Older session JSON omitted usage; missing it crashes real (non-mock) calls.
+          usage: EMPTY_USAGE,
         };
       } else if (msg.role === "toolResult") {
         return {

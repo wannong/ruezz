@@ -1,10 +1,9 @@
 import http from "node:http";
 import { SidecarSession } from "./server.js";
-import { settingsFromEnv } from "./settings-store.js";
 
 /** Optional HTTP wrapper for Vite-only / non-Tauri development. */
 export function startHttpServer(port = Number(process.env.WIKIHOME_HTTP_PORT ?? 8787)) {
-  const session = new SidecarSession(settingsFromEnv());
+  const session = new SidecarSession();
 
   const server = http.createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
