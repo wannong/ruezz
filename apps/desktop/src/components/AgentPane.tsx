@@ -5,6 +5,7 @@ import wikihomeIcon from "../assets/wikihome-icon.svg";
 import { parseModelSwitchKey } from "../lib/llmProviders";
 import { loadPref, savePref } from "../lib/prefs";
 import { attachResizeY } from "../lib/pointerResize";
+import { MarkdownPreview } from "./MarkdownPreview";
 import { WikilinkText } from "./WikilinkText";
 
 const COMPOSER_MIN = 88;
@@ -227,9 +228,9 @@ export function AgentPane({
                 <div className="msg-role">Agent</div>
                 <div className="msg-body">
                   {streamingText ? (
-                    <WikilinkText text={streamingText} pages={pages} onOpen={onOpen} />
+                    <MarkdownPreview markdown={streamingText} pages={pages} onOpen={onOpen} />
                   ) : (
-                    "正在查询知识库…"
+                    <span className="msg-thinking">思考中</span>
                   )}
                 </div>
                 {streamingTools.length > 0 && (
@@ -428,7 +429,7 @@ function SessionMessageView({
       <div className="msg-role">Agent</div>
       {hasText && (
         <div className="msg-body">
-          <WikilinkText text={message.content} pages={pages} onOpen={onOpen} />
+          <MarkdownPreview markdown={message.content} pages={pages} onOpen={onOpen} />
         </div>
       )}
       {toolCalls.length > 0 && (

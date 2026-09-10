@@ -1,6 +1,6 @@
 {
   "name": "@wikihome/llm",
-  "version": "0.1.10",
+  "version": "1.0.0",
   "description": "OpenAI-compatible LLM client for WikiHome",
   "type": "module",
   "main": "./dist/index.js",

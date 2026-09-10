@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-10
+
+WikiHome’s first feature-complete release: local wiki, graph, and a vertical Agent chat.
+
+### Added
+
+- Render Agent replies as Markdown (headings, lists, emphasis, code, tables, and `[[wikilinks]]`)
+
+### Changed
+
+- Waiting copy before the first token is now “思考中”
+
 ## [0.1.10] - 2026-09-10
 
 ### Added
@@ -112,7 +124,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/wikihome/wikihome/releases/tag/v1.0.0
+[0.1.10]: https://github.com/wikihome/wikihome/releases/tag/v0.1.10
 [0.1.9]: https://github.com/wikihome/wikihome/releases/tag/v0.1.9
 [0.1.8]: https://github.com/wikihome/wikihome/releases/tag/v0.1.8
 [0.1.7]: https://github.com/wikihome/wikihome/releases/tag/v0.1.7
