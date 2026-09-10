@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { VaultSettings } from "../api";
+import { hydrateProviders } from "../lib/llmProviders";
 import { Modal } from "./Modal";
 import { SettingsFields } from "./SettingsFields";
 
@@ -11,7 +12,7 @@ type SettingsModalProps = {
 };
 
 export function SettingsModal({ settings, busy, onClose, onSave }: SettingsModalProps) {
-  const [draft, setDraft] = useState(settings);
+  const [draft, setDraft] = useState(() => hydrateProviders(settings));
 
   return (
     <Modal title="设置" onClose={onClose} wide>

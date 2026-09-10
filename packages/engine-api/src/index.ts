@@ -26,9 +26,64 @@ function uniqueModelIds(ids: string[]): string[] {
   return [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
 }
 
+function normalizeProviderBase(url: string): string {
+  return url.trim().replace(/\/+$/, "").replace(/\/v1$/i, "").toLowerCase();
+}
+
+/** Built-in OpenAI-compatible vendors. Keep in sync with apps/desktop/src/lib/llmProviders.ts */
+export const PRESET_LLM_PROVIDERS: LlmProvider[] = [
+  { id: "openai", name: "OpenAI", apiBaseUrl: "https://api.openai.com/v1", apiKey: "", models: [] },
+  { id: "deepseek", name: "DeepSeek", apiBaseUrl: "https://api.deepseek.com/v1", apiKey: "", models: [] },
+  { id: "glm", name: "智谱 GLM", apiBaseUrl: "https://open.bigmodel.cn/api/paas/v4", apiKey: "", models: [] },
+  { id: "kimi", name: "Kimi", apiBaseUrl: "https://api.moonshot.cn/v1", apiKey: "", models: [] },
+];
+
+export function isPresetProviderId(id: string): boolean {
+  return PRESET_LLM_PROVIDERS.some((provider) => provider.id === id);
+}
+
+export function mergePresetProviders(existing: LlmProvider[]): {
+  providers: LlmProvider[];
+  idMap: Map<string, string>;
+} {
+  const remaining = existing.map((provider) => ({
+    ...provider,
+    models: uniqueModelIds(provider.models),
+  }));
+  const idMap = new Map<string, string>();
+
+  const presets = PRESET_LLM_PROVIDERS.map((preset) => {
+    const byId = remaining.findIndex((row) => row.id === preset.id);
+    const byUrl = remaining.findIndex(
+      (row) => row.apiBaseUrl.trim() && normalizeProviderBase(row.apiBaseUrl) === normalizeProviderBase(preset.apiBaseUrl),
+    );
+    const idx = byId >= 0 ? byId : byUrl;
+    if (idx < 0) return { ...preset };
+    const found = remaining.splice(idx, 1)[0];
+    idMap.set(found.id, preset.id);
+    const genericName = found.name === "OpenAI Compatible" || found.name === "未命名";
+    return {
+      ...preset,
+      name: genericName ? preset.name : found.name,
+      apiBaseUrl: found.apiBaseUrl.trim() || preset.apiBaseUrl,
+      apiKey: found.apiKey,
+      models: uniqueModelIds(found.models),
+    };
+  });
+
+  return { providers: [...presets, ...remaining.map(labelCustomProvider)], idMap };
+}
+
+function labelCustomProvider(provider: LlmProvider): LlmProvider {
+  if (provider.id === "default" && (provider.name === "OpenAI Compatible" || provider.name === "未命名")) {
+    return { ...provider, name: "自定义" };
+  }
+  return provider;
+}
+
 /** Fill providers from the legacy single endpoint, and keep active URL/key/model in sync. */
 export function ensureLlmProviders(settings: VaultSettings): VaultSettings {
-  const providers = (
+  const seed =
     settings.providers.length > 0
       ? settings.providers
       : [
@@ -39,12 +94,15 @@ export function ensureLlmProviders(settings: VaultSettings): VaultSettings {
             apiKey: settings.apiKey,
             models: uniqueModelIds([settings.model]),
           },
-        ]
-  ).map((provider) => ({ ...provider, models: uniqueModelIds(provider.models) }));
+        ];
+  const { providers, idMap } = mergePresetProviders(seed);
 
   const activeProviderId = providers.some((provider) => provider.id === settings.activeProviderId)
     ? settings.activeProviderId
-    : providers[0]?.id ?? "";
+    : idMap.get(settings.activeProviderId) ||
+      providers.find((provider) => provider.apiKey.trim() || provider.models.length)?.id ||
+      providers[0]?.id ||
+      "";
   const active = providers.find((provider) => provider.id === activeProviderId) ?? providers[0];
   if (!active) {
     return { ...settings, providers, activeProviderId };

@@ -3,7 +3,7 @@ import { api, type VaultSettings } from "./api";
 import { Onboarding } from "./components/Onboarding";
 import { TitleBar } from "./components/TitleBar";
 import { Workspace } from "./components/Workspace";
-import { vaultName } from "./lib/fileTree";
+import { hydrateProviders } from "./lib/llmProviders";
 import { applyTheme, loadTheme, type Theme } from "./theme";
 
 const defaultSettings: VaultSettings = {
@@ -33,7 +33,7 @@ export default function App() {
       try {
         const s = await api.settingsGet();
         if (cancelled) return;
-        setSettings(s);
+        setSettings(hydrateProviders(s));
         if (!s.vaultPath) return;
         await api.vaultInit(s.vaultPath);
         if (!cancelled) setScreen("main");

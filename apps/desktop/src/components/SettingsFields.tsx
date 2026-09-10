@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, type LlmProvider, type VaultSettings } from "../api";
 import {
   activeProviderIdOf,
+  isPresetProviderId,
   newProviderId,
   providersOf,
   syncSettings,
@@ -29,9 +30,7 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
   const [providerBusy, setProviderBusy] = useState<string | null>(null);
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [draftModel, setDraftModel] = useState<Record<string, string>>({});
-  const [openId, setOpenId] = useState<string | null>(activeId);
-
-  const expandedId = providers.some((provider) => provider.id === openId) ? openId : activeId;
+  const [openId, setOpenId] = useState<string | null>(null);
 
   function commit(nextProviders: LlmProvider[], nextActiveId = activeId, model = settings.model) {
     onChange(syncSettings(settings, nextProviders, nextActiveId, model));
@@ -61,28 +60,12 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
   }
 
   function removeProvider(id: string) {
+    if (isPresetProviderId(id)) return;
     const next = providers.filter((provider) => provider.id !== id);
-    if (!next.length) {
-      setOpenId("default");
-      commit(
-        [
-          {
-            id: "default",
-            name: "OpenAI Compatible",
-            apiBaseUrl: "",
-            apiKey: "",
-            models: [],
-          },
-        ],
-        "default",
-        "",
-      );
-      return;
-    }
+    if (openId === id) setOpenId(null);
     const nextActive = id === activeId ? next[0].id : activeId;
     const active = next.find((provider) => provider.id === nextActive) ?? next[0];
-    setOpenId(active.id);
-    commit(next, nextActive, active.models[0] ?? "");
+    commit(next, nextActive, active?.models[0] ?? "");
   }
 
   async function listModels(provider: LlmProvider) {
@@ -103,6 +86,7 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
         mock: false,
       });
       setStatus({ kind: "ok", text: `已拉取 ${models.length} 个模型。点选后保存设置。` });
+      setOpenId(provider.id);
     } catch (e) {
       setStatus({ kind: "err", text: e instanceof Error ? e.message : String(e) });
     } finally {
@@ -164,15 +148,16 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
       <div className="settings-section-head">
         <span>模型服务商</span>
         <button type="button" onClick={addProvider}>
-          添加服务商
+          添加自定义
         </button>
       </div>
-      <p className="hint">点击条目展开填写；折叠后只显示摘要，方便添加多个服务商。模型可在 Agent 对话里切换。</p>
+      <p className="hint">已预填 OpenAI、DeepSeek、GLM、Kimi 地址。粘贴 API Key 后点拉取模型；点条目可展开改地址或选模型。</p>
 
       {providers.map((provider) => {
         const busy = providerBusy?.startsWith(`${provider.id}:`) ?? false;
         const isActive = provider.id === activeId;
-        const open = provider.id === expandedId;
+        const open = provider.id === openId;
+        const preset = isPresetProviderId(provider.id);
         const modelLabel = provider.models.length ? `${provider.models.length} 个模型` : "无模型";
         return (
           <section
@@ -208,10 +193,26 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
                 />
               )}
               {isActive && <span className="provider-badge">当前</span>}
-              <button type="button" className="ghost" onClick={() => removeProvider(provider.id)}>
-                删除
-              </button>
+              {!preset && (
+                <button type="button" className="ghost" onClick={() => removeProvider(provider.id)}>
+                  删除
+                </button>
+              )}
             </div>
+            {!open && (
+              <div className="provider-quick">
+                <input
+                  type="password"
+                  value={provider.apiKey}
+                  onChange={(e) => patchProvider(provider.id, { apiKey: e.target.value })}
+                  placeholder="粘贴 API Key"
+                  aria-label={`${provider.name} API Key`}
+                />
+                <button type="button" disabled={busy} onClick={() => void listModels(provider)}>
+                  {providerBusy === `${provider.id}:list` ? "拉取中…" : "拉取模型"}
+                </button>
+              </div>
+            )}
             {open && (
               <div className="provider-card-body">
                 <label className="label">
@@ -229,7 +230,7 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
                     type="password"
                     value={provider.apiKey}
                     onChange={(e) => patchProvider(provider.id, { apiKey: e.target.value })}
-                    placeholder="本地服务可留空"
+                    placeholder="粘贴 API Key，本地服务可留空"
                   />
                 </label>
                 <div className="settings-provider-actions">
