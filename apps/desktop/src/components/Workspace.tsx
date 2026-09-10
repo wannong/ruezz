@@ -14,6 +14,7 @@ import { joinWikiId, parentWikiId, pasteDest, type WikiClip } from "../lib/fileT
 import { tabKey, type Tab } from "../lib/tabs";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import type { Theme } from "../theme";
+import { PanelRightOpen } from "lucide-react";
 import { CommandPalette, type PaletteCommand, type PaletteMode } from "./CommandPalette";
 import { IngestModal } from "./IngestModal";
 import { LeftSidebar } from "./LeftSidebar";
@@ -615,14 +616,27 @@ export function Workspace({
           onResize={(dx) => setLeftWidth((w) => clamp(w + dx, LEFT_MIN, LEFT_MAX))}
         />
         <section className="center-pane">
-          <TabBar
-            tabs={tabs}
-            activeKey={activeKey}
-            titleFor={titleFor}
-            isDirty={isDirty}
-            onSelect={setActiveKey}
-            onClose={closeTab}
-          />
+          <div className="center-header">
+            <TabBar
+              tabs={tabs}
+              activeKey={activeKey}
+              titleFor={titleFor}
+              isDirty={isDirty}
+              onSelect={setActiveKey}
+              onClose={closeTab}
+            />
+            {rightCollapsed && (
+              <button
+                type="button"
+                className="sidebar-expand"
+                title="展开右侧栏"
+                aria-label="展开右侧栏"
+                onClick={() => setRightCollapsed(false)}
+              >
+                <PanelRightOpen size={14} />
+              </button>
+            )}
+          </div>
           <div className="center-body">
             {!activeTab && (
               <div className="empty-center">

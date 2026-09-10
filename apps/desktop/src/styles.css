@@ -469,15 +469,42 @@ textarea:focus {
   background: var(--panel);
 }
 
-.tab-bar {
+.center-header {
   display: flex;
   align-items: stretch;
+  flex-shrink: 0;
   height: var(--pane-header-height);
   min-height: var(--pane-header-height);
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--line);
+}
+
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  background: transparent;
   overflow-x: auto;
-  flex-shrink: 0;
+}
+
+.sidebar-expand {
+  flex: 0 0 32px;
+  width: 32px;
+  border: none;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+}
+
+.sidebar-expand:hover {
+  color: var(--ink);
+  background: var(--hover);
 }
 
 .tab {

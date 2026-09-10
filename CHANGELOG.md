@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-09-10
+
+### Fixed
+
+- After collapsing the right sidebar, the expand control stays on the far right of the note header
+
 ## [0.1.8] - 2026-09-10
 
 ### Fixed
@@ -94,7 +100,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/wikihome/wikihome/releases/tag/v0.1.9
 [0.1.8]: https://github.com/wikihome/wikihome/releases/tag/v0.1.8
 [0.1.7]: https://github.com/wikihome/wikihome/releases/tag/v0.1.7
 [0.1.6]: https://github.com/wikihome/wikihome/releases/tag/v0.1.6
