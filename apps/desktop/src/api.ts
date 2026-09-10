@@ -95,13 +95,18 @@ export const api = {
   vaultCopyFolder: (from: string, to: string) => rpc<{ id: string }>("vault_copy_folder", { from, to }),
   vaultRenameFolder: (from: string, to: string) =>
     rpc<{ id: string }>("vault_rename_folder", { from, to }),
+  vaultReveal: (opts?: { kind?: "root" | "page" | "folder"; id?: string; open?: boolean }) =>
+    rpc<{ path: string }>("vault_reveal", opts ?? {}),
   vaultLint: () => rpc("vault_lint"),
   vaultSearch: (query: string) => rpc<PageSummary[]>("vault_search", { query }),
   vaultGraph: () => rpc<GraphDto>("vault_graph"),
   vaultBacklinks: (id: string) => rpc<PageSummary[]>("vault_backlinks", { id }),
-  pickFolder: async () => {
-    if (!isTauri()) return null;
-    const selected = await open({ directory: true, multiple: false });
+  pickFolder: async (title?: string) => {
+    if (!isTauri()) {
+      const typed = window.prompt(title ?? "知识库文件夹路径");
+      return typed?.trim() || null;
+    }
+    const selected = await open({ directory: true, multiple: false, title });
     return typeof selected === "string" ? selected : null;
   },
   pickFiles: async () => {

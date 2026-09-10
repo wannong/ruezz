@@ -26,15 +26,24 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    api
-      .settingsGet()
-      .then((s) => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const s = await api.settingsGet();
+        if (cancelled) return;
         setSettings(s);
-        if (s.vaultPath) setScreen("main");
-      })
-      .catch(() => {
-        /* sidecar may not be up yet in pure vite */
-      });
+        if (!s.vaultPath) return;
+        await api.vaultInit(s.vaultPath);
+        if (!cancelled) setScreen("main");
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+        setScreen("onboarding");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const toggleTheme = useCallback(() => {
@@ -45,23 +54,52 @@ export default function App() {
     });
   }, []);
 
-  async function start() {
+  async function openVaultAt(root: string) {
     setBusy(true);
     setError(null);
     try {
-      await api.settingsSet(settings);
-      await api.vaultInit(settings.vaultPath);
+      const next = await api.settingsSet({ ...settings, vaultPath: root });
+      await api.vaultInit(root);
+      setSettings(next);
       setScreen("main");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setScreen("onboarding");
     } finally {
       setBusy(false);
     }
   }
 
+  async function chooseVault(kind: "new" | "open") {
+    const title = kind === "new" ? "新建知识库：选择或新建文件夹" : "打开知识库";
+    const folder = await api.pickFolder(title);
+    if (!folder) return;
+    await openVaultAt(folder);
+  }
+
+  async function start() {
+    if (!settings.vaultPath.trim()) return;
+    await openVaultAt(settings.vaultPath.trim());
+  }
+
+  async function revealVault() {
+    if (!settings.vaultPath) return;
+    try {
+      await api.vaultReveal({ kind: "root" });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
     <div className="app-shell">
-      <TitleBar label={settings.vaultPath ? vaultName(settings.vaultPath) : "WikiHome"} />
+      <TitleBar
+        label={settings.vaultPath ? vaultName(settings.vaultPath) : "WikiHome"}
+        hasVault={Boolean(settings.vaultPath)}
+        onNewVault={() => void chooseVault("new")}
+        onOpenVault={() => void chooseVault("open")}
+        onRevealVault={() => void revealVault()}
+      />
       <div className="app-shell-body">
         {screen === "onboarding" ? (
           <Onboarding
@@ -73,6 +111,7 @@ export default function App() {
           />
         ) : (
           <Workspace
+            key={settings.vaultPath}
             settings={settings}
             onSettings={setSettings}
             theme={theme}

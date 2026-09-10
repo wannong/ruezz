@@ -25,7 +25,7 @@ export function StatusBar({
 }: StatusBarProps) {
   return (
     <footer className="status-bar">
-      <span className="status-item" title={vaultPath}>
+      <span className="status-item" title={vaultPath ? `${vaultPath} / wiki` : ""}>
         {vaultName(vaultPath)}
       </span>
       <span className="status-item">{pageCount} 页</span>

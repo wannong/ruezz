@@ -348,6 +348,14 @@ export function Workspace({
     }
   }
 
+  async function revealEntry(kind: "root" | "page" | "folder", id?: string) {
+    try {
+      await api.vaultReveal({ kind, id });
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   async function renameEntry(kind: "page" | "folder", fromId: string, name: string) {
     const dest = joinWikiId(parentWikiId(fromId), name);
     if (dest === fromId) return;
@@ -590,6 +598,7 @@ export function Workspace({
           onRename={(kind, fromId, name) => void renameEntry(kind, fromId, name)}
           onCreateNote={(folderId, name) => void createNoteIn(folderId, name)}
           onCreateFolder={(folderId, name) => void createFolderIn(folderId, name)}
+          onReveal={(kind, id) => void revealEntry(kind, id)}
           onError={onError}
           onResize={(dx) => setLeftWidth((w) => clamp(w + dx, LEFT_MIN, LEFT_MAX))}
         />

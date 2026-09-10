@@ -29,6 +29,7 @@ type FileTreeProps = {
   onRename: (kind: "page" | "folder", fromId: string, name: string) => void;
   onCreateNote: (folderId: string, name: string) => void;
   onCreateFolder: (folderId: string, name: string) => void;
+  onReveal: (kind: "root" | "page" | "folder", id?: string) => void;
 };
 
 export function FileTree({
@@ -43,6 +44,7 @@ export function FileTree({
   onRename,
   onCreateNote,
   onCreateFolder,
+  onReveal,
 }: FileTreeProps) {
   const tree = useMemo(() => buildFileTree(pages, folders), [pages, folders]);
   const taken = useMemo(() => {
@@ -117,6 +119,22 @@ export function FileTree({
     if (target.type === "node") {
       items.push({ type: "sep" });
       items.push({ type: "item", label: "重命名", disabled, onClick: () => startRename(target.node) });
+      const revealKind = target.node.page ? "page" : "folder";
+      const revealId = target.node.page?.id ?? target.node.path;
+      items.push({
+        type: "item",
+        label: "在资源管理器中显示",
+        disabled,
+        onClick: () => onReveal(revealKind, revealId),
+      });
+    } else {
+      items.push({ type: "sep" });
+      items.push({
+        type: "item",
+        label: "在资源管理器中打开",
+        disabled,
+        onClick: () => onReveal("root"),
+      });
     }
     return items;
   };
@@ -128,7 +146,9 @@ export function FileTree({
       className="file-tree-wrap"
       onContextMenu={(e) => openMenu(e, { type: "blank" })}
     >
-      {empty && <div className="empty">暂无页面，右键可新建笔记或文件夹</div>}
+      {empty && (
+        <div className="empty">暂无页面。笔记在知识库的 wiki 文件夹里，右键可新建或在资源管理器中打开。</div>
+      )}
       <ul className="file-tree">
         {editor?.mode === "create" && editor.parent === "" && (
           <CreateRow editor={editor} onChange={(value) => setEditor({ ...editor, value })} onCommit={commitEditor} />

@@ -20,6 +20,7 @@ type LeftSidebarProps = {
   onRename: (kind: "page" | "folder", fromId: string, name: string) => void;
   onCreateNote: (folderId: string, name: string) => void;
   onCreateFolder: (folderId: string, name: string) => void;
+  onReveal: (kind: "root" | "page" | "folder", id?: string) => void;
   onError: (message: string) => void;
   onResize: (dx: number) => void;
 };
@@ -40,6 +41,7 @@ export function LeftSidebar({
   onRename,
   onCreateNote,
   onCreateFolder,
+  onReveal,
   onError,
   onResize,
 }: LeftSidebarProps) {
@@ -66,6 +68,7 @@ export function LeftSidebar({
           onRename={onRename}
           onCreateNote={onCreateNote}
           onCreateFolder={onCreateFolder}
+          onReveal={onReveal}
         />
       ) : (
         <SearchPane onOpen={onOpen} onError={onError} />

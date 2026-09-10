@@ -1,14 +1,27 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { Menu } from "lucide-react";
 import { isTauriRuntime } from "../api";
+import { ContextMenu } from "./ContextMenu";
 
 type TitleBarProps = {
   label: string;
+  hasVault: boolean;
+  onNewVault: () => void;
+  onOpenVault: () => void;
+  onRevealVault: () => void;
 };
 
-export function TitleBar({ label }: TitleBarProps) {
+export function TitleBar({
+  label,
+  hasVault,
+  onNewVault,
+  onOpenVault,
+  onRevealVault,
+}: TitleBarProps) {
   const tauri = isTauriRuntime();
   const [maximized, setMaximized] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!tauri) return;
@@ -41,7 +54,19 @@ export function TitleBar({ label }: TitleBarProps) {
 
   return (
     <header className="titlebar">
-      <div className="titlebar-drag" data-tauri-drag-region>
+      <div className="titlebar-start">
+        <button
+          type="button"
+          className="titlebar-menu-btn"
+          aria-label="知识库选项"
+          title="知识库选项"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            setMenu({ x: rect.left, y: rect.bottom + 2 });
+          }}
+        >
+          <Menu size={16} />
+        </button>
         <span className="titlebar-brand" data-tauri-drag-region>
           WikiHome
         </span>
@@ -51,6 +76,7 @@ export function TitleBar({ label }: TitleBarProps) {
           </span>
         )}
       </div>
+      <div className="titlebar-drag" data-tauri-drag-region />
       {tauri && (
         <div className="titlebar-controls">
           <button
@@ -81,6 +107,23 @@ export function TitleBar({ label }: TitleBarProps) {
             <CloseIcon />
           </button>
         </div>
+      )}
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={[
+            { type: "item", label: "新建知识库…", onClick: onNewVault },
+            { type: "item", label: "打开知识库…", onClick: onOpenVault },
+            {
+              type: "item",
+              label: "在资源管理器中打开",
+              disabled: !hasVault,
+              onClick: onRevealVault,
+            },
+          ]}
+          onClose={() => setMenu(null)}
+        />
       )}
     </header>
   );

@@ -4,6 +4,8 @@ import path from "node:path";
 import { SidecarSession } from "./server.js";
 
 async function main() {
+  const cfg = await fs.mkdtemp(path.join(os.tmpdir(), "wikihome-config-"));
+  process.env.WIKIHOME_CONFIG_DIR = cfg;
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "wikihome-smoke-"));
   const session = new SidecarSession({ mock: true, vaultPath: root });
 
@@ -157,7 +159,23 @@ async function main() {
     throw new Error(`expected backlinks array, got ${JSON.stringify(backlinks.result)}`);
   }
 
+  const revealed = await session.handle({
+    id: 19,
+    method: "vault_reveal",
+    params: { kind: "page", id: "notes/hello", open: false },
+  });
+  if (revealed.error) throw new Error(revealed.error.message);
+  const revealPath = String((revealed.result as { path: string }).path).replace(/\\/g, "/");
+  if (!revealPath.endsWith("/wiki/notes/hello.md")) {
+    throw new Error(`expected wiki/notes/hello.md, got ${revealPath}`);
+  }
+
   session.close();
+  const reopened = new SidecarSession({ mock: true });
+  if (reopened.getSettings().vaultPath !== root) {
+    throw new Error(`expected persisted vault ${root}, got ${reopened.getSettings().vaultPath}`);
+  }
+  reopened.close();
   console.log("smoke ok", { root, pages: list.length, answerPreview: answer.slice(0, 80) });
 }
 

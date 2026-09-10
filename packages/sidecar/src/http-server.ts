@@ -1,15 +1,10 @@
 import http from "node:http";
 import { SidecarSession } from "./server.js";
+import { settingsFromEnv } from "./settings-store.js";
 
 /** Optional HTTP wrapper for Vite-only / non-Tauri development. */
 export function startHttpServer(port = Number(process.env.WIKIHOME_HTTP_PORT ?? 8787)) {
-  const session = new SidecarSession({
-    mock: process.env.WIKIHOME_MOCK === "1",
-    vaultPath: process.env.WIKIHOME_VAULT ?? "",
-    apiBaseUrl: process.env.WIKIHOME_API_BASE ?? "https://api.openai.com/v1",
-    apiKey: process.env.WIKIHOME_API_KEY ?? "",
-    model: process.env.WIKIHOME_MODEL ?? "gpt-4o-mini",
-  });
+  const session = new SidecarSession(settingsFromEnv());
 
   const server = http.createServer(async (req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");

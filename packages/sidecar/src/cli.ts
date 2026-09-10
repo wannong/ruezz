@@ -1,14 +1,9 @@
 #!/usr/bin/env node
 import readline from "node:readline";
 import { SidecarSession, type RpcRequest } from "./server.js";
+import { settingsFromEnv } from "./settings-store.js";
 
-const session = new SidecarSession({
-  mock: process.env.WIKIHOME_MOCK === "1",
-  vaultPath: process.env.WIKIHOME_VAULT ?? "",
-  apiBaseUrl: process.env.WIKIHOME_API_BASE ?? "https://api.openai.com/v1",
-  apiKey: process.env.WIKIHOME_API_KEY ?? "",
-  model: process.env.WIKIHOME_MODEL ?? "gpt-4o-mini",
-});
+const session = new SidecarSession(settingsFromEnv());
 
 const rl = readline.createInterface({ input: process.stdin, terminal: false });
 

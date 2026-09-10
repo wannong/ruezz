@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-10
+
+### Added
+
+- Remember the last vault path across restarts (`%APPDATA%\WikiHome\settings.json`)
+- Title-bar menu: new vault, open vault, reveal in File Explorer
+- File-tree “在资源管理器中显示” (notes live under the vault’s `wiki/` folder)
+
 ## [0.1.4] - 2026-09-10
 
 ### Added
@@ -67,7 +75,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/wikihome/wikihome/releases/tag/v0.1.5
 [0.1.4]: https://github.com/wikihome/wikihome/releases/tag/v0.1.4
 [0.1.3]: https://github.com/wikihome/wikihome/releases/tag/v0.1.3
 [0.1.2]: https://github.com/wikihome/wikihome/releases/tag/v0.1.2

@@ -201,9 +201,39 @@ textarea:focus {
   -webkit-user-select: none;
 }
 
+.titlebar-start {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  padding-left: 0.15rem;
+  flex-shrink: 1;
+}
+
+.titlebar-menu-btn {
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  app-region: no-drag;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-menu-btn:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
 .titlebar-drag {
   flex: 1;
-  min-width: 0;
+  min-width: 12px;
   display: flex;
   align-items: center;
   gap: 0.55rem;
@@ -216,6 +246,8 @@ textarea:focus {
   font-weight: 650;
   letter-spacing: 0.02em;
   color: var(--ink);
+  app-region: drag;
+  -webkit-app-region: drag;
 }
 
 .titlebar-label {
@@ -224,6 +256,8 @@ textarea:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  app-region: drag;
+  -webkit-app-region: drag;
 }
 
 .titlebar-label::before {

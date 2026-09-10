@@ -5,6 +5,10 @@ import {
   type WikiEngine,
 } from "@wikihome/engine-api";
 import { createEngine } from "@wikihome/engine-llmwiki";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { revealInExplorer } from "./reveal.js";
+import { loadPersistedSettings, savePersistedSettings } from "./settings-store.js";
 
 export type RpcRequest = {
   id: string | number;
@@ -24,11 +28,8 @@ export class SidecarSession {
 
   constructor(initial?: Partial<VaultSettings>) {
     this.settings = VaultSettingsSchema.parse({
-      vaultPath: initial?.vaultPath ?? "",
-      apiBaseUrl: initial?.apiBaseUrl ?? "https://api.openai.com/v1",
-      apiKey: initial?.apiKey ?? "",
-      model: initial?.model ?? "gpt-4o-mini",
-      mock: initial?.mock ?? false,
+      ...loadPersistedSettings(),
+      ...initial,
     });
     this.engine = createEngine(this.settings);
   }
@@ -41,6 +42,11 @@ export class SidecarSession {
     this.settings = VaultSettingsSchema.parse({ ...this.settings, ...patch });
     this.engine.close?.();
     this.engine = createEngine(this.settings);
+    try {
+      savePersistedSettings(this.settings);
+    } catch {
+      /* config dir may be read-only in some test environments */
+    }
     return this.getSettings();
   }
 
@@ -129,6 +135,22 @@ export class SidecarSession {
           String(params.from ?? params.id ?? ""),
           String(params.to ?? ""),
         );
+      case "vault_reveal": {
+        const root = this.requireVault();
+        const kind = String(params.kind ?? "root");
+        const id = String(params.id ?? params.path ?? "");
+        let target = path.join(path.resolve(root), "wiki");
+        if (kind === "page" && id) {
+          const page = await this.engine.readPage(root, id);
+          if (!page) throw new Error(`页面不存在：${id}`);
+          target = path.resolve(root, page.path);
+        } else if (kind === "folder" && id) {
+          target = path.join(path.resolve(root), "wiki", ...id.split("/").filter(Boolean));
+        }
+        if (kind !== "page") await fs.mkdir(target, { recursive: true });
+        if (params.open !== false) await revealInExplorer(target);
+        return { path: target };
+      }
       case "vault_lint":
         return this.engine.lint(this.requireVault());
       case "vault_read_index":
