@@ -1,3 +1,4 @@
+import { PanelRightClose } from "lucide-react";
 import type { GraphDto, PageSummary } from "../api";
 import { attachResizeX } from "../lib/pointerResize";
 import type { OutlineItem } from "../lib/outline";
@@ -27,6 +28,7 @@ type RightSidebarProps = {
   onOpen: (id: string) => void;
   onJump: (id: string) => void;
   onResize: (dx: number) => void;
+  onCollapse: () => void;
 };
 
 export function RightSidebar({
@@ -48,6 +50,7 @@ export function RightSidebar({
   onOpen,
   onJump,
   onResize,
+  onCollapse,
 }: RightSidebarProps) {
   if (collapsed) return null;
 
@@ -70,6 +73,15 @@ export function RightSidebar({
         </button>
         <button type="button" className={view === "graph" ? "active" : ""} onClick={() => onView("graph")}>
           图谱
+        </button>
+        <button
+          type="button"
+          className="sidebar-collapse"
+          title="收起"
+          aria-label="收起右侧栏"
+          onClick={onCollapse}
+        >
+          <PanelRightClose size={14} />
         </button>
       </div>
       {view === "agent" && (

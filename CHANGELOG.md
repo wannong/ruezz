@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-09-10
+
+### Fixed
+
+- Collapsing the Agent pane no longer leaves it without a way to open it again (ribbon Agent button and a close control on the right sidebar)
+
 ## [0.1.7] - 2026-09-10
 
 ### Changed
@@ -88,7 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/wikihome/wikihome/releases/tag/v0.1.8
 [0.1.7]: https://github.com/wikihome/wikihome/releases/tag/v0.1.7
 [0.1.6]: https://github.com/wikihome/wikihome/releases/tag/v0.1.6
 [0.1.5]: https://github.com/wikihome/wikihome/releases/tag/v0.1.5

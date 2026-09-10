@@ -1,4 +1,5 @@
 import {
+  Bot,
   ClipboardPaste,
   FilePlus,
   FolderTree,
@@ -10,10 +11,12 @@ import {
 type RibbonProps = {
   leftView: "files" | "search";
   leftCollapsed: boolean;
+  agentOpen: boolean;
   graphOpen: boolean;
   busy: boolean;
   onFiles: () => void;
   onSearch: () => void;
+  onAgent: () => void;
   onGraph: () => void;
   onIngest: () => void;
   onSettings: () => void;
@@ -22,10 +25,12 @@ type RibbonProps = {
 export function Ribbon({
   leftView,
   leftCollapsed,
+  agentOpen,
   graphOpen,
   busy,
   onFiles,
   onSearch,
+  onAgent,
   onGraph,
   onIngest,
   onSettings,
@@ -47,6 +52,14 @@ export function Ribbon({
         onClick={onSearch}
       >
         <Search size={18} />
+      </button>
+      <button
+        type="button"
+        className={`icon-btn${agentOpen ? " active" : ""}`}
+        title="Agent"
+        onClick={onAgent}
+      >
+        <Bot size={18} />
       </button>
       <button
         type="button"

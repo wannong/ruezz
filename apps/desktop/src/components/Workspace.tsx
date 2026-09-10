@@ -84,6 +84,7 @@ export function Workspace({
   const activeTab = tabs.find((t) => tabKey(t) === activeKey) ?? null;
   const activePageId = activeTab?.kind === "page" ? activeTab.id : null;
   const activePage = activePageId ? (pageCache[activePageId] ?? null) : null;
+  const agentOpen = !rightCollapsed && rightView === "agent";
   const graphOpen = !rightCollapsed && rightView === "graph";
 
   const onError = useCallback(
@@ -208,6 +209,14 @@ export function Workspace({
     },
     [narrow],
   );
+
+  const openAgent = useCallback(() => {
+    if (!rightCollapsed && rightView === "agent") setRightCollapsed(true);
+    else {
+      setRightCollapsed(false);
+      setRightView("agent");
+    }
+  }, [rightCollapsed, rightView]);
 
   const openGraph = useCallback(() => {
     if (!rightCollapsed && rightView === "graph") setRightCollapsed(true);
@@ -507,6 +516,7 @@ export function Workspace({
       { id: "search", label: "搜索", run: () => { setLeftCollapsed(false); setLeftView("search"); } },
       { id: "new-note", label: "新建笔记", hint: "Ctrl+N", run: () => setNewNoteOpen(true) },
       { id: "edit", label: "切换阅读/编辑", hint: "Ctrl+E", run: () => setNoteMode((m) => (m === "edit" ? "read" : "edit")) },
+      { id: "agent", label: "显示 Agent", run: () => { setRightCollapsed(false); setRightView("agent"); } },
       { id: "graph", label: "打开图谱", hint: "Ctrl+G", run: () => { setRightCollapsed(false); setRightView("graph"); } },
       { id: "ingest", label: "入库…", run: () => setIngestOpen(true) },
       { id: "settings", label: "打开设置", run: () => setSettingsOpen(true) },
@@ -574,10 +584,12 @@ export function Workspace({
         <Ribbon
           leftView={leftView}
           leftCollapsed={leftCollapsed}
+          agentOpen={agentOpen}
           graphOpen={graphOpen}
           busy={busy}
           onFiles={toggleLeftFiles}
           onSearch={toggleLeftSearch}
+          onAgent={openAgent}
           onGraph={openGraph}
           onIngest={() => setIngestOpen(true)}
           onSettings={() => setSettingsOpen(true)}
@@ -660,6 +672,7 @@ export function Workspace({
           onOpen={openPage}
           onJump={jumpHeading}
           onResize={(dx) => setRightWidth((w) => clamp(w + dx, RIGHT_MIN, RIGHT_MAX))}
+          onCollapse={() => setRightCollapsed(true)}
         />
       </div>
       <StatusBar
