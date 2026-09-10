@@ -59,8 +59,40 @@ async function main() {
   }
 
   const sampleId = list.find((p) => p.id.includes("attention"))?.id ?? list[0]?.id;
-  const backlinks = await session.handle({
+  const written = await session.handle({
     id: 8,
+    method: "vault_write_page",
+    params: {
+      id: sampleId,
+      raw: `---\ntype: concept\ntitle: Attention\n---\nEdited attention body.\n`,
+    },
+  });
+  if (written.error) throw new Error(written.error.message);
+  const writtenPage = written.result as { body: string; raw: string };
+  if (!writtenPage.body.includes("Edited attention body")) {
+    throw new Error(`write did not persist body: ${JSON.stringify(writtenPage)}`);
+  }
+
+  const created = await session.handle({
+    id: 9,
+    method: "vault_create_page",
+    params: { id: "notes/hello", title: "Hello" },
+  });
+  if (created.error) throw new Error(created.error.message);
+  const createdPage = created.result as { id: string; title?: string };
+  if (createdPage.id !== "notes/hello") {
+    throw new Error(`expected created id notes/hello, got ${JSON.stringify(createdPage)}`);
+  }
+
+  const listed = await session.handle({ id: 10, method: "vault_list_pages", params: {} });
+  if (listed.error) throw new Error(listed.error.message);
+  const after = listed.result as Array<{ id: string }>;
+  if (!after.some((p) => p.id === "notes/hello")) {
+    throw new Error(`expected new page in list, got ${JSON.stringify(after)}`);
+  }
+
+  const backlinks = await session.handle({
+    id: 11,
     method: "vault_backlinks",
     params: { id: sampleId },
   });

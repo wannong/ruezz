@@ -25,6 +25,25 @@ function slugify(title: string): string {
     .slice(0, 80) || "untitled";
 }
 
+function normalizePageId(idOrPath: string): string {
+  const cleaned = idOrPath
+    .replace(/\\/g, "/")
+    .replace(/^wiki\//, "")
+    .replace(/\.md$/i, "")
+    .replace(/^\/+|\/+$/g, "");
+  const parts = cleaned.split("/").filter(Boolean);
+  if (parts.length === 0) throw new Error("页面 id 无效");
+  if (parts.some((p) => p === "." || p === ".." || /[<>:"|?*\u0000]/.test(p))) {
+    throw new Error("页面 id 无效");
+  }
+  return parts.join("/");
+}
+
+function isInsideDir(dir: string, file: string): boolean {
+  const rel = path.relative(path.resolve(dir), path.resolve(file));
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
 export interface LlmWikiEngineOptions {
   settings: Pick<VaultSettings, "apiBaseUrl" | "apiKey" | "model" | "mock">;
 }
@@ -136,10 +155,7 @@ export class LlmWikiEngine implements WikiEngine {
 
   async readPage(root: string, idOrPath: string): Promise<PageContent | null> {
     const wiki = this.getWiki(root);
-    const id = idOrPath
-      .replace(/^wiki\//, "")
-      .replace(/\.md$/i, "")
-      .replace(/\\/g, "/");
+    const id = normalizePageId(idOrPath);
     const page = await wiki.read(id);
     if (!page) return null;
     return {
@@ -150,6 +166,60 @@ export class LlmWikiEngine implements WikiEngine {
       body: page.body,
       raw: page.raw,
     };
+  }
+
+  async writePage(root: string, idOrPath: string, raw: string): Promise<PageContent> {
+    const absRoot = path.resolve(root);
+    const id = normalizePageId(idOrPath);
+    const existing = await this.readPage(absRoot, id);
+    if (!existing) throw new Error(`页面不存在：${id}`);
+
+    const absFile = path.resolve(absRoot, existing.path);
+    const wikiDir = path.join(absRoot, "wiki");
+    if (!isInsideDir(wikiDir, absFile)) {
+      throw new Error("只能写入 wiki/ 下的页面");
+    }
+
+    const content = raw.endsWith("\n") ? raw : `${raw}\n`;
+    await fs.writeFile(absFile, content, "utf8");
+    await this.getWiki(absRoot).reindex();
+    const updated = await this.readPage(absRoot, id);
+    if (!updated) throw new Error("写入后无法读取页面");
+    return updated;
+  }
+
+  async createPage(root: string, idOrPath: string, title?: string): Promise<PageContent> {
+    const absRoot = path.resolve(root);
+    const id = normalizePageId(idOrPath);
+    const wikiDir = path.join(absRoot, "wiki");
+    const absFile = path.resolve(wikiDir, `${id}.md`);
+    if (!isInsideDir(wikiDir, absFile)) {
+      throw new Error("只能在 wiki/ 下创建页面");
+    }
+
+    try {
+      await fs.access(absFile);
+      throw new Error(`页面已存在：${id}`);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    }
+
+    const heading = title?.trim() || id.split("/").pop() || id;
+    const day = new Date().toISOString().slice(0, 10);
+    const stub = `---
+type: concept
+title: ${JSON.stringify(heading)}
+created: ${day}
+updated: ${day}
+---
+
+`;
+    await fs.mkdir(path.dirname(absFile), { recursive: true });
+    await fs.writeFile(absFile, stub, "utf8");
+    await this.getWiki(absRoot).reindex();
+    const created = await this.readPage(absRoot, id);
+    if (!created) throw new Error("创建后无法读取页面");
+    return created;
   }
 
   async lint(root: string): Promise<LintIssue[]> {

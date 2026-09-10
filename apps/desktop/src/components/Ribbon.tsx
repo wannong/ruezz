@@ -2,6 +2,7 @@ import {
   ClipboardPaste,
   FilePlus,
   FolderTree,
+  Plus,
   Search,
   Settings,
   Share2,
@@ -15,6 +16,7 @@ type RibbonProps = {
   onFiles: () => void;
   onSearch: () => void;
   onGraph: () => void;
+  onNewNote: () => void;
   onIngest: () => void;
   onSettings: () => void;
 };
@@ -27,6 +29,7 @@ export function Ribbon({
   onFiles,
   onSearch,
   onGraph,
+  onNewNote,
   onIngest,
   onSettings,
 }: RibbonProps) {
@@ -55,6 +58,9 @@ export function Ribbon({
         onClick={onGraph}
       >
         <Share2 size={18} />
+      </button>
+      <button type="button" className="icon-btn" title="新建笔记" disabled={busy} onClick={onNewNote}>
+        <Plus size={18} />
       </button>
       <div className="ribbon-spacer" />
       <button type="button" className="icon-btn" title="入库" disabled={busy} onClick={onIngest}>

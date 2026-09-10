@@ -85,6 +85,9 @@ export const api = {
   vaultAsk: (question: string) => rpc<AskResult>("vault_ask", { question }),
   vaultListPages: () => rpc<PageSummary[]>("vault_list_pages"),
   vaultReadPage: (id: string) => rpc<PageContent | null>("vault_read_page", { id }),
+  vaultWritePage: (id: string, raw: string) => rpc<PageContent>("vault_write_page", { id, raw }),
+  vaultCreatePage: (id: string, title?: string) =>
+    rpc<PageContent>("vault_create_page", title ? { id, title } : { id }),
   vaultLint: () => rpc("vault_lint"),
   vaultSearch: (query: string) => rpc<PageSummary[]>("vault_search", { query }),
   vaultGraph: () => rpc<GraphDto>("vault_graph"),

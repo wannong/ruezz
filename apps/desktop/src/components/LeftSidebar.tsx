@@ -11,6 +11,7 @@ type LeftSidebarProps = {
   collapsed: boolean;
   overlay: boolean;
   onOpen: (id: string) => void;
+  onNewNote?: () => void;
   onError: (message: string) => void;
   onResize: (dx: number) => void;
 };
@@ -23,6 +24,7 @@ export function LeftSidebar({
   collapsed,
   overlay,
   onOpen,
+  onNewNote,
   onError,
   onResize,
 }: LeftSidebarProps) {
@@ -33,7 +35,14 @@ export function LeftSidebar({
       className={`sidebar sidebar-left${overlay ? " overlay" : ""}`}
       style={{ width }}
     >
-      <div className="sidebar-header">{view === "files" ? "文件" : "搜索"}</div>
+      <div className="sidebar-header">
+        <span>{view === "files" ? "文件" : "搜索"}</span>
+        {view === "files" && onNewNote && (
+          <button type="button" className="icon-btn sidebar-new" title="新建笔记" onClick={onNewNote}>
+            +
+          </button>
+        )}
+      </div>
       {view === "files" ? (
         <FileTree pages={pages} activeId={activeId} onOpen={onOpen} />
       ) : (

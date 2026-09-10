@@ -88,6 +88,8 @@ export interface WikiEngine {
   findPages(root: string, query: string): Promise<PageSummary[]>;
   listPages(root: string): Promise<PageSummary[]>;
   readPage(root: string, idOrPath: string): Promise<PageContent | null>;
+  writePage(root: string, idOrPath: string, raw: string): Promise<PageContent>;
+  createPage(root: string, id: string, title?: string): Promise<PageContent>;
   lint(root: string): Promise<LintIssue[]>;
   ask(root: string, question: string): Promise<AskResult>;
   getGraph(root: string): Promise<GraphDto>;

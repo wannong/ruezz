@@ -7,6 +7,8 @@ type StatusBarProps = {
   pageCount: number;
   currentId: string | null;
   busy: boolean;
+  dirty: boolean;
+  saving: boolean;
   theme: Theme;
   onToggleTheme: () => void;
 };
@@ -16,6 +18,8 @@ export function StatusBar({
   pageCount,
   currentId,
   busy,
+  dirty,
+  saving,
   theme,
   onToggleTheme,
 }: StatusBarProps) {
@@ -26,7 +30,8 @@ export function StatusBar({
       </span>
       <span className="status-item">{pageCount} 页</span>
       {currentId && <span className="status-item">{currentId}</span>}
-      <span className="status-item muted">只读</span>
+      {saving && <span className="status-item">保存中…</span>}
+      {dirty && !saving && <span className="status-item">未保存</span>}
       {busy && <span className="status-item">工作中…</span>}
       <span className="status-spacer" />
       <button type="button" className="icon-btn status-theme" onClick={onToggleTheme} title="切换深浅色">

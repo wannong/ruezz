@@ -9,12 +9,14 @@ import {
 } from "../api";
 import { loadPref, savePref } from "../lib/prefs";
 import { parseOutline } from "../lib/outline";
+import { markdownBody } from "../lib/noteId";
 import { tabKey, type Tab } from "../lib/tabs";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import type { Theme } from "../theme";
 import { CommandPalette, type PaletteCommand, type PaletteMode } from "./CommandPalette";
 import { IngestModal } from "./IngestModal";
 import { LeftSidebar } from "./LeftSidebar";
+import { NewNoteModal } from "./NewNoteModal";
 import { NoteView } from "./NoteView";
 import { Ribbon } from "./Ribbon";
 import { RightSidebar, type RightView } from "./RightSidebar";
@@ -59,7 +61,9 @@ export function Workspace({
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [pageCache, setPageCache] = useState<Record<string, PageContent>>({});
   const [missingIds, setMissingIds] = useState<Record<string, true>>({});
-  const [noteMode, setNoteMode] = useState<"read" | "source">("read");
+  const [noteMode, setNoteMode] = useState<"read" | "edit">("read");
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [noteSaving, setNoteSaving] = useState(false);
   const [leftView, setLeftView] = useState<"files" | "search">("files");
   const [rightView, setRightView] = useState<RightView>("agent");
   const [leftCollapsed, setLeftCollapsed] = useState(() => loadPref("leftCollapsed", false));
@@ -68,6 +72,7 @@ export function Workspace({
   const [rightWidth, setRightWidth] = useState(() => loadPref("rightWidth", 320));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ingestOpen, setIngestOpen] = useState(false);
+  const [newNoteOpen, setNewNoteOpen] = useState(false);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [graph, setGraph] = useState<GraphDto | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -93,6 +98,53 @@ export function Workspace({
     const g = await api.vaultGraph();
     setGraph(g);
   }, []);
+
+  const isDirty = useCallback(
+    (id: string) => {
+      const page = pageCache[id];
+      const text = noteDrafts[id];
+      return text != null && page != null && text !== page.raw;
+    },
+    [noteDrafts, pageCache],
+  );
+
+  const saveNote = useCallback(
+    async (id: string) => {
+      const page = pageCache[id];
+      const text = noteDrafts[id] ?? page?.raw;
+      if (!page || text == null || text === page.raw) return;
+      setNoteSaving(true);
+      setError(null);
+      try {
+        const saved = await api.vaultWritePage(id, text);
+        setPageCache((c) => ({ ...c, [saved.id]: saved }));
+        setNoteDrafts((d) => {
+          if (d[id] !== text) return d;
+          const next = { ...d };
+          delete next[id];
+          return next;
+        });
+        await loadPages();
+        await loadGraph();
+      } catch (e) {
+        onError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setNoteSaving(false);
+      }
+    },
+    [pageCache, noteDrafts, loadPages, loadGraph, onError, setError],
+  );
+
+  useEffect(() => {
+    if (!activePageId) return;
+    const page = pageCache[activePageId];
+    const text = noteDrafts[activePageId];
+    if (!page || text == null || text === page.raw) return;
+    const timer = window.setTimeout(() => {
+      void saveNote(activePageId);
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [activePageId, noteDrafts, pageCache, saveNote]);
 
   useEffect(() => {
     loadPages().catch((e) => onError(String(e)));
@@ -163,6 +215,16 @@ export function Workspace({
 
   const closeTab = useCallback(
     (key: string) => {
+      const id = key.startsWith("page:") ? key.slice(5) : "";
+      if (id && isDirty(id)) {
+        const ok = window.confirm("有未保存的更改，确定关闭？未保存内容将丢失。");
+        if (!ok) return;
+        setNoteDrafts((d) => {
+          const next = { ...d };
+          delete next[id];
+          return next;
+        });
+      }
       setTabs((prev) => {
         const idx = prev.findIndex((t) => tabKey(t) === key);
         const next = prev.filter((t) => tabKey(t) !== key);
@@ -173,13 +235,31 @@ export function Workspace({
         return next;
       });
     },
-    [activeKey],
+    [activeKey, isDirty],
   );
 
   const titleFor = useCallback(
     (id: string) => pages.find((p) => p.id === id)?.title ?? pageCache[id]?.title ?? id.split("/").pop() ?? id,
     [pages, pageCache],
   );
+
+  async function createNote(id: string, title: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await api.vaultCreatePage(id, title);
+      setPageCache((c) => ({ ...c, [created.id]: created }));
+      await loadPages();
+      await loadGraph();
+      openPage(created.id);
+      setNoteMode("edit");
+      setNewNoteOpen(false);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function ingestFiles(paths: string[]) {
     if (!paths.length) return;
@@ -282,6 +362,8 @@ export function Workspace({
     () => [
       { id: "files", label: "显示文件列表", hint: "Ctrl+[", run: () => { setLeftCollapsed(false); setLeftView("files"); } },
       { id: "search", label: "搜索", run: () => { setLeftCollapsed(false); setLeftView("search"); } },
+      { id: "new-note", label: "新建笔记", hint: "Ctrl+N", run: () => setNewNoteOpen(true) },
+      { id: "edit", label: "切换阅读/编辑", hint: "Ctrl+E", run: () => setNoteMode((m) => (m === "edit" ? "read" : "edit")) },
       { id: "graph", label: "打开图谱", hint: "Ctrl+G", run: () => { setRightCollapsed(false); setRightView("graph"); } },
       { id: "ingest", label: "入库…", run: () => setIngestOpen(true) },
       { id: "settings", label: "打开设置", run: () => setSettingsOpen(true) },
@@ -289,7 +371,7 @@ export function Workspace({
       { id: "left", label: "折叠/展开左栏", hint: "Ctrl+[", run: () => setLeftCollapsed((v) => !v) },
       { id: "right", label: "折叠/展开右栏", hint: "Ctrl+]", run: () => setRightCollapsed((v) => !v) },
     ],
-    [onToggleTheme],
+    [onToggleTheme, activePageId, saveNote],
   );
 
   useEffect(() => {
@@ -299,6 +381,7 @@ export function Workspace({
         setPalette(null);
         setSettingsOpen(false);
         setIngestOpen(false);
+        setNewNoteOpen(false);
         return;
       }
       if (!mod) return;
@@ -306,6 +389,15 @@ export function Workspace({
       if (key === "p") {
         e.preventDefault();
         setPalette(e.shiftKey ? "commands" : "quick");
+      } else if (key === "s") {
+        e.preventDefault();
+        if (activePageId) void saveNote(activePageId);
+      } else if (key === "n") {
+        e.preventDefault();
+        setNewNoteOpen(true);
+      } else if (key === "e") {
+        e.preventDefault();
+        setNoteMode((m) => (m === "edit" ? "read" : "edit"));
       } else if (key === "g") {
         e.preventDefault();
         setRightCollapsed(false);
@@ -320,9 +412,14 @@ export function Workspace({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [activePageId, saveNote]);
 
-  const outline = activePage ? parseOutline(activePage.body) : [];
+  const outlineSource =
+    activePageId && noteDrafts[activePageId] != null
+      ? markdownBody(noteDrafts[activePageId])
+      : (activePage?.body ?? "");
+  const outline = outlineSource ? parseOutline(outlineSource) : [];
+  const activeDirty = Boolean(activePageId && isDirty(activePageId));
 
   const jumpHeading = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -339,6 +436,7 @@ export function Workspace({
           onFiles={toggleLeftFiles}
           onSearch={toggleLeftSearch}
           onGraph={openGraph}
+          onNewNote={() => setNewNoteOpen(true)}
           onIngest={() => setIngestOpen(true)}
           onSettings={() => setSettingsOpen(true)}
         />
@@ -350,6 +448,7 @@ export function Workspace({
           collapsed={leftCollapsed}
           overlay={narrow}
           onOpen={openPage}
+          onNewNote={() => setNewNoteOpen(true)}
           onError={onError}
           onResize={(dx) => setLeftWidth((w) => clamp(w + dx, LEFT_MIN, LEFT_MAX))}
         />
@@ -358,10 +457,11 @@ export function Workspace({
             tabs={tabs}
             activeKey={activeKey}
             titleFor={titleFor}
+            isDirty={isDirty}
             onSelect={setActiveKey}
             onClose={closeTab}
           />
-          <div className="center-body">
+          <div className={`center-body${noteMode === "edit" ? " editing" : ""}`}>
             {!activeTab && (
               <div className="empty-center">
                 打开笔记，或按 {modHint()}P 快速打开
@@ -378,7 +478,14 @@ export function Workspace({
                 page={activePage}
                 pages={pages}
                 mode={noteMode}
+                draft={noteDrafts[activePage.id] ?? activePage.raw}
+                dirty={isDirty(activePage.id)}
+                saving={noteSaving}
                 onMode={setNoteMode}
+                onDraft={(value) =>
+                  setNoteDrafts((d) => ({ ...d, [activePage.id]: value }))
+                }
+                onSave={() => void saveNote(activePage.id)}
                 onOpen={openPage}
               />
             )}
@@ -410,6 +517,8 @@ export function Workspace({
         pageCount={pages.length}
         currentId={activePageId}
         busy={busy}
+        dirty={activeDirty}
+        saving={noteSaving}
         theme={theme}
         onToggleTheme={onToggleTheme}
       />
@@ -436,6 +545,13 @@ export function Workspace({
             await ingestFiles(files);
           }}
           onPaste={ingestPaste}
+        />
+      )}
+      {newNoteOpen && (
+        <NewNoteModal
+          busy={busy}
+          onClose={() => setNewNoteOpen(false)}
+          onCreate={createNote}
         />
       )}
       {palette && (

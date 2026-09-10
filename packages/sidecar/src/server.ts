@@ -89,6 +89,18 @@ export class SidecarSession {
         return this.engine.listPages(this.requireVault());
       case "vault_read_page":
         return this.engine.readPage(this.requireVault(), String(params.id ?? params.path ?? ""));
+      case "vault_write_page":
+        return this.engine.writePage(
+          this.requireVault(),
+          String(params.id ?? params.path ?? ""),
+          String(params.raw ?? ""),
+        );
+      case "vault_create_page":
+        return this.engine.createPage(
+          this.requireVault(),
+          String(params.id ?? params.path ?? ""),
+          params.title == null ? undefined : String(params.title),
+        );
       case "vault_lint":
         return this.engine.lint(this.requireVault());
       case "vault_read_index":
