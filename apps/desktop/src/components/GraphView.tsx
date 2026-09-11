@@ -1,6 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import ForceGraph2D from "react-force-graph-2d";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import ForceGraph2D, { type ForceGraphMethods } from "react-force-graph-2d";
 import type { GraphDto } from "../api";
+import {
+  applyGraphForces,
+  dragLeashRadius,
+  graphFitTransform,
+  maxDistanceFromLeader,
+  releaseGraphPins,
+  tetherNodesToLeader,
+} from "../lib/graph";
 
 type GraphNode = {
   id: string;
@@ -48,6 +56,8 @@ const THEME_PALETTE = {
   light: { bg: "#ffffff", ink: "#222222", line: "#d0d0d0", accent: "#222222" },
 };
 
+const GRAPH_PHYSICS_REV = Date.now();
+
 export function GraphView({
   graph,
   theme,
@@ -57,10 +67,25 @@ export function GraphView({
   replayKey = "",
 }: GraphViewProps) {
   const wrap = useRef<HTMLDivElement>(null);
-  const fgRef = useRef<{ zoomToFit: (durationMs?: number, padding?: number) => void } | undefined>(undefined);
+  const fgRef = useRef<ForceGraphMethods<GraphNode> | undefined>(undefined);
   const fitted = useRef(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const sizeRef = useRef(size);
+  sizeRef.current = size;
+  const compactRef = useRef(compact);
+  compactRef.current = compact;
+  const leashRef = useRef<number | null>(null);
   const colors = THEME_PALETTE[theme];
+
+  const applyFit = useCallback((durationMs: number) => {
+    const fg = fgRef.current;
+    const { width, height } = sizeRef.current;
+    if (!fg || width < 8 || height < 8) return;
+    const next = graphFitTransform(fg.getGraphBbox(), { width, height }, compactRef.current);
+    if (!next) return;
+    fg.centerAt(next.cx, next.cy, durationMs);
+    fg.zoom(next.k, durationMs);
+  }, []);
 
   useEffect(() => {
     fitted.current = false;
@@ -99,6 +124,18 @@ export function GraphView({
     };
   }, [graph]);
 
+  useEffect(() => {
+    if (!fitted.current) return;
+    applyFit(0);
+  }, [size.width, size.height, applyFit]);
+
+  useLayoutEffect(() => {
+    const fg = fgRef.current;
+    if (!fg) return;
+    applyGraphForces(fg, compact);
+    releaseGraphPins(data.nodes);
+  }, [compact, size.width, size.height, data.nodes, replayKey, theme, focusId, GRAPH_PHYSICS_REV]);
+
   if (!graph) {
     return <div className="empty-center">正在加载图谱…</div>;
   }
@@ -120,10 +157,13 @@ export function GraphView({
           nodeLabel="label"
           cooldownTicks={compact ? 60 : 120}
           d3AlphaDecay={compact ? 0.04 : 0.0228}
+          d3VelocityDecay={0.4}
+          minZoom={0.08}
+          maxZoom={compact ? 4 : 6}
           onEngineStop={() => {
-            if (fitted.current || !fgRef.current) return;
+            if (fitted.current) return;
             fitted.current = true;
-            fgRef.current.zoomToFit(280, 36);
+            applyFit(compact ? 180 : 240);
           }}
           linkColor={() => colors.line}
           linkWidth={compact ? 1.2 : 1}
@@ -158,6 +198,17 @@ export function GraphView({
             ctx.beginPath();
             ctx.arc(n.x ?? 0, n.y ?? 0, 10, 0, Math.PI * 2);
             ctx.fill();
+          }}
+          onNodeDrag={(node) => {
+            const id = String((node as GraphNode).id);
+            const nodes = data.nodes;
+            if (leashRef.current == null) {
+              leashRef.current = dragLeashRadius(maxDistanceFromLeader(nodes, id), compactRef.current);
+            }
+            tetherNodesToLeader(nodes, id, leashRef.current);
+          }}
+          onNodeDragEnd={() => {
+            leashRef.current = null;
           }}
           onNodeClick={(node) => {
             const id = String((node as GraphNode).id);
