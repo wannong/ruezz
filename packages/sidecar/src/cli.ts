@@ -2,7 +2,22 @@
 import readline from "node:readline";
 import { SidecarSession, type RpcRequest } from "./server.js";
 
-const session = new SidecarSession();
+process.on("uncaughtException", (err) => {
+  process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
+  process.exit(1);
+});
+process.on("unhandledRejection", (err) => {
+  process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
+  process.exit(1);
+});
+
+let session: SidecarSession;
+try {
+  session = new SidecarSession();
+} catch (err) {
+  process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
+  process.exit(1);
+}
 
 const rl = readline.createInterface({ input: process.stdin, terminal: false });
 

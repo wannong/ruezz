@@ -60,6 +60,18 @@ fn skip_walk_dir(name: &str) -> bool {
     )
 }
 
+fn win_normal_path(p: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        const PREFIX: &str = r"\\?\";
+        let s = p.to_string_lossy();
+        if let Some(rest) = s.strip_prefix(PREFIX) {
+            return PathBuf::from(rest);
+        }
+    }
+    p.to_path_buf()
+}
+
 fn make_bundled_command(node: &Path, cli: &Path) -> Command {
     let sidecar_dir = cli
         .parent()
@@ -67,8 +79,12 @@ fn make_bundled_command(node: &Path, cli: &Path) -> Command {
         .unwrap_or(cli)
         .to_path_buf();
     let runtime_dir = node.parent().unwrap_or(node).to_path_buf();
-    let mut cmd = Command::new(node);
-    cmd.arg(cli);
+    let node = win_normal_path(node);
+    let cli = win_normal_path(cli);
+    let sidecar_dir = win_normal_path(&sidecar_dir);
+    let runtime_dir = win_normal_path(&runtime_dir);
+    let mut cmd = Command::new(&node);
+    cmd.arg(&cli);
     cmd.current_dir(&sidecar_dir);
     prepend_path(&mut cmd, &runtime_dir);
     let python = runtime_dir.join("python").join("python.exe");
@@ -83,8 +99,12 @@ fn make_bundled_command(node: &Path, cli: &Path) -> Command {
         std::env::var("WIKIHOME_MOCK").unwrap_or_else(|_| "0".into()),
     );
     cmd.env("PYTHONNOUSERSITE", "1");
-    // Node 24 fetch/undici only honors HTTP(S)_PROXY when this is set.
     cmd.env("NODE_USE_ENV_PROXY", "1");
+    cmd.env_remove("NODE_OPTIONS");
+    let node_modules = sidecar_dir.join("node_modules");
+    if node_modules.is_dir() {
+        cmd.env("NODE_PATH", &node_modules);
+    }
     cmd
 }
 
@@ -122,6 +142,26 @@ fn find_bundled_sidecar(root: &Path, depth: u8) -> Option<Command> {
 
 fn bundled_sidecar_command(resource: &Path) -> Option<Command> {
     find_bundled_sidecar(resource, 3)
+}
+
+fn sidecar_log_tail() -> String {
+    let Ok(text) = std::fs::read_to_string(sidecar_log_path()) else {
+        return String::new();
+    };
+    let clipped: String = text
+        .chars()
+        .rev()
+        .take(1500)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect();
+    let clipped = clipped.trim();
+    if clipped.is_empty() {
+        String::new()
+    } else {
+        format!("\n{clipped}")
+    }
 }
 
 fn sidecar_log_path() -> PathBuf {
@@ -249,7 +289,12 @@ fn spawn_sidecar(app: &AppHandle) -> Result<SidecarProc, String> {
     cmd.stdin(Stdio::piped()).stdout(Stdio::piped());
     let log_path = sidecar_log_path();
     match OpenOptions::new().create(true).append(true).open(&log_path) {
-        Ok(file) => {
+        Ok(mut file) => {
+            let _ = writeln!(
+                file,
+                "\n----- spawn -----\nprogram {:?}",
+                cmd.get_program()
+            );
             cmd.stderr(Stdio::from(file));
         }
         Err(_) => {
@@ -294,11 +339,16 @@ fn spawn_sidecar(app: &AppHandle) -> Result<SidecarProc, String> {
         }
     });
 
-    thread::sleep(Duration::from_millis(80));
+    thread::sleep(Duration::from_millis(400));
     if let Ok(Some(status)) = child.try_wait() {
-        return Err(format!(
-            "引擎启动后立即退出（{status}）。请查看 %APPDATA%\\WikiHome\\sidecar-stderr.log"
-        ));
+        let detail = sidecar_log_tail();
+        return Err(if detail.is_empty() {
+            format!(
+                "引擎启动后立即退出（{status}）。请查看 %APPDATA%\\WikiHome\\sidecar-stderr.log"
+            )
+        } else {
+            format!("引擎启动后立即退出（{status}）。{detail}")
+        });
     }
 
     Ok(SidecarProc {
@@ -360,18 +410,47 @@ fn grant_dir_acl(dir: &Path) {
     }
 }
 
-fn locate_webview2_runtime(app: &AppHandle) -> Option<PathBuf> {
-    let mut dirs = Vec::new();
+fn system_webview2_present() -> bool {
+    let bases = [
+        PathBuf::from(r"C:\Program Files (x86)\Microsoft\EdgeWebView\Application"),
+        PathBuf::from(r"C:\Program Files\Microsoft\EdgeWebView\Application"),
+        PathBuf::from(r"C:\Program Files (x86)\Microsoft\Edge\Application"),
+        PathBuf::from(r"C:\Program Files\Microsoft\Edge\Application"),
+    ];
+    for base in bases {
+        let Ok(entries) = std::fs::read_dir(&base) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            if entry.path().join("msedgewebview2.exe").is_file() {
+                return true;
+            }
+        }
+        if base.join("msedgewebview2.exe").is_file() {
+            return true;
+        }
+    }
+    false
+}
+
+fn user_webview2_dir() -> PathBuf {
+    std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("APPDATA").map(PathBuf::from))
+        .unwrap_or_else(std::env::temp_dir)
+        .join("WikiHome")
+        .join("webview2-runtime")
+}
+
+fn locate_webview2_runtime(extra: &[PathBuf]) -> Option<PathBuf> {
+    let mut dirs = extra.to_vec();
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
             dirs.push(parent.to_path_buf());
             dirs.push(parent.join("resources"));
         }
     }
-    if let Ok(resource) = app.path().resource_dir() {
-        dirs.push(resource.clone());
-        dirs.push(resource.join("resources"));
-    }
+    dirs.push(user_webview2_dir());
     for dir in dirs {
         let direct = dir.join("msedgewebview2.exe");
         if direct.is_file() {
@@ -385,12 +464,118 @@ fn locate_webview2_runtime(app: &AppHandle) -> Option<PathBuf> {
     None
 }
 
-fn ensure_webview2_fixed_runtime(app: &AppHandle) {
-    let Some(runtime) = locate_webview2_runtime(app) else {
+#[cfg(windows)]
+mod win_msg {
+    #[link(name = "user32")]
+    extern "system" {
+        fn MessageBoxW(
+            hwnd: *mut core::ffi::c_void,
+            text: *const u16,
+            caption: *const u16,
+            ty: u32,
+        ) -> i32;
+    }
+    pub fn info(text: &str) {
+        let text: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+        let caption: Vec<u16> = "WikiHome".encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            MessageBoxW(std::ptr::null_mut(), text.as_ptr(), caption.as_ptr(), 0x40);
+        }
+    }
+}
+
+fn download_fixed_webview2() -> Option<PathBuf> {
+    let dest = user_webview2_dir();
+    if dest.join("msedgewebview2.exe").is_file() {
+        return Some(dest);
+    }
+    #[cfg(windows)]
+    win_msg::info("本机没有网页组件（WebView2）。即将下载到用户目录，不需要管理员权限，请稍候。");
+
+    let cache = dest.parent().unwrap_or(&dest).join("cache");
+    let _ = std::fs::create_dir_all(&cache);
+    let nupkg = cache.join("webview2.runtime.x64.151.0.4129.107.nupkg");
+    let url = "https://globalcdn.nuget.org/packages/webview2.runtime.x64.151.0.4129.107.nupkg";
+    let mut curl = Command::new("curl.exe");
+    curl.args(["-L", "--retry", "3", "-o"]);
+    curl.arg(&nupkg);
+    curl.arg(url);
+    hide_console(&mut curl);
+    if !curl.status().ok()?.success() {
+        return None;
+    }
+    let meta = std::fs::metadata(&nupkg).ok()?;
+    if meta.len() < 50 * 1024 * 1024 {
+        return None;
+    }
+    let extract = cache.join("webview2-extract");
+    let _ = std::fs::remove_dir_all(&extract);
+    let _ = std::fs::create_dir_all(&extract);
+    let mut tar = Command::new("tar.exe");
+    tar.arg("-xf").arg(&nupkg).arg("-C").arg(&extract);
+    hide_console(&mut tar);
+    if !tar.status().ok()?.success() {
+        return None;
+    }
+    fn find_exe(dir: &Path, depth: u8) -> Option<PathBuf> {
+        if dir.join("msedgewebview2.exe").is_file() {
+            return Some(dir.to_path_buf());
+        }
+        if depth == 0 {
+            return None;
+        }
+        for entry in std::fs::read_dir(dir).ok()?.flatten() {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                if let Some(found) = find_exe(&entry.path(), depth.saturating_sub(1)) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
+    let inner = find_exe(&extract, 6)?;
+    let _ = std::fs::create_dir_all(&dest);
+    for entry in std::fs::read_dir(&inner).ok()?.flatten() {
+        let from = entry.path();
+        let to = dest.join(entry.file_name());
+        if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            copy_dir(&from, &to);
+        } else {
+            let _ = std::fs::copy(&from, &to);
+        }
+    }
+    dest.join("msedgewebview2.exe").is_file().then_some(dest)
+}
+
+fn copy_dir(from: &Path, to: &Path) {
+    let _ = std::fs::create_dir_all(to);
+    let Ok(rd) = std::fs::read_dir(from) else {
         return;
     };
-    std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", &runtime);
-    grant_dir_acl(&runtime);
+    for entry in rd.flatten() {
+        let from = entry.path();
+        let to = to.join(entry.file_name());
+        if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            copy_dir(&from, &to);
+        } else {
+            let _ = std::fs::copy(&from, to);
+        }
+    }
+}
+
+fn prepare_webview2(extra: &[PathBuf]) {
+    if system_webview2_present() {
+        return;
+    }
+    if let Some(runtime) = locate_webview2_runtime(extra) {
+        std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", &runtime);
+        grant_dir_acl(&runtime);
+        return;
+    }
+    if let Some(runtime) = download_fixed_webview2() {
+        std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", &runtime);
+        grant_dir_acl(&runtime);
+    }
 }
 
 #[tauri::command]
@@ -439,23 +624,7 @@ async fn rpc(
 }
 
 fn prime_webview2_from_exe_dir() {
-    let Ok(exe) = std::env::current_exe() else {
-        return;
-    };
-    let Some(dir) = exe.parent() else {
-        return;
-    };
-    for candidate in [
-        dir.join("webview2-runtime"),
-        dir.join("resources").join("webview2-runtime"),
-        dir.to_path_buf(),
-    ] {
-        if candidate.join("msedgewebview2.exe").is_file() {
-            std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", &candidate);
-            grant_dir_acl(&candidate);
-            return;
-        }
-    }
+    prepare_webview2(&[]);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -469,7 +638,11 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![rpc])
         .setup(|app| {
-            ensure_webview2_fixed_runtime(app.handle());
+            let mut extra = Vec::new();
+            if let Ok(resource) = app.path().resource_dir() {
+                extra.push(resource);
+            }
+            prepare_webview2(&extra);
             Ok(())
         })
         .on_window_event(|window, event| {

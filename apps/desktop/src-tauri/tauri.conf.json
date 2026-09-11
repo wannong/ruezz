@@ -47,14 +47,14 @@
     ],
     "windows": {
       "webviewInstallMode": {
-        "type": "fixedRuntime",
-        "path": "./webview2-runtime"
+        "type": "skip"
       },
       "nsis": {
         "languages": ["SimpChinese", "English"],
         "displayLanguageSelector": false,
         "installMode": "currentUser",
-        "installerIcon": "icons/icon.ico"
+        "installerIcon": "icons/icon.ico",
+        "installerHooks": "./windows/installer-hooks.nsh"
       }
     }
   },

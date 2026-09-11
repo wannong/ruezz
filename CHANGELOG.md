@@ -9,12 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Self-contained Windows NSIS installer with bundled Node sidecar, Python/MarkItDown, and WebView2 Fixed Runtime (no admin, no system WebView2 install)
+- Self-contained Windows NSIS installer with bundled Node sidecar and Python/MarkItDown. Uses the PC's WebView2 when present; downloads a user-local runtime only if missing.
 
 ### Fixed
 
-- Installer no longer skips or fails WebView2 on PCs without admin or with a leftover Edge registry stub
-- Custom AI setup maps engine write/pipe errors and API connect failures to Chinese messages, and restarts a dead sidecar
+- GNU `WebView2Loader.dll` is copied next to WikiHome.exe at install time (it was previously only under `resources\`)
+- Sidecar spawn surfaces stderr when the engine exits immediately; Node `\\?\` paths and inherited `NODE_OPTIONS` are sanitized
+
 
 ## [1.0.5] - 2026-09-11
 

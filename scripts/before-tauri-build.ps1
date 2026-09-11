@@ -10,10 +10,6 @@ if ($ready) {
 } else {
   & (Join-Path $PSScriptRoot "stage-installer-runtime.ps1")
 }
-$wv2 = Join-Path $PSScriptRoot "..\apps\desktop\src-tauri\webview2-runtime\msedgewebview2.exe"
-if (-not (Test-Path $wv2)) {
-  & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "ensure-webview2-fixed.ps1")
-}
 Set-Location (Join-Path $PSScriptRoot "..\apps\desktop")
 pnpm build
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

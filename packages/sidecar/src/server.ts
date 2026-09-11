@@ -37,12 +37,19 @@ export class SidecarSession {
     // Faux LLM is smoke-only (`initial.mock` or WIKIHOME_MOCK=1 with no saved settings).
     // Never restore mock from disk — it used to leave the desktop stuck on canned replies.
     const { mock: _persistedMock, ...persistedRest } = persisted;
-    this.settings = ensureLlmProviders(
-      VaultSettingsSchema.parse({
-        ...(hasPersisted ? persistedRest : env),
-        ...initial,
-      }),
-    );
+    try {
+      this.settings = ensureLlmProviders(
+        VaultSettingsSchema.parse({
+          ...(hasPersisted ? persistedRest : env),
+          ...initial,
+        }),
+      );
+    } catch (err) {
+      process.stderr.write(
+        `settings parse failed, using defaults: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+      this.settings = ensureLlmProviders(VaultSettingsSchema.parse({ ...env, ...initial }));
+    }
     this.engine = createEngine(this.settings);
   }
 

@@ -80,13 +80,14 @@ $cli = Join-Path $SidecarOut "dist\cli.js"
 if (-not (Test-Path $cli)) { throw "sidecar cli.js missing after deploy: $cli" }
 
 Write-Host "==> copy Node runtime"
-$nodeSrc = (Get-Command node.exe -ErrorAction Stop).Source
+$nodeSrc = (node -p "process.execPath").Trim()
+if (-not $nodeSrc -or -not (Test-Path $nodeSrc)) {
+  $nodeSrc = (Get-Command node.exe -ErrorAction Stop).Source
+}
 Copy-Item -Force $nodeSrc (Join-Path $RuntimeOut "node.exe")
 
 Write-Host "==> WebView2Loader.dll"
 & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "copy-webview2-dll.ps1") -TargetDir $Res
-Write-Host "==> WebView2 Fixed Runtime"
-& powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "ensure-webview2-fixed.ps1")
 
 function Ensure-PythonRuntime {
   $pythonExe = Join-Path $PythonCache "python.exe"

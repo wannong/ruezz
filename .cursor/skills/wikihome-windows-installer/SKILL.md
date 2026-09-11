@@ -9,7 +9,7 @@ description: >-
 
 # WikiHome Windows installer
 
-Self-contained **current-user** NSIS setup for a PC with nothing installed. Bundles Node sidecar, embeddable CPython + MarkItDown, and WebView2 **Fixed Runtime** (no admin, no system WebView2).
+Self-contained **current-user** NSIS setup for a PC with nothing installed. Bundles Node sidecar and embeddable CPython + MarkItDown. Uses the machine's WebView2 when present; GNU builds still need `WebView2Loader.dll` **next to the exe** (NSIS post-install copies it from `resources\`).
 
 Deliverable: `release/WikiHome_<version>_x64-setup.exe` (typically ~300MB). Do not commit `release/`, `.cache/`, or staged runtimes.
 
@@ -61,8 +61,7 @@ This script:
 2. `pnpm --filter @wikihome/sidecar deploy --prod --ignore-scripts --node-linker=hoisted` into `.cache/installer-runtime/sidecar-pkg` (not directly into `resources/`)
 3. `robocopy /E` (not `/MIR`) cache → `apps/desktop/src-tauri/resources/sidecar`
 4. Materializes any leftover reparse points (`scripts/materialize-node-modules.mjs`)
-5. Copies `node.exe`, WebView2Loader.dll, embeddable CPython 3.14 + `markitdown[pdf,docx,pptx,xlsx]` with `PYTHONNOUSERSITE=1` and `pip install --no-user`
-6. Downloads WebView2 Fixed Runtime into `apps/desktop/src-tauri/webview2-runtime/` (`scripts/ensure-webview2-fixed.ps1`)
+5. Copies `node.exe` (from `node -p process.execPath`), WebView2Loader.dll, embeddable CPython 3.14 + `markitdown[pdf,docx,pptx,xlsx]` with `PYTHONNOUSERSITE=1` and `pip install --no-user`
 
 ### 2. Smoke
 
@@ -86,9 +85,9 @@ $env:PATH = "D:\winlibs\mingw64\bin;" + $env:PATH
 pnpm --filter @wikihome/desktop tauri build
 ```
 
-Expect: compile, pack Fixed Runtime + sidecar, then `makensis` (10–20+ min). Success log: `Finished 1 bundle at: ...\bundle\nsis\WikiHome_*_x64-setup.exe`.
+Expect: compile, pack sidecar, then `makensis`. Success log: `Finished 1 bundle at: ...\bundle\nsis\WikiHome_*_x64-setup.exe`.
 
-A **~4MB** setup.exe is the old shell-only pack. A real 小白 installer is **hundreds of MB**. If it is ~4MB, resources were not packed — restage and rebuild.
+A **~4MB** setup.exe is the old shell-only pack. A real 小白 installer is **tens to ~150MB** (sidecar + Python; WebView2 is *not* embedded). If it is ~4MB, resources were not packed — restage and rebuild. If it is ~300MB, the old Fixed Runtime is still being packed — `webviewInstallMode` must be `skip`.
 
 ### 4. Copy to `release/`
 
@@ -112,7 +111,7 @@ Give the user **one file**: `release/WikiHome_<ver>_x64-setup.exe`.
 2. Double-click; Chinese; Next
 3. No admin, no Node/Python/Git
 4. First launch: pick a vault folder, then fill AI base URL + key in settings
-5. Needs 64-bit Windows 10/11. WebView2 is inside the installer.
+5. Needs 64-bit Windows 10/11. If the PC already has Edge/WebView2, that is used. If not, first launch downloads a user-local copy (no admin).
 
 Do not tell them to run `WikiHome.exe` from `release/` unless they are on this dev machine.
 
@@ -122,9 +121,9 @@ Do not tell them to run `WikiHome.exe` from `release/` unless they are on this d
 - **Never** `pnpm deploy` straight into `resources/sidecar`. On this machine the final rename `sidecar_tmp_*` → `sidecar` hits EPERM. Deploy to `.cache/installer-runtime/sidecar-pkg`, then `robocopy /E`.
 - Isolated (non-hoisted) deploy + following junctions explodes size (50MB → 600MB+) and is unsafe. Keep `--node-linker=hoisted`.
 - Bundled pip must not see the developer user-site. Always `PYTHONNOUSERSITE=1` and `pip install --no-user`. Verify `markitdown.__file__` is inside the embed tree.
-- GNU builds need `WebView2Loader.dll` beside the exe. `build.rs` copies it from `resources/` into `target/release/`.
-- Do **not** use `webviewInstallMode: offlineInstaller` for current-user NSIS. Evergreen WebView2 install needs admin; leftover registry `pv` also makes Tauri skip the installer. Use `fixedRuntime` + `./webview2-runtime`.
-- Sidecar spawn looks for `runtime/node.exe` + `sidecar/dist/cli.js` under resource dir, exe dir, or a short walk (skips `webview2-runtime` / `node_modules`). Sets `WIKIHOME_PYTHON`, `PYTHONNOUSERSITE`, `NODE_USE_ENV_PROXY`. Stderr goes to `%APPDATA%\WikiHome\sidecar-stderr.log`.
+- GNU builds need `WebView2Loader.dll` beside the exe. `build.rs` copies it from `resources/` into `target/release/`. NSIS `windows/installer-hooks.nsh` copies `$INSTDIR\resources\WebView2Loader.dll` → `$INSTDIR\` after install.
+- Do **not** pack WebView2 Fixed Runtime by default (`webviewInstallMode: skip`). Prefer the OS WebView2 (look for `msedgewebview2.exe`, not a leftover registry `pv`). If missing, the app downloads a user-local runtime into `%LOCALAPPDATA%\WikiHome\webview2-runtime` (no admin).
+- Sidecar spawn looks for `runtime/node.exe` + `sidecar/dist/cli.js` under resource dir, exe dir, or a short walk (skips `webview2-runtime` / `node_modules`). Sets `WIKIHOME_PYTHON`, `PYTHONNOUSERSITE`, `NODE_USE_ENV_PROXY`, `NODE_PATH`. Strips `\\?\` prefixes. Stderr goes to `%APPDATA%\WikiHome\sidecar-stderr.log`.
 - `beforeBuildCommand` is a **single** `-File scripts/before-tauri-build.ps1`. `cmd /C` does not treat `;` as a command separator.
 - Do not git-add: `release/`, `.cache/`, `apps/desktop/src-tauri/resources/runtime/`, `resources/sidecar/`, `WebView2Loader.dll`, `webview2-runtime/`, `*.exe`.
 - After a botched stage that deleted `packages/` or `vendor/`: `git checkout -- packages vendor` then `pnpm install --force` (dev servers must be stopped).
@@ -134,8 +133,9 @@ Do not tell them to run `WikiHome.exe` from `release/` unless they are on this d
 `apps/desktop/src-tauri/tauri.conf.json`:
 
 - `bundle.targets`: `["nsis"]`
-- `bundle.resources`: `resources/runtime/**/*`, `resources/sidecar/**/*`, `resources/WebView2Loader.dll` (`tauri-build` also packs `./webview2-runtime` from `fixedRuntime.path`)
-- `webviewInstallMode`: `{ "type": "fixedRuntime", "path": "./webview2-runtime" }`
+- `bundle.resources`: `resources/runtime/**/*`, `resources/sidecar/**/*`, `resources/WebView2Loader.dll`
+- `webviewInstallMode`: `{ "type": "skip" }`
+- `nsis.installerHooks`: `./windows/installer-hooks.nsh` (copies loader DLL next to the exe)
 - `nsis.languages`: `SimpChinese`, `English`; `installMode`: `currentUser`
 
 Root scripts: `release:stage`, `release:pack`, `release:prepare` (DLL only).
