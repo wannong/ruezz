@@ -312,9 +312,19 @@ Agent 可使用以下工具（封装 WikiEngine，见 `packages/agent/src/tools/
 - `get_graph()`：获取知识图谱
 - `get_backlinks(pageId)`：获取反向链接
 - `ingest_text(title, text)`：入库文本
-- `ingest_file(filePath)`：入库文件（必须在 `raw/sources/` 内）
+- `ingest_file(filePath)`：入库文件（必须在 `raw/sources/` 内；PDF/Office 先转 Markdown）
+- `convert_to_markdown(filePath)`：用 MarkItDown 把 PDF / Word / PPT / Excel 转为 `raw/sources/*.md`
 
 工具执行受 WikiEngine 路径守卫保护，禁止写入 `wiki/` 外或读取任意文件。
+
+## Agent 技能
+
+WikiHome Agent 内置技能目录（`packages/agent/skills/`），每轮按用户消息启用完整说明：
+
+- **grill-me** / **grilling**：用户说 grill-me、拷问、追问方案时，按轮次追问并给出推荐答案，得到确认前不入库、不写页面
+- **markitdown**：把 vault 里的 PDF / Office 转为 Markdown；工具为 `convert_to_markdown`（调用本机 `python -m markitdown`）
+
+需要本机已安装 Python 和 `markitdown` 包（例如 `python -m pip install "markitdown[pdf,docx,pptx,xlsx]"`）。
 
 ## 前端对接步骤
 
@@ -398,6 +408,7 @@ Agent 可使用以下工具（封装 WikiEngine，见 `packages/agent/src/tools/
 - `packages/agent/src/agent-runner.ts` - Pi Agent 循环封装
 - `packages/agent/src/context-builder.ts` - 上下文构建（当前页 + N 跳）
 - `packages/agent/src/tools/` - WikiEngine 工具封装
+- `packages/agent/skills/` - grill-me、grilling、markitdown
 - `packages/sidecar/src/server.ts` - RPC 方法扩展
 - `packages/sidecar/src/smoke.ts` - 集成测试
 - `vendor/pi-agent-core` / `vendor/pi-ai` - 收进仓库的 Pi 底座（`package.json` + `dist` + `README.md`）

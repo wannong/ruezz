@@ -3,6 +3,12 @@ import type { Models } from "@earendil-works/pi-ai";
 import type { WikiEngine } from "@wikihome/engine-api";
 import { collectNeighborIds } from "./neighbors.js";
 import { SessionStorage } from "./session-storage.js";
+import {
+  formatSkillsForPrompt,
+  loadBundledSkills,
+  selectSkillsForMessage,
+  type AgentSkill,
+} from "./skills.js";
 import { createWikiTools } from "./tools/index.js";
 import type {
   AgentPromptResult,
@@ -32,7 +38,8 @@ const SYSTEM_PROMPT = `你是 WikiHome 本地知识库助手。对话里不会�
 - get_graph：获取知识图谱
 - get_backlinks：获取反向链接
 - ingest_text：入库文本内容
-- ingest_file：入库文件
+- ingest_file：入库文件（须在 raw/sources/ 内；PDF/Office 请先转换）
+- convert_to_markdown：把 PDF / Word / PPT / Excel 等转为 Markdown
 
 引用页面时使用 [[page-id]] 格式。所有写入操作必须在 wiki/ 目录内。`;
 
@@ -45,12 +52,14 @@ export class AgentRunner {
   private vaultRoot: string;
   private models: Models;
   private activeAgent: Agent | null = null;
+  private skills: AgentSkill[];
 
   constructor(engine: WikiEngine, vaultRoot: string, models: Models) {
     this.engine = engine;
     this.vaultRoot = vaultRoot;
     this.models = models;
     this.storage = new SessionStorage(vaultRoot);
+    this.skills = loadBundledSkills();
   }
 
   /**
@@ -189,9 +198,14 @@ export class AgentRunner {
         /* graph may be empty or not compiled yet */
       }
     }
-    const fullSystemPrompt = currentPageId
-      ? `${SYSTEM_PROMPT}\n\n用户当前打开的页面是 [[${currentPageId}]]。需要正文、邻居或检索结果时请自行调用工具。${neighborLine}`
-      : SYSTEM_PROMPT;
+    const skillBlock = formatSkillsForPrompt(
+      this.skills,
+      selectSkillsForMessage(message, this.skills),
+    );
+    const pageContext = currentPageId
+      ? `用户当前打开的页面是 [[${currentPageId}]]。需要正文、邻居或检索结果时请自行调用工具。${neighborLine}`
+      : "";
+    const fullSystemPrompt = [SYSTEM_PROMPT, skillBlock, pageContext].filter(Boolean).join("\n\n");
 
     // Create tools
     const tools = createWikiTools(this.engine, this.vaultRoot);

@@ -1,6 +1,6 @@
 {
   "name": "@wikihome/agent",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Ask/tool loop for WikiHome",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,7 +12,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/skills.test.js"
   },
   "dependencies": {
     "@wikihome/engine-api": "workspace:*",
@@ -20,6 +21,7 @@
     "@earendil-works/pi-ai": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "@types/node": "^22.13.10"
   }
 }

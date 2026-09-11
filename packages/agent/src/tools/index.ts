@@ -3,6 +3,7 @@ import type { WikiEngine } from "@wikihome/engine-api";
 import { createBacklinksTool } from "./backlinks.js";
 import { createCreatePageTool } from "./create-page.js";
 import { createGetGraphTool } from "./get-graph.js";
+import { createConvertToMarkdownTool } from "./convert-markdown.js";
 import { createIngestFileTool, createIngestTextTool } from "./ingest.js";
 import { createListPagesTool } from "./list-pages.js";
 import { createReadPageTool } from "./read-page.js";
@@ -23,11 +24,13 @@ export function createWikiTools(engine: WikiEngine, vaultRoot: string): AgentToo
     createBacklinksTool(engine, vaultRoot),
     createIngestTextTool(engine, vaultRoot),
     createIngestFileTool(engine, vaultRoot),
+    createConvertToMarkdownTool(vaultRoot),
   ];
 }
 
 export {
   createBacklinksTool,
+  createConvertToMarkdownTool,
   createCreatePageTool,
   createGetGraphTool,
   createIngestFileTool,

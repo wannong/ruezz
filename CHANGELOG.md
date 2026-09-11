@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-09-11
+
+### Added
+
+- WikiHome Agent skills: grill-me / grilling interviews, and MarkItDown conversion of PDF/Office files before ingest
+
 ## [1.0.4] - 2026-09-11
 
 ### Added
@@ -160,7 +166,8 @@ WikiHome’s first feature-complete release: local wiki, graph, and a vertical A
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/wikihome/wikihome/releases/tag/v1.0.5
 [1.0.4]: https://github.com/wikihome/wikihome/releases/tag/v1.0.4
 [1.0.3]: https://github.com/wikihome/wikihome/releases/tag/v1.0.3
 [1.0.2]: https://github.com/wikihome/wikihome/releases/tag/v1.0.2
