@@ -4,6 +4,20 @@ export function normalizeOpenAiBase(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
 
+/** Claude ids on OpenAI-compatible gateways. Foxnio 502s /chat/completions when tools are present. */
+export function looksLikeClaudeModel(id: string): boolean {
+  return /^claude\b/i.test(id.trim());
+}
+
+/**
+ * Anthropic SDK posts to `${baseURL}/v1/messages`.
+ * Settings store OpenAI-style `https://host/v1` — strip that suffix.
+ */
+export function anthropicMessagesBaseUrl(openaiBaseUrl: string): string {
+  const trimmed = normalizeOpenAiBase(openaiBaseUrl);
+  return trimmed.replace(/\/v1$/i, "") || trimmed;
+}
+
 function authHeaders(apiKey: string): Record<string, string> {
   const headers: Record<string, string> = { accept: "application/json" };
   if (apiKey.trim()) headers.authorization = `Bearer ${apiKey.trim()}`;
@@ -50,15 +64,60 @@ export async function listOpenAiModels(baseUrl: string, apiKey: string): Promise
   throw new Error(lastError);
 }
 
+async function testAnthropicMessagesConnection(
+  baseUrl: string,
+  apiKey: string,
+  modelId: string,
+): Promise<{ ok: true; reply: string }> {
+  const root = anthropicMessagesBaseUrl(baseUrl);
+  if (!root) throw new Error("请先填写 API Base URL");
+  const res = await fetch(`${root}/v1/messages`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(apiKey),
+      "content-type": "application/json",
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: modelId,
+      max_tokens: 8,
+      stream: false,
+      messages: [{ role: "user", content: "ping" }],
+      // Agent always sends tools; foxnio 502s the OpenAI tools path, so probe this too.
+      tools: [
+        {
+          name: "ping_tool",
+          description: "connection probe",
+          input_schema: { type: "object", properties: {} },
+        },
+      ],
+    }),
+    signal: AbortSignal.timeout(FETCH_MS),
+  });
+  if (!res.ok) {
+    throw new Error(`测试连接失败 HTTP ${res.status}：${await readError(res)}`);
+  }
+  const json = (await res.json()) as {
+    content?: Array<{ type?: string; text?: string }>;
+  };
+  const reply =
+    json.content?.find((block) => block.type === "text" && block.text?.trim())?.text?.trim() || "连接成功";
+  return { ok: true, reply };
+}
+
 export async function testOpenAiConnection(
   baseUrl: string,
   apiKey: string,
   model: string,
 ): Promise<{ ok: true; reply: string }> {
-  const bases = candidateBases(baseUrl);
-  if (!bases.length) throw new Error("请先填写 API Base URL");
   const modelId = model.trim();
   if (!modelId) throw new Error("请先填写或选择模型名");
+  if (looksLikeClaudeModel(modelId)) {
+    return testAnthropicMessagesConnection(baseUrl, apiKey, modelId);
+  }
+
+  const bases = candidateBases(baseUrl);
+  if (!bases.length) throw new Error("请先填写 API Base URL");
 
   let lastError = "测试连接失败";
   for (const base of bases) {

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-11
+
+### Fixed
+
+- Route Claude models through Anthropic Messages so Agent tool calls no longer 502 on OpenAI-compatible gateways such as foxnio
+
 ## [1.0.1] - 2026-09-11
 
 Desktop motion for overlays and Agent feedback, without slowing daily navigation.
@@ -137,7 +143,8 @@ WikiHome’s first feature-complete release: local wiki, graph, and a vertical A
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/wikihome/wikihome/releases/tag/v1.0.2
 [1.0.1]: https://github.com/wikihome/wikihome/releases/tag/v1.0.1
 [1.0.0]: https://github.com/wikihome/wikihome/releases/tag/v1.0.0
 [0.1.10]: https://github.com/wikihome/wikihome/releases/tag/v0.1.10

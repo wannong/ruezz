@@ -9,7 +9,7 @@ import { createEngine } from "@wikihome/engine-llmwiki";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { revealInExplorer } from "./reveal.js";
-import { listOpenAiModels, testOpenAiConnection } from "./openai-compat.js";
+import { anthropicMessagesBaseUrl, listOpenAiModels, looksLikeClaudeModel, testOpenAiConnection } from "./openai-compat.js";
 import { loadPersistedSettings, savePersistedSettings, settingsFromEnv } from "./settings-store.js";
 
 export type RpcRequest = {
@@ -87,10 +87,14 @@ export class SidecarSession {
           });
         }
       } else {
-        // Most OpenAI-compatible servers (LM Studio, 代理、国产网关) speak
-        // /v1/chat/completions, not the newer /v1/responses API.
+        // Most gateways speak /v1/chat/completions. Claude on some proxies
+        // (e.g. foxnio) returns Cloudflare 502 when that path includes tools;
+        // those models must use Anthropic /v1/messages instead.
         const { openAICompletionsApi } = await import(
           "@earendil-works/pi-ai/api/openai-completions.lazy"
+        );
+        const { anthropicMessagesApi } = await import(
+          "@earendil-works/pi-ai/api/anthropic-messages.lazy"
         );
         const active = this.settings.providers.find((p) => p.id === this.settings.activeProviderId);
         const modelIds = [
@@ -101,10 +105,12 @@ export class SidecarSession {
         if (modelIds.length === 0) {
           throw new Error("当前没有可用模型。请在设置中填写 API 并拉取模型。");
         }
+        const openAiBase = this.settings.apiBaseUrl;
+        const anthropicBase = anthropicMessagesBaseUrl(openAiBase);
         const provider = createProvider({
           id: "openai-compatible",
           name: "OpenAI Compatible",
-          baseUrl: this.settings.apiBaseUrl,
+          baseUrl: openAiBase,
           auth: {
             apiKey: {
               name: "API Key",
@@ -117,19 +123,27 @@ export class SidecarSession {
               },
             },
           },
-          models: modelIds.map((id) => ({
-            id,
-            name: id,
-            provider: "openai-compatible",
-            api: "openai-completions" as const,
-            baseUrl: this.settings.apiBaseUrl,
-            reasoning: false,
-            input: ["text" as const],
-            contextWindow: 128000,
-            maxTokens: 16384,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          })),
-          api: openAICompletionsApi(),
+          models: modelIds.map((id) => {
+            const claude = looksLikeClaudeModel(id);
+            return {
+              id,
+              name: id,
+              provider: "openai-compatible" as const,
+              api: (claude ? "anthropic-messages" : "openai-completions") as
+                | "anthropic-messages"
+                | "openai-completions",
+              baseUrl: claude ? anthropicBase : openAiBase,
+              reasoning: false,
+              input: ["text" as const],
+              contextWindow: 128000,
+              maxTokens: 16384,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            };
+          }),
+          api: {
+            "anthropic-messages": anthropicMessagesApi(),
+            "openai-completions": openAICompletionsApi(),
+          },
         });
 
         models.setProvider(provider);

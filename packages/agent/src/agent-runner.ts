@@ -213,7 +213,7 @@ export class AgentRunner {
         systemPrompt: fullSystemPrompt,
         model,
         tools,
-        messages: this.convertToAgentMessages(session.messages),
+        messages: this.convertToAgentMessages(session.messages, model),
       },
       streamFn: (streamModel, context, options) =>
         this.models.streamSimple(streamModel, context, options),
@@ -294,7 +294,9 @@ export class AgentRunner {
     }
 
     // Extract assistant response and collect all messages from this turn
-    const newMessages = agent.state.messages.slice(this.convertToAgentMessages(session.messages).length);
+    const newMessages = agent.state.messages.slice(
+      this.convertToAgentMessages(session.messages, model).length,
+    );
     
     let answer = "";
     const turnMessages: SessionMessage[] = [];
@@ -435,7 +437,10 @@ export class AgentRunner {
   /**
    * Convert session messages to Pi agent-core format.
    */
-  private convertToAgentMessages(messages: SessionMessage[]): any[] {
+  private convertToAgentMessages(
+    messages: SessionMessage[],
+    model: { api: string; provider: string; id: string },
+  ): any[] {
     return messages.map((msg) => {
       if (msg.role === "user") {
         return {
@@ -461,9 +466,9 @@ export class AgentRunner {
         return {
           role: "assistant",
           content,
-          api: "openai-completions",
-          provider: msg.provider || "openai-compatible",
-          model: msg.model || "unknown",
+          api: model.api,
+          provider: msg.provider || model.provider,
+          model: msg.model || model.id,
           timestamp: msg.timestamp,
           stopReason: msg.toolCalls && msg.toolCalls.length > 0 ? "toolUse" : "stop",
           // Pi streamSimple estimates context from assistant.usage.totalTokens.
