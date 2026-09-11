@@ -1,7 +1,9 @@
 use parking_lot::Mutex;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -30,15 +32,154 @@ fn hide_console(cmd: &mut Command) {
     }
 }
 
-fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
-    // Prefer external binary next to the app; fall back to `node packages/sidecar/dist/cli.js`
-    if let Ok(path) = app
-        .path()
-        .resolve("wikihome-sidecar", tauri::path::BaseDirectory::Resource)
-    {
-        if path.exists() {
-            return Ok(Command::new(path));
+fn prepend_path(cmd: &mut Command, dir: &Path) {
+    let mut parts = vec![dir.to_path_buf()];
+    let existing = cmd
+        .get_envs()
+        .find(|(k, _)| k.eq_ignore_ascii_case("PATH"))
+        .and_then(|(_, v)| v.map(|val| val.to_os_string()))
+        .or_else(|| std::env::var_os("PATH"));
+    if let Some(existing) = existing {
+        parts.extend(std::env::split_paths(&existing));
+    }
+    if let Ok(joined) = std::env::join_paths(&parts) {
+        cmd.env("PATH", joined);
+    }
+}
+
+fn skip_walk_dir(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "webview2-runtime"
+            | "node_modules"
+            | "python"
+            | "lib"
+            | "dlls"
+            | "target"
+            | ".git"
+    )
+}
+
+fn make_bundled_command(node: &Path, cli: &Path) -> Command {
+    let sidecar_dir = cli
+        .parent()
+        .and_then(|p| p.parent())
+        .unwrap_or(cli)
+        .to_path_buf();
+    let runtime_dir = node.parent().unwrap_or(node).to_path_buf();
+    let mut cmd = Command::new(node);
+    cmd.arg(cli);
+    cmd.current_dir(&sidecar_dir);
+    prepend_path(&mut cmd, &runtime_dir);
+    let python = runtime_dir.join("python").join("python.exe");
+    if python.exists() {
+        cmd.env("WIKIHOME_PYTHON", &python);
+        if let Some(dir) = python.parent() {
+            prepend_path(&mut cmd, dir);
         }
+    }
+    cmd.env(
+        "WIKIHOME_MOCK",
+        std::env::var("WIKIHOME_MOCK").unwrap_or_else(|_| "0".into()),
+    );
+    cmd.env("PYTHONNOUSERSITE", "1");
+    // Node 24 fetch/undici only honors HTTP(S)_PROXY when this is set.
+    cmd.env("NODE_USE_ENV_PROXY", "1");
+    cmd
+}
+
+fn try_runtime_pair(root: &Path) -> Option<Command> {
+    let node = root.join("runtime").join("node.exe");
+    let cli = root.join("sidecar").join("dist").join("cli.js");
+    if node.is_file() && cli.is_file() {
+        return Some(make_bundled_command(&node, &cli));
+    }
+    None
+}
+
+fn find_bundled_sidecar(root: &Path, depth: u8) -> Option<Command> {
+    if let Some(cmd) = try_runtime_pair(root) {
+        return Some(cmd);
+    }
+    if depth == 0 {
+        return None;
+    }
+    let rd = std::fs::read_dir(root).ok()?;
+    for entry in rd.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if skip_walk_dir(&name) {
+            continue;
+        }
+        if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            if let Some(cmd) = find_bundled_sidecar(&entry.path(), depth.saturating_sub(1)) {
+                return Some(cmd);
+            }
+        }
+    }
+    None
+}
+
+fn bundled_sidecar_command(resource: &Path) -> Option<Command> {
+    find_bundled_sidecar(resource, 3)
+}
+
+fn sidecar_log_path() -> PathBuf {
+    let base = std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
+        .unwrap_or_else(std::env::temp_dir);
+    let dir = base.join("WikiHome");
+    let _ = std::fs::create_dir_all(&dir);
+    dir.join("sidecar-stderr.log")
+}
+
+fn explain_io(what: &str, err: &std::io::Error) -> String {
+    let raw = err.to_string();
+    let broken = err.kind() == std::io::ErrorKind::BrokenPipe
+        || raw.contains("pipe")
+        || raw.contains("管道")
+        || raw.contains("being closed");
+    if broken {
+        return format!(
+            "{what}：引擎进程已退出。请关掉 WikiHome 再打开。若仍失败，查看 %APPDATA%\\WikiHome\\sidecar-stderr.log"
+        );
+    }
+    if err.kind() == std::io::ErrorKind::NotFound {
+        return format!("{what}：找不到引擎文件，请重新安装 WikiHome");
+    }
+    format!("{what}：{raw}")
+}
+
+fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
+    let mut roots = Vec::new();
+    if let Ok(resource) = app.path().resource_dir() {
+        roots.push(resource.clone());
+        roots.push(resource.join("resources"));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            roots.push(dir.to_path_buf());
+            roots.push(dir.join("resources"));
+        }
+    }
+
+    for root in &roots {
+        if let Some(cmd) = bundled_sidecar_command(root) {
+            return Ok(cmd);
+        }
+    }
+
+    if let Ok(resource) = app.path().resource_dir() {
+        if let Ok(path) = app
+            .path()
+            .resolve("wikihome-sidecar", tauri::path::BaseDirectory::Resource)
+        {
+            if path.exists() {
+                return Ok(Command::new(path));
+            }
+        }
+        let _ = resource;
     }
 
     let mut candidates = Vec::new();
@@ -63,16 +204,10 @@ fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
         }
     }
 
-    // Explicit local checkout used during development / acceptance.
-    candidates.push(std::path::PathBuf::from(
-        r"D:\WikiHome\packages\sidecar\dist\cli.js",
-    ));
-
     for c in &candidates {
         if c.extension().and_then(|e| e.to_str()) == Some("js") && c.exists() {
             let mut cmd = Command::new("node.exe");
             cmd.arg(c);
-            // Keep cwd at monorepo root so workspace package imports resolve.
             if let Some(root) = c
                 .ancestors()
                 .find(|p| p.join("pnpm-workspace.yaml").exists())
@@ -83,6 +218,7 @@ fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
                 "WIKIHOME_MOCK",
                 std::env::var("WIKIHOME_MOCK").unwrap_or_else(|_| "0".into()),
             );
+            cmd.env("NODE_USE_ENV_PROXY", "1");
             return Ok(cmd);
         }
         if c.exists() {
@@ -91,7 +227,7 @@ fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
     }
 
     Err(format!(
-        "sidecar not found; tried: {}",
+        "找不到 WikiHome 引擎。请重新安装。已尝试：{}",
         candidates
             .iter()
             .map(|p| p.display().to_string())
@@ -110,11 +246,20 @@ impl Drop for SidecarProc {
 fn spawn_sidecar(app: &AppHandle) -> Result<SidecarProc, String> {
     let mut cmd = sidecar_command(app)?;
     hide_console(&mut cmd);
-    cmd.stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped());
+    let log_path = sidecar_log_path();
+    match OpenOptions::new().create(true).append(true).open(&log_path) {
+        Ok(file) => {
+            cmd.stderr(Stdio::from(file));
+        }
+        Err(_) => {
+            cmd.stderr(Stdio::null());
+        }
+    }
 
-    let mut child = cmd.spawn().map_err(|e| format!("spawn sidecar: {e}"))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| explain_io("启动引擎失败", &e))?;
     let stdin = child.stdin.take().ok_or("sidecar stdin missing")?;
     let stdout = child.stdout.take().ok_or("sidecar stdout missing")?;
     let pending: Arc<Mutex<HashMap<u64, tokio::sync::oneshot::Sender<Value>>>> =
@@ -149,8 +294,12 @@ fn spawn_sidecar(app: &AppHandle) -> Result<SidecarProc, String> {
         }
     });
 
-    // drain boot line briefly
-    thread::sleep(Duration::from_millis(50));
+    thread::sleep(Duration::from_millis(80));
+    if let Ok(Some(status)) = child.try_wait() {
+        return Err(format!(
+            "引擎启动后立即退出（{status}）。请查看 %APPDATA%\\WikiHome\\sidecar-stderr.log"
+        ));
+    }
 
     Ok(SidecarProc {
         _child: child,
@@ -160,12 +309,88 @@ fn spawn_sidecar(app: &AppHandle) -> Result<SidecarProc, String> {
     })
 }
 
+fn sidecar_dead(proc: &mut SidecarProc) -> bool {
+    matches!(proc._child.try_wait(), Ok(Some(_)))
+}
+
 fn ensure_sidecar(app: &AppHandle, state: &SidecarState) -> Result<(), String> {
     let mut guard = state.inner.lock();
-    if guard.is_none() {
+    let dead = match guard.as_mut() {
+        None => true,
+        Some(proc) => sidecar_dead(proc),
+    };
+    if dead {
         *guard = Some(spawn_sidecar(app)?);
     }
     Ok(())
+}
+
+fn write_rpc(proc: &mut SidecarProc, method: &str, params: &Value) -> Result<(u64, tokio::sync::oneshot::Receiver<Value>), String> {
+    let id = proc.next_id.fetch_add(1, Ordering::SeqCst);
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    proc.pending.lock().insert(id, tx);
+    let req = json!({
+        "id": id,
+        "method": method,
+        "params": params,
+    });
+    writeln!(proc.stdin, "{req}").map_err(|e| explain_io("无法把请求发给引擎", &e))?;
+    proc.stdin.flush().map_err(|e| explain_io("无法把请求发给引擎", &e))?;
+    Ok((id, rx))
+}
+
+fn grant_dir_acl(dir: &Path) {
+    #[cfg(windows)]
+    {
+        if !dir.is_dir() {
+            return;
+        }
+        let mut cmd = Command::new("icacls");
+        cmd.arg(dir)
+            .arg("/grant")
+            .arg("*S-1-15-2-1:(OI)(CI)(RX)")
+            .arg("/grant")
+            .arg("*S-1-15-2-2:(OI)(CI)(RX)");
+        hide_console(&mut cmd);
+        let _ = cmd.status();
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = dir;
+    }
+}
+
+fn locate_webview2_runtime(app: &AppHandle) -> Option<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            dirs.push(parent.to_path_buf());
+            dirs.push(parent.join("resources"));
+        }
+    }
+    if let Ok(resource) = app.path().resource_dir() {
+        dirs.push(resource.clone());
+        dirs.push(resource.join("resources"));
+    }
+    for dir in dirs {
+        let direct = dir.join("msedgewebview2.exe");
+        if direct.is_file() {
+            return Some(dir);
+        }
+        let nested = dir.join("webview2-runtime");
+        if nested.join("msedgewebview2.exe").is_file() {
+            return Some(nested);
+        }
+    }
+    None
+}
+
+fn ensure_webview2_fixed_runtime(app: &AppHandle) {
+    let Some(runtime) = locate_webview2_runtime(app) else {
+        return;
+    };
+    std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", &runtime);
+    grant_dir_acl(&runtime);
 }
 
 #[tauri::command]
@@ -177,26 +402,31 @@ async fn rpc(
 ) -> Result<Value, String> {
     ensure_sidecar(&app, &state)?;
 
-    let (id, rx) = {
+    let write_once = || -> Result<(u64, tokio::sync::oneshot::Receiver<Value>), String> {
         let mut guard = state.inner.lock();
         let proc = guard.as_mut().ok_or("sidecar unavailable")?;
-        let id = proc.next_id.fetch_add(1, Ordering::SeqCst);
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        proc.pending.lock().insert(id, tx);
-        let req = json!({
-            "id": id,
-            "method": method,
-            "params": params,
-        });
-        writeln!(proc.stdin, "{req}").map_err(|e| format!("write sidecar: {e}"))?;
-        proc.stdin.flush().map_err(|e| format!("flush sidecar: {e}"))?;
-        (id, rx)
+        if sidecar_dead(proc) {
+            return Err("引擎进程已退出".into());
+        }
+        write_rpc(proc, &method, &params)
+    };
+
+    let (id, rx) = match write_once() {
+        Ok(pair) => pair,
+        Err(_) => {
+            *state.inner.lock() = None;
+            ensure_sidecar(&app, &state)?;
+            write_once()?
+        }
     };
 
     let response = tokio::time::timeout(Duration::from_secs(300), rx)
         .await
         .map_err(|_| format!("rpc timeout id={id}"))?
-        .map_err(|_| "rpc channel closed".to_string())?;
+        .map_err(|_| {
+            "引擎连接已断开。请关掉 WikiHome 再打开。若仍失败，查看 %APPDATA%\\WikiHome\\sidecar-stderr.log"
+                .to_string()
+        })?;
 
     if let Some(err) = response.get("error") {
         let msg = err
@@ -208,8 +438,29 @@ async fn rpc(
     Ok(response.get("result").cloned().unwrap_or(Value::Null))
 }
 
+fn prime_webview2_from_exe_dir() {
+    let Ok(exe) = std::env::current_exe() else {
+        return;
+    };
+    let Some(dir) = exe.parent() else {
+        return;
+    };
+    for candidate in [
+        dir.join("webview2-runtime"),
+        dir.join("resources").join("webview2-runtime"),
+        dir.to_path_buf(),
+    ] {
+        if candidate.join("msedgewebview2.exe").is_file() {
+            std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", &candidate);
+            grant_dir_acl(&candidate);
+            return;
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    prime_webview2_from_exe_dir();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -217,6 +468,10 @@ pub fn run() {
             inner: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![rpc])
+        .setup(|app| {
+            ensure_webview2_fixed_runtime(app.handle());
+            Ok(())
+        })
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 if let Some(state) = window.try_state::<SidecarState>() {

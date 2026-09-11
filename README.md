@@ -34,19 +34,27 @@ pnpm dev
 
 ### Tauri 桌面 / 独立 exe
 
-打包后验收目录：`release/`
+给完全没有开发环境的电脑用 **安装包**：
+
+1. 把 `release/WikiHome_*_x64-setup.exe` 拷到那台电脑
+2. 双击安装，一直点「下一步」
+3. 开始菜单或桌面打开 WikiHome
+
+安装包已内置 Node 引擎、PDF/Office 转换（MarkItDown）和 WebView2 运行时。不需要再装 Node、Python、Git，也不要求系统事先装过 WebView2。默认装到当前用户目录，不用管理员权限。
+
+开发机本地验收仍可用绿色目录 `release/`：
 
 - `WikiHome.exe`
 - `WebView2Loader.dll`（GNU 工具链必需，运行 `pnpm release:prepare` 自动复制）
 - `启动WikiHome.bat`
-
-需本机已安装 **Node.js**（sidecar）与 **WebView2 运行时**。
 
 ```bash
 pnpm dev:desktop
 pnpm --filter @wikihome/desktop tauri build
 pnpm release:prepare
 ```
+
+生成安装包前会暂存运行时到 `apps/desktop/src-tauri/resources/`（不进 git）。
 
 ## 版本
 

@@ -14,7 +14,9 @@
     "test": "pnpm -r --filter=./packages/* run test --if-present",
     "version:check": "node scripts/version-check.mjs",
     "smoke": "pnpm --filter @wikihome/sidecar smoke",
-    "release:prepare": "powershell -ExecutionPolicy Bypass -File scripts/copy-webview2-dll.ps1"
+    "release:stage": "powershell -ExecutionPolicy Bypass -File scripts/stage-installer-runtime.ps1",
+    "release:prepare": "powershell -ExecutionPolicy Bypass -File scripts/copy-webview2-dll.ps1",
+    "release:pack": "powershell -ExecutionPolicy Bypass -File scripts/copy-release-pack.ps1"
   },
   "engines": {
     "node": ">=20"

@@ -17,6 +17,7 @@
   "dependencies": {
     "js-yaml": "^4.1.0"
   },
+  "files": ["dist"],
   "engines": {
     "node": ">=20"
   }

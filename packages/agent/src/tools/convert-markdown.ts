@@ -106,7 +106,7 @@ function spawnOnce(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       windowsHide: true,
-      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
+      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1", PYTHONNOUSERSITE: "1" },
     });
     let stdout = "";
     let stderr = "";

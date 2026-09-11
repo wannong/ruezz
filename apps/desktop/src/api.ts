@@ -150,11 +150,26 @@ async function httpRpc<T>(method: string, params: Record<string, unknown> = {}):
   return json.result as T;
 }
 
-async function rpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-  if (isTauri()) {
-    return invoke<T>("rpc", { method, params });
+function rpcError(err: unknown): Error {
+  const message =
+    err instanceof Error ? err.message : typeof err === "string" ? err : String(err);
+  if (/write sidecar|flush sidecar|无法把请求发给引擎/i.test(message)) {
+    return new Error(
+      "引擎连接已断开。请关掉 WikiHome 再打开。若仍失败，查看 %APPDATA%\\WikiHome\\sidecar-stderr.log",
+    );
   }
-  return httpRpc<T>(method, params);
+  return err instanceof Error ? err : new Error(message);
+}
+
+async function rpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+  try {
+    if (isTauri()) {
+      return await invoke<T>("rpc", { method, params });
+    }
+    return await httpRpc<T>(method, params);
+  } catch (err) {
+    throw rpcError(err);
+  }
 }
 
 type StreamTransportEvent =

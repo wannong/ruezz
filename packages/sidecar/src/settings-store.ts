@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { VaultSettingsSchema, type VaultSettings } from "@wikihome/engine-api";
@@ -37,5 +45,14 @@ export function savePersistedSettings(settings: VaultSettings): void {
   const file = path.join(dir, "settings.json");
   const tmp = `${file}.tmp`;
   writeFileSync(tmp, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-  renameSync(tmp, file);
+  try {
+    renameSync(tmp, file);
+  } catch {
+    copyFileSync(tmp, file);
+    try {
+      unlinkSync(tmp);
+    } catch {
+      /* antivirus may lock the temp file briefly */
+    }
+  }
 }

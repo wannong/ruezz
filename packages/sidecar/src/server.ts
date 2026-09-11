@@ -192,8 +192,9 @@ export class SidecarSession {
     
     try {
       savePersistedSettings(this.settings);
-    } catch {
-      /* config dir may be read-only in some test environments */
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`保存设置失败：${message}\n`);
     }
     return this.getSettings();
   }

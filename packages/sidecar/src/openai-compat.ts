@@ -36,13 +36,67 @@ async function readError(res: Response): Promise<string> {
   return text.replace(/\s+/g, " ").slice(0, 240);
 }
 
+function causeText(err: unknown): string {
+  const parts: string[] = [];
+  let cur: unknown = err;
+  for (let i = 0; i < 4 && cur; i += 1) {
+    if (cur instanceof Error) {
+      if (cur.message) parts.push(cur.message);
+      const extra = cur as Error & { code?: string };
+      if (extra.code && !parts.includes(extra.code)) parts.push(extra.code);
+      cur = cur.cause;
+    } else {
+      parts.push(String(cur));
+      break;
+    }
+  }
+  return parts.join(" | ");
+}
+
+export function describeNetworkError(err: unknown, action: string): string {
+  const name = err instanceof Error ? err.name : "";
+  const blob = `${name} ${causeText(err)}`;
+  if (/TimeoutError|ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT|aborted due to timeout/i.test(blob)) {
+    return `${action}失败：连接超时。请检查网络、防火墙，或是否需要代理。`;
+  }
+  if (/ENOTFOUND|getaddrinfo|ERR_NAME_NOT_RESOLVED/i.test(blob)) {
+    return `${action}失败：无法解析服务器地址。请检查 Base URL 是否写对、电脑能否上网。`;
+  }
+  if (/ECONNREFUSED/i.test(blob)) {
+    return `${action}失败：连接被拒绝。请确认地址和端口正确，且该 AI 服务已启动。`;
+  }
+  if (/ECONNRESET|EPIPE|UND_ERR_SOCKET|write ECONN/i.test(blob)) {
+    return `${action}失败：连接被中断。请检查网络或对方服务是否稳定。`;
+  }
+  if (/CERT|UNABLE_TO_VERIFY|ERR_TLS|certificate/i.test(blob)) {
+    return `${action}失败：HTTPS 证书校验失败。`;
+  }
+  if (/fetch failed|TypeError/i.test(blob)) {
+    const extra = blob
+      .replace(/TypeError/gi, "")
+      .replace(/fetch failed/gi, "")
+      .replace(/^\s*\|\s*/, "")
+      .trim();
+    return extra ? `${action}失败：连不上该 API（${extra}）。` : `${action}失败：连不上该 API。`;
+  }
+  return `${action}失败：${causeText(err) || "未知网络错误"}`;
+}
+
+async function fetchApi(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    throw new Error(describeNetworkError(err, "连接 API"));
+  }
+}
+
 export async function listOpenAiModels(baseUrl: string, apiKey: string): Promise<string[]> {
   const bases = candidateBases(baseUrl);
   if (!bases.length) throw new Error("请先填写 API Base URL");
 
   let lastError = "拉取模型失败";
   for (const base of bases) {
-    const res = await fetch(`${base}/models`, {
+    const res = await fetchApi(`${base}/models`, {
       headers: authHeaders(apiKey),
       signal: AbortSignal.timeout(FETCH_MS),
     });
@@ -71,7 +125,7 @@ async function testAnthropicMessagesConnection(
 ): Promise<{ ok: true; reply: string }> {
   const root = anthropicMessagesBaseUrl(baseUrl);
   if (!root) throw new Error("请先填写 API Base URL");
-  const res = await fetch(`${root}/v1/messages`, {
+  const res = await fetchApi(`${root}/v1/messages`, {
     method: "POST",
     headers: {
       ...authHeaders(apiKey),
@@ -121,7 +175,7 @@ export async function testOpenAiConnection(
 
   let lastError = "测试连接失败";
   for (const base of bases) {
-    const res = await fetch(`${base}/chat/completions`, {
+    const res = await fetchApi(`${base}/chat/completions`, {
       method: "POST",
       headers: {
         ...authHeaders(apiKey),
