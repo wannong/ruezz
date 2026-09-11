@@ -12,7 +12,13 @@ Replace the engine later by implementing `@wikihome/engine-api` in a new package
 
 ## Vault layout (from llmwiki-core)
 
-- `raw/sources/` — immutable sources
-- `wiki/` — compiled pages (entities, concepts, …)
-- `.llmwiki/` — derived SQLite index (rebuildable)
+- `raw/sources/` — immutable originals (Markdown, PDF, Word, …)
+- `wiki/` — wiki pages you browse (always Markdown)
+- `.llmwiki/` — derived JSON index (rebuildable)
 - `.wikihome/meta.json` — WikiHome metadata (`format: 1`)
+
+## Import vs 内化
+
+**Import** (GUI 导入 / `ingest_file` / `ingest_text`) archives the original and files **one** `wiki/sources/` page. A complete Markdown file is not split by heading. PDF / Word / PPT / Excel are converted with MarkItDown into that single page.
+
+**内化 / compile** is a later Agent step: update existing concept pages when the user asks. It is not a side effect of import.

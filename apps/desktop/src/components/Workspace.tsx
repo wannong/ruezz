@@ -620,7 +620,7 @@ export function Workspace({
       }
       await loadPages();
       await loadGraph();
-      setNotice(`已入库 ${paths.length} 个文件`);
+      setNotice(`已整篇导入 ${paths.length} 个文件`);
       setIngestOpen(false);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -636,7 +636,7 @@ export function Workspace({
       await api.vaultIngestText(title, body);
       await loadPages();
       await loadGraph();
-      setNotice(`已入库文本「${title}」`);
+      setNotice(`已整篇入库文本「${title}」`);
       setIngestOpen(false);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));

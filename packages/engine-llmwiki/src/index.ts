@@ -12,18 +12,11 @@ import {
 } from "@wikihome/engine-api";
 import { createLlmClient, type LlmClient } from "@wikihome/llm";
 import { createWiki, type Wiki } from "llmwiki-core";
+import { ingestWholeDocument, slugify } from "./ingest-document.js";
 
 type WikiHandle = Wiki & {
   close(): void;
 };
-
-function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fff]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "untitled";
-}
 
 function normalizePageId(idOrPath: string): string {
   const cleaned = idOrPath
@@ -150,21 +143,13 @@ export class LlmWikiEngine implements WikiEngine {
 
   async ingestFile(root: string, filePath: string): Promise<IngestResult> {
     const absRoot = path.resolve(root);
-    const absFile = path.resolve(filePath);
     const wiki = this.getWiki(absRoot);
     await wiki.init();
-
-    const rawDir = path.join(absRoot, "raw", "sources");
-    await fs.mkdir(rawDir, { recursive: true });
-    const base = path.basename(absFile);
-    const dest = path.join(rawDir, base);
-    if (path.resolve(dest) !== absFile) {
-      await fs.copyFile(absFile, dest);
-    }
-
-    const rel = path.relative(absRoot, dest).split(path.sep).join("/");
-    const result = await wiki.ingest({ sourcePath: rel });
-    return { files: result.files, reviews: result.reviews, sourcePath: rel };
+    return ingestWholeDocument({
+      root: absRoot,
+      filePath,
+      reindex: () => wiki.reindex(),
+    });
   }
 
   async ingestText(root: string, title: string, body: string): Promise<IngestResult> {

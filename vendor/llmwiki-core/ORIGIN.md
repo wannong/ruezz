@@ -16,6 +16,7 @@
 | File | Change |
 | --- | --- |
 | `dist/store.js` | Replaced `better-sqlite3` with JSON-file Store (same class API) so Windows installs without node-gyp |
+| `dist/ingest.js` | Generation prompt forbids splitting a complete source into one page per heading |
 | `package.json` | Dropped `better-sqlite3` dependency |
 
 Upgrade process: replace this directory from a new npm pack, re-apply patches if needed, update this file, adjust `@wikihome/engine-llmwiki`.

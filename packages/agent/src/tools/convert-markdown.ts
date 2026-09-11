@@ -13,7 +13,7 @@ export function createConvertToMarkdownTool(vaultRoot: string): AgentTool {
     name: "convert_to_markdown",
     label: "转为 Markdown",
     description:
-      "用 MarkItDown 把 vault 内的 PDF / Word / PPT / Excel / HTML 等转为 Markdown，并写入 raw/sources/。二进制文档入库前应先调用此工具。",
+      "用 MarkItDown 把 vault 内的 PDF / Word / PPT / Excel / HTML 等转成一篇 Markdown，写入 raw/sources/。只转写、不拆页。ingest_file 遇到这些格式会自行转换；需要先预览转写结果时再用本工具。",
     parameters: Type.Object({
       filePath: Type.String({ description: "要转换的文件路径（相对于 vault root）" }),
     }),
@@ -65,13 +65,28 @@ function defaultMarkdownOutput(vaultRoot: string, inputAbs: string): string {
   return candidate;
 }
 
+function pythonCandidates(): string[] {
+  const fromEnv = process.env.WIKIHOME_PYTHON?.trim();
+  const bins: string[] = [];
+  if (fromEnv) bins.push(fromEnv);
+  if (process.platform === "win32") bins.push("python", "py");
+  else bins.push("python3", "python");
+  return [...new Set(bins)];
+}
+
+function isPyLauncher(bin: string): boolean {
+  return /^(?:py|py\.exe)$/i.test(path.basename(bin));
+}
+
 async function runMarkitdown(inputAbs: string, outputAbs: string, signal?: AbortSignal): Promise<void> {
   const args = [inputAbs, "-o", outputAbs];
-  const bins = process.platform === "win32" ? ["python", "py"] : ["python3", "python"];
+  const bins = pythonCandidates();
 
   let lastError = "";
   for (const bin of bins) {
-    const moduleArgs = bin === "py" ? ["-3", "-m", "markitdown", ...args] : ["-m", "markitdown", ...args];
+    const moduleArgs = isPyLauncher(bin)
+      ? ["-3", "-m", "markitdown", ...args]
+      : ["-m", "markitdown", ...args];
     try {
       const result = await spawnOnce(bin, moduleArgs, signal, CONVERT_MS);
       if (result.code === 0) return;

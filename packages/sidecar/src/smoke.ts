@@ -14,7 +14,20 @@ async function main() {
 
   const src = path.join(root, "raw", "sources", "paper.md");
   await fs.mkdir(path.dirname(src), { recursive: true });
-  await fs.writeFile(src, "We propose attention.\n", "utf8");
+  await fs.writeFile(
+    src,
+    [
+      "# Attention",
+      "",
+      "We propose attention.",
+      "",
+      "## Architecture",
+      "",
+      "The core idea stays in one page.",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
 
   const ingest = await session.handle({
     id: 2,
@@ -26,8 +39,22 @@ async function main() {
   const pages = await session.handle({ id: 3, method: "vault_list_pages", params: {} });
   if (pages.error) throw new Error(pages.error.message);
   const list = pages.result as Array<{ id: string }>;
-  if (!list.some((p) => p.id.includes("attention"))) {
-    throw new Error(`expected attention page, got ${JSON.stringify(list)}`);
+  const sourcePages = list.filter((p) => p.id.startsWith("sources/"));
+  if (sourcePages.length !== 1 || sourcePages[0]?.id !== "sources/paper") {
+    throw new Error(`expected one whole-document page sources/paper, got ${JSON.stringify(list)}`);
+  }
+  if (list.some((p) => /architecture/i.test(p.id))) {
+    throw new Error(`ingest split headings into extra pages: ${JSON.stringify(list)}`);
+  }
+  const imported = await session.handle({
+    id: 31,
+    method: "vault_read_page",
+    params: { id: "sources/paper" },
+  });
+  if (imported.error) throw new Error(imported.error.message);
+  const importedPage = imported.result as { body: string };
+  if (!importedPage.body.includes("## Architecture") || !importedPage.body.includes("We propose attention.")) {
+    throw new Error(`source page lost original sections: ${JSON.stringify(importedPage)}`);
   }
 
   const ask = await session.handle({
@@ -49,8 +76,8 @@ async function main() {
   });
   if (search.error) throw new Error(search.error.message);
   const hits = search.result as Array<{ id: string }>;
-  if (!hits.some((h) => h.id.includes("attention"))) {
-    throw new Error(`expected search hit for attention, got ${JSON.stringify(hits)}`);
+  if (!hits.some((h) => h.id === "sources/paper" || /attention/i.test(h.id))) {
+    throw new Error(`expected search hit for sources/paper, got ${JSON.stringify(hits)}`);
   }
 
   const graphRes = await session.handle({ id: 7, method: "vault_graph", params: {} });
@@ -60,7 +87,7 @@ async function main() {
     throw new Error(`expected graph nodes, got ${JSON.stringify(graph)}`);
   }
 
-  const sampleId = list.find((p) => p.id.includes("attention"))?.id ?? list[0]?.id;
+  const sampleId = "sources/paper";
   const written = await session.handle({
     id: 8,
     method: "vault_write_page",

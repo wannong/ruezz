@@ -1,6 +1,6 @@
 {
   "name": "@wikihome/agent",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Ask/tool loop for WikiHome",
   "type": "module",
   "main": "./dist/index.js",

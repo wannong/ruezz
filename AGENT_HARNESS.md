@@ -311,9 +311,9 @@ Agent 可使用以下工具（封装 WikiEngine，见 `packages/agent/src/tools/
 - `list_pages()`：列出所有页面
 - `get_graph()`：获取知识图谱
 - `get_backlinks(pageId)`：获取反向链接
-- `ingest_text(title, text)`：入库文本
-- `ingest_file(filePath)`：入库文件（必须在 `raw/sources/` 内；PDF/Office 先转 Markdown）
-- `convert_to_markdown(filePath)`：用 MarkItDown 把 PDF / Word / PPT / Excel 转为 `raw/sources/*.md`
+- `ingest_text(title, text)`：整篇入库为 `wiki/sources` 一页（不拆页）
+- `ingest_file(filePath)`：归档原件；Markdown 整篇入库；PDF/Office 先转成一篇 Markdown 再写入一页（文件须在 vault 内）
+- `convert_to_markdown(filePath)`：只把 PDF / Word / PPT / Excel 转成一篇 Markdown，写入 `raw/sources/`，不拆页、不写 wiki
 
 工具执行受 WikiEngine 路径守卫保护，禁止写入 `wiki/` 外或读取任意文件。
 
@@ -322,7 +322,7 @@ Agent 可使用以下工具（封装 WikiEngine，见 `packages/agent/src/tools/
 WikiHome Agent 内置技能目录（`packages/agent/skills/`），每轮按用户消息启用完整说明：
 
 - **grill-me** / **grilling**：用户说 grill-me、拷问、追问方案时，按轮次追问并给出推荐答案，得到确认前不入库、不写页面
-- **markitdown**：把 vault 里的 PDF / Office 转为 Markdown；工具为 `convert_to_markdown`（调用本机 `python -m markitdown`）
+- **markitdown**：把 vault 里的 PDF / Office 转成一篇 Markdown；`ingest_file` 会自动转写，`convert_to_markdown` 用于预览（调用 `WIKIHOME_PYTHON` 或本机 `python -m markitdown`）
 
 需要本机已安装 Python 和 `markitdown` 包（例如 `python -m pip install "markitdown[pdf,docx,pptx,xlsx]"`）。
 

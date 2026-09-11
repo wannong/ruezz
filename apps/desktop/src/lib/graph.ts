@@ -1,5 +1,8 @@
 import type { GraphDto, GraphNodeDto } from "../api";
 
+export { applyGraphForces, graphNodeRadius } from "./graph-layout";
+export type { GraphForceApi, GraphLayoutNode } from "./graph-layout";
+
 const MAX_GRAPH_NODES = 80;
 
 export type GraphViewScope = "global" | 1 | 2 | 3;
@@ -102,36 +105,6 @@ export function graphFitTransform(
   const maxK = tiny ? (compact ? 1.9 : 2.4) : compact ? 5 : 6.5;
   const k = Math.max(0.08, Math.min(maxK, fillK));
   return { k, cx, cy };
-}
-
-type GraphForce = {
-  strength?: (value: number) => unknown;
-  distance?: (value: number) => unknown;
-  distanceMin?: (value: number) => unknown;
-  distanceMax?: (value: number) => unknown;
-};
-
-export type GraphForceApi = {
-  d3Force: (name: string) => unknown;
-};
-
-/**
- * Default many-body charge has infinite range, so a drag (which reheats
- * the sim) pushes every other node away forever. Keep local push / link
- * follow, but cut repulsion beyond a few link-lengths.
- */
-export function applyGraphForces(fg: GraphForceApi, compact = false) {
-  const charge = fg.d3Force("charge") as GraphForce | undefined;
-  charge?.strength?.(compact ? -42 : -48);
-  charge?.distanceMin?.(4);
-  charge?.distanceMax?.(compact ? 140 : 180);
-
-  const link = fg.d3Force("link") as GraphForce | undefined;
-  link?.distance?.(compact ? 32 : 40);
-  link?.strength?.(1);
-
-  const center = fg.d3Force("center") as GraphForce | undefined;
-  center?.strength?.(0.12);
 }
 
 export function releaseGraphPins(nodes: Array<{ fx?: number; fy?: number }>) {

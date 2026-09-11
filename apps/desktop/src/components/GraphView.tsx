@@ -5,6 +5,7 @@ import {
   applyGraphForces,
   dragLeashRadius,
   graphFitTransform,
+  graphNodeRadius,
   maxDistanceFromLeader,
   releaseGraphPins,
   tetherNodesToLeader,
@@ -138,7 +139,7 @@ export function GraphView({
   useLayoutEffect(() => {
     const fg = fgRef.current;
     if (!fg) return;
-    applyGraphForces(fg, compact);
+    applyGraphForces(fg, compact, focusId);
     releaseGraphPins(data.nodes);
   }, [compact, size.width, size.height, data.nodes, replayKey, theme, focusId, GRAPH_PHYSICS_REV]);
 
@@ -181,7 +182,7 @@ export function GraphView({
             const x = n.x ?? 0;
             const y = n.y ?? 0;
             const focused = Boolean(focusId && n.id === focusId);
-            const r = (focused ? 6 : 4) + Math.min(compact ? 5 : 8, n.degree * 0.35);
+            const r = graphNodeRadius({ degree: n.degree, focused }, compact);
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
             ctx.fillStyle = TYPE_COLOR[theme][n.type] ?? (theme === "dark" ? "#a0a0a0" : "#808080");
@@ -200,9 +201,10 @@ export function GraphView({
           }}
           nodePointerAreaPaint={(node, color, ctx) => {
             const n = node as GraphNode & { x?: number; y?: number };
+            const r = graphNodeRadius({ degree: n.degree }, compact) + 4;
             ctx.fillStyle = color;
             ctx.beginPath();
-            ctx.arc(n.x ?? 0, n.y ?? 0, 10, 0, Math.PI * 2);
+            ctx.arc(n.x ?? 0, n.y ?? 0, r, 0, Math.PI * 2);
             ctx.fill();
           }}
           onNodeDrag={(node) => {

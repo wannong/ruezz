@@ -20,12 +20,12 @@ export function IngestModal({
   const [body, setBody] = useState("");
 
   return (
-    <Modal title="入库" onClose={onClose} wide>
+    <Modal title="导入资料" onClose={onClose} wide>
       <section className="ingest-section">
         <h3>导入文件</h3>
         <p className="hint">
           {canPickFiles
-            ? "从本地选择 Markdown / 文本文件，复制进知识库并编译 wiki 页。"
+            ? "原件归档到 raw/sources。Markdown / 文本整篇进入 wiki/sources，不按标题拆页。PDF / Word / PPT / Excel 会先转成一篇 Markdown 再入库。概念页请之后在 Agent 里单独内化，不要指望导入时自动拆碎。"
             : "Web 模式下无法打开系统文件选择器，请改用下方粘贴，或在桌面应用中导入。"}
         </p>
         <button
@@ -39,6 +39,7 @@ export function IngestModal({
       </section>
       <section className="ingest-section">
         <h3>粘贴文本</h3>
+        <p className="hint">同样整篇写成一页，不会按段落拆成多篇概念笔记。</p>
         <label className="label">
           标题
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="标题" />

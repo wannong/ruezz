@@ -1,7 +1,7 @@
 {
   "name": "wikihome",
   "private": true,
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Beginner-friendly local knowledge base agent (Tauri + LLM Wiki engine)",
   "type": "module",
   "packageManager": "pnpm@9.15.0",
@@ -11,7 +11,7 @@
     "dev:http": "pnpm --filter @wikihome/sidecar dev:http",
     "dev:ui": "pnpm --filter @wikihome/desktop dev",
     "dev:desktop": "pnpm --filter @wikihome/desktop tauri dev",
-    "test": "pnpm -r --filter=./packages/* run test --if-present",
+    "test": "pnpm -r --filter=./packages/* --filter=@wikihome/desktop run test --if-present",
     "version:check": "node scripts/version-check.mjs",
     "smoke": "pnpm --filter @wikihome/sidecar smoke",
     "release:stage": "powershell -ExecutionPolicy Bypass -File scripts/stage-installer-runtime.ps1",

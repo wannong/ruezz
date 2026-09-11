@@ -1,13 +1,14 @@
 import type { WikiEngine } from "@wikihome/engine-api";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
-import { isInsideDir, resolveInsideVault, toVaultRelative } from "./vault-path.js";
+import { resolveInsideVault, toVaultRelative } from "./vault-path.js";
 
 export function createIngestTextTool(engine: WikiEngine, vaultRoot: string): AgentTool {
   return {
     name: "ingest_text",
     label: "入库文本",
-    description: "将文本内容入库，生成新的知识页面。",
+    description:
+      "把一段文本归档到 raw/sources，并整篇写入 wiki/sources 一页。不会按标题拆成多个概念页。",
     parameters: Type.Object({
       title: Type.String({ description: "内容标题" }),
       text: Type.String({ description: "要入库的文本内容" }),
@@ -16,7 +17,7 @@ export function createIngestTextTool(engine: WikiEngine, vaultRoot: string): Age
       const { title, text } = params as { title: string; text: string };
       const result = await engine.ingestText(vaultRoot, title, text);
 
-      const summary = `已入库文本，生成 ${result.files.length} 个页面：\n${result.files.map((f) => `- ${f}`).join("\n")}`;
+      const summary = `已整篇入库文本，写入 ${result.files.length} 页（未拆页）：\n${result.files.map((f) => `- ${f}`).join("\n")}`;
 
       return {
         content: [{ type: "text", text: summary }],
@@ -30,20 +31,17 @@ export function createIngestFileTool(engine: WikiEngine, vaultRoot: string): Age
   return {
     name: "ingest_file",
     label: "入库文件",
-    description: "将文件入库，生成新的知识页面。文件必须在 raw/sources/ 目录内。PDF/Office 请先 convert_to_markdown。",
+    description:
+      "归档原文件到 raw/sources。Markdown/文本整篇写入 wiki/sources 一页；PDF/Word/PPT/Excel 会先转成一篇 Markdown 再入库。不会按标题拆页。文件须在 vault 内。",
     parameters: Type.Object({
       filePath: Type.String({ description: "文件路径（相对于 vault root）" }),
     }),
     async execute(_toolCallId, params) {
       const { filePath } = params as { filePath: string };
       const resolved = resolveInsideVault(vaultRoot, filePath);
-      if (!isInsideDir(vaultRoot, resolved, pathJoinSources())) {
-        throw new Error(`入库文件应该在 raw/sources/ 目录内，实际路径：${filePath}`);
-      }
-
       const result = await engine.ingestFile(vaultRoot, resolved);
       const shown = toVaultRelative(vaultRoot, resolved);
-      const summary = `已入库文件 ${shown}，生成 ${result.files.length} 个页面：\n${result.files.map((f) => `- ${f}`).join("\n")}`;
+      const summary = `已整篇入库 ${shown}，写入 ${result.files.length} 页（未拆页）：\n${result.files.map((f) => `- ${f}`).join("\n")}`;
 
       return {
         content: [{ type: "text", text: summary }],
@@ -51,8 +49,4 @@ export function createIngestFileTool(engine: WikiEngine, vaultRoot: string): Age
       };
     },
   };
-}
-
-function pathJoinSources(): string {
-  return "raw/sources";
 }

@@ -7,15 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-09-11
+
 ### Added
 
 - Self-contained Windows NSIS installer with bundled Node sidecar and Python/MarkItDown. Uses the PC's WebView2 when present; downloads a user-local runtime only if missing.
 
+### Changed
+
+- File import archives the original and writes one `wiki/sources` page. A complete Markdown file is no longer LLM-split into concept fragments. PDF / Word / PPT / Excel are converted with MarkItDown first.
+
 ### Fixed
 
+- Graph layout keeps extra space between high-degree nodes so large disks no longer sit on top of each other
 - GNU `WebView2Loader.dll` is copied next to WikiHome.exe at install time (it was previously only under `resources\`)
 - Sidecar spawn surfaces stderr when the engine exits immediately; Node `\\?\` paths and inherited `NODE_OPTIONS` are sanitized
-
 
 ## [1.0.5] - 2026-09-11
 
@@ -176,7 +182,8 @@ WikiHome’s first feature-complete release: local wiki, graph, and a vertical A
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/wikihome/wikihome/releases/tag/v1.0.6
 [1.0.5]: https://github.com/wikihome/wikihome/releases/tag/v1.0.5
 [1.0.4]: https://github.com/wikihome/wikihome/releases/tag/v1.0.4
 [1.0.3]: https://github.com/wikihome/wikihome/releases/tag/v1.0.3

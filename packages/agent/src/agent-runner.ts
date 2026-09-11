@@ -37,9 +37,9 @@ const SYSTEM_PROMPT = `你是 WikiHome 本地知识库助手。对话里不会�
 - list_pages：列出所有页面
 - get_graph：获取知识图谱
 - get_backlinks：获取反向链接
-- ingest_text：入库文本内容
-- ingest_file：入库文件（须在 raw/sources/ 内；PDF/Office 请先转换）
-- convert_to_markdown：把 PDF / Word / PPT / Excel 等转为 Markdown
+- ingest_text：把文本整篇入库为 wiki/sources 一页（不拆页）
+- ingest_file：归档原件；Markdown 整篇入库；PDF/Office 先转成一篇 Markdown 再入库（不拆页）
+- convert_to_markdown：只把 PDF / Word / PPT / Excel 转成一篇 Markdown，不写入 wiki 页
 
 引用页面时使用 [[page-id]] 格式。所有写入操作必须在 wiki/ 目录内。`;
 

@@ -1,6 +1,6 @@
 # WikiHome
 
-本地知识库管理 Agent（MVP）：拖入资料 → AI 编译 wiki → 提问与浏览。
+本地知识库管理 Agent：拖入 Markdown / PDF / Word → 整篇归档进 wiki → 提问与浏览。
 
 无需 Obsidian / Claude Code CLI。桌面壳为 Tauri；引擎经 `@wikihome/engine-api` 门面接入 vendored `llmwiki-core`，可替换。
 

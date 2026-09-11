@@ -322,7 +322,15 @@ export const api = {
     if (!isTauri()) return [] as string[];
     const selected = await open({
       multiple: true,
-      filters: [{ name: "Markdown/Text", extensions: ["md", "txt", "markdown"] }],
+      filters: [
+        {
+          name: "Documents",
+          extensions: ["md", "markdown", "txt", "pdf", "docx", "doc", "pptx", "xlsx", "html", "htm"],
+        },
+        { name: "Markdown", extensions: ["md", "markdown", "txt"] },
+        { name: "PDF", extensions: ["pdf"] },
+        { name: "Office", extensions: ["docx", "doc", "pptx", "xlsx"] },
+      ],
     });
     if (!selected) return [];
     return Array.isArray(selected) ? selected : [selected];

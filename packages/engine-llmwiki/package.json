@@ -1,6 +1,6 @@
 {
   "name": "@wikihome/engine-llmwiki",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "llmwiki-core adapter implementing @wikihome/engine-api",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,7 +12,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/ingest-document.test.js"
   },
   "dependencies": {
     "@wikihome/engine-api": "workspace:*",
