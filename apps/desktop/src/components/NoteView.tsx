@@ -1,5 +1,7 @@
+import { useRef, useState, type MouseEvent } from "react";
 import type { PageContent, PageSummary } from "../api";
 import { markdownBody } from "../lib/noteId";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { MarkdownPreview } from "./MarkdownPreview";
 
 export type NoteMode = "read" | "edit";
@@ -15,6 +17,7 @@ type NoteViewProps = {
   onDraft: (value: string) => void;
   onSave: () => void;
   onOpen: (id: string) => void;
+  onLink: (range: { start: number; end: number }) => void;
 };
 
 export function NoteView({
@@ -28,7 +31,72 @@ export function NoteView({
   onDraft,
   onSave,
   onOpen,
+  onLink,
 }: NoteViewProps) {
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; start: number; end: number } | null>(null);
+
+  const openEditorMenu = (e: MouseEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    const el = e.currentTarget;
+    setMenu({ x: e.clientX, y: e.clientY, start: el.selectionStart, end: el.selectionEnd });
+  };
+
+  const replaceRange = (next: string, start: number, end: number) => {
+    onDraft(draft.slice(0, start) + next + draft.slice(end));
+  };
+
+  const copyRange = async (start: number, end: number) => {
+    const text = draft.slice(start, end);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      document.execCommand("copy");
+    }
+  };
+
+  const menuItems = (): ContextMenuItem[] => {
+    if (!menu) return [];
+    const { start, end } = menu;
+    return [
+      {
+        type: "item",
+        label: "剪切",
+        onClick: () => {
+          if (start === end) return;
+          void copyRange(start, end).then(() => replaceRange("", start, end));
+        },
+      },
+      {
+        type: "item",
+        label: "复制",
+        onClick: () => {
+          void copyRange(start, end);
+        },
+      },
+      {
+        type: "item",
+        label: "粘贴",
+        onClick: () => {
+          void navigator.clipboard
+            .readText()
+            .then((text) => replaceRange(text, start, end))
+            .catch(() => {
+              editorRef.current?.focus();
+              document.execCommand("paste");
+            });
+        },
+      },
+      { type: "sep" },
+      {
+        type: "item",
+        label: "链接",
+        onClick: () => onLink({ start, end }),
+      },
+    ];
+  };
+
   return (
     <div className="note-view">
       <div className="note-header">
@@ -58,9 +126,11 @@ export function NoteView({
       {mode === "edit" ? (
         <div className="note-edit-split">
           <textarea
+            ref={editorRef}
             className="note-editor"
             value={draft}
             spellCheck={false}
+            onContextMenu={openEditorMenu}
             onChange={(e) => onDraft(e.target.value)}
             onKeyDown={(e) => {
               if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
@@ -78,6 +148,13 @@ export function NoteView({
           <MarkdownPreview markdown={page.body} pages={pages} onOpen={onOpen} />
         </div>
       )}
+      <ContextMenu
+        open={menu !== null}
+        x={menu?.x ?? 0}
+        y={menu?.y ?? 0}
+        items={menu ? menuItems() : []}
+        onClose={() => setMenu(null)}
+      />
     </div>
   );
 }

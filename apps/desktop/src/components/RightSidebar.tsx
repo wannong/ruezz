@@ -3,6 +3,7 @@ import type { AgentSessionMessage, AgentSessionSummary, GraphDto, PageSummary } 
 import { attachResizeX } from "../lib/pointerResize";
 import type { OutlineItem } from "../lib/outline";
 import type { Theme } from "../theme";
+import type { GraphViewScope } from "../lib/graph";
 import { AgentPane } from "./AgentPane";
 import { LocalGraphPane } from "./LocalGraphPane";
 import { OutlinePane } from "./OutlinePane";
@@ -39,8 +40,12 @@ type RightSidebarProps = {
   modelValue: string;
   modelGroups: Array<{ providerId: string; providerName: string; models: string[] }>;
   mock: boolean;
+  graphHops: GraphViewScope;
+  onGraphHops: (scope: GraphViewScope) => void;
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
+  onDeleteSession: (id: string) => void;
+  onArchiveSession: (id: string, archived: boolean) => void;
   onSwitchModel: (providerId: string, modelId: string) => void;
   onResize: (dx: number) => void;
   onCollapse: () => void;
@@ -77,8 +82,12 @@ export function RightSidebar({
   modelValue,
   modelGroups,
   mock,
+  graphHops,
+  onGraphHops,
   onNewChat,
   onSelectSession,
+  onDeleteSession,
+  onArchiveSession,
   onSwitchModel,
 }: RightSidebarProps) {
   const aside = (
@@ -133,12 +142,21 @@ export function RightSidebar({
           mock={mock}
           onNewChat={onNewChat}
           onSelectSession={onSelectSession}
+          onDeleteSession={onDeleteSession}
+          onArchiveSession={onArchiveSession}
           onSwitchModel={onSwitchModel}
         />
       )}
       {view === "outline" && <OutlinePane items={outline} onJump={onJump} />}
       {view === "graph" && (
-        <LocalGraphPane graph={graph} pageId={pageId} theme={theme} onOpen={onOpen} />
+        <LocalGraphPane
+          graph={graph}
+          pageId={pageId}
+          theme={theme}
+          scope={graphHops}
+          onScope={onGraphHops}
+          onOpen={onOpen}
+        />
       )}
     </aside>
   );

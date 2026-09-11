@@ -56,6 +56,8 @@ export interface AgentSession {
   };
   /** Wiki pages linked to this session (current page ∪ tool-accessed pages) */
   linkedPageIds: string[];
+  /** Hidden from the main session list when true */
+  archived?: boolean;
   /** Conversation history */
   messages: SessionMessage[];
 }
@@ -74,6 +76,7 @@ export interface AgentSessionSummary {
   };
   messageCount: number;
   linkedPageIds: string[];
+  archived?: boolean;
 }
 
 /**

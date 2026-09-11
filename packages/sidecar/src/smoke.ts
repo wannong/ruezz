@@ -285,6 +285,29 @@ async function main() {
     throw new Error(`expected messages in reloaded session, got ${reloadedSession.messages.length}`);
   }
 
+  const archiveRes = await reopened.handle({
+    id: 25,
+    method: "agent_session_archive",
+    params: { id: createdSession.id, archived: true },
+  });
+  if (archiveRes.error) throw new Error(archiveRes.error.message);
+  const archivedSession = (archiveRes.result as { session: { archived?: boolean } }).session;
+  if (!archivedSession.archived) throw new Error("expected session.archived after archive");
+  const listAfterArchive = await reopened.handle({ id: 251, method: "agent_session_list", params: {} });
+  if (listAfterArchive.error) throw new Error(listAfterArchive.error.message);
+  const archivedRow = (
+    listAfterArchive.result as { sessions: Array<{ id: string; archived?: boolean }> }
+  ).sessions.find((s) => s.id === createdSession.id);
+  if (!archivedRow?.archived) {
+    throw new Error("expected archived session in list");
+  }
+  const unarchiveRes = await reopened.handle({
+    id: 252,
+    method: "agent_session_archive",
+    params: { id: createdSession.id, archived: false },
+  });
+  if (unarchiveRes.error) throw new Error(unarchiveRes.error.message);
+
   // Test session ID validation (invalid path) — handle() returns { error }, does not throw
   const invalidIdRes = await reopened.handle({
     id: 26,

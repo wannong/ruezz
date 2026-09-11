@@ -9,6 +9,7 @@ import { MarkdownPreview } from "./MarkdownPreview";
 import { Presence } from "./Presence";
 import { PRESENCE_MS } from "../lib/usePresence";
 import { WikilinkText } from "./WikilinkText";
+import { ContextMenu } from "./ContextMenu";
 
 const COMPOSER_MIN = 88;
 const COMPOSER_MAX = 360;
@@ -34,6 +35,8 @@ type AgentPaneProps = {
   mock: boolean;
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
+  onDeleteSession: (id: string) => void;
+  onArchiveSession: (id: string, archived: boolean) => void;
   onSwitchModel: (providerId: string, modelId: string) => void;
   onDraft: (value: string) => void;
   onSend: () => void;
@@ -98,6 +101,8 @@ export function AgentPane({
   mock,
   onNewChat,
   onSelectSession,
+  onDeleteSession,
+  onArchiveSession,
   onSwitchModel,
   onDraft,
   onSend,
@@ -109,6 +114,12 @@ export function AgentPane({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
+  const [sessionMenu, setSessionMenu] = useState<{
+    x: number;
+    y: number;
+    id: string;
+    archived: boolean;
+  } | null>(null);
   const [composerHeight, setComposerHeight] = useState(() =>
     clampComposer(loadPref("agentComposerHeight", COMPOSER_MIN)),
   );
@@ -117,6 +128,8 @@ export function AgentPane({
   const usage = useMemo(() => sessionUsage(messages), [messages]);
   const modelName = modelValue.includes("::") ? modelValue.slice(modelValue.indexOf("::") + 2) : modelValue;
   const canSend = Boolean(draft.trim()) && !busy && !modelMissing;
+  const liveSessions = useMemo(() => sessions.filter((s) => !s.archived), [sessions]);
+  const archivedSessions = useMemo(() => sessions.filter((s) => s.archived), [sessions]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -182,8 +195,13 @@ export function AgentPane({
               <span>会话</span>
             </div>
             <div className="agent-session-list">
-              {sessions.length === 0 && <div className="agent-session-empty">还没有对话</div>}
-              {sessions.map((session) => (
+              {liveSessions.length === 0 && archivedSessions.length === 0 && (
+                <div className="agent-session-empty">还没有对话</div>
+              )}
+              {liveSessions.length === 0 && archivedSessions.length > 0 && (
+                <div className="agent-session-empty">没有进行中的对话</div>
+              )}
+              {liveSessions.map((session) => (
                 <button
                   key={session.id}
                   type="button"
@@ -193,11 +211,51 @@ export function AgentPane({
                     onSelectSession(session.id);
                     setHistoryOpen(false);
                   }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setSessionMenu({
+                      x: event.clientX,
+                      y: event.clientY,
+                      id: session.id,
+                      archived: false,
+                    });
+                  }}
                 >
                   <span className="agent-session-title">{session.title || "新对话"}</span>
                   <span className="agent-session-meta">{formatSessionTime(session.updatedAt)}</span>
                 </button>
               ))}
+              {archivedSessions.length > 0 && (
+                <>
+                  <div className="agent-session-section">归档</div>
+                  {archivedSessions.map((session) => (
+                    <button
+                      key={session.id}
+                      type="button"
+                      className={`agent-session-item${session.id === sessionId ? " active" : ""}`}
+                      disabled={busy && session.id !== sessionId}
+                      onClick={() => {
+                        onSelectSession(session.id);
+                        setHistoryOpen(false);
+                      }}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setSessionMenu({
+                          x: event.clientX,
+                          y: event.clientY,
+                          id: session.id,
+                          archived: true,
+                        });
+                      }}
+                    >
+                      <span className="agent-session-title">{session.title || "新对话"}</span>
+                      <span className="agent-session-meta">{formatSessionTime(session.updatedAt)}</span>
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           </div>
         </Presence>
@@ -249,7 +307,6 @@ export function AgentPane({
                 )}
               </div>
             )}
-          </div>
         </div>
 
         <div className="agent-input-panel">
@@ -377,6 +434,32 @@ export function AgentPane({
               </div>
             </div>
           </div>
+      </div>
+      <ContextMenu
+        open={sessionMenu !== null}
+        x={sessionMenu?.x ?? 0}
+        y={sessionMenu?.y ?? 0}
+        items={
+          sessionMenu
+            ? [
+                {
+                  type: "item",
+                  label: sessionMenu.archived ? "取消归档" : "归档",
+                  disabled: busy && sessionMenu.id === sessionId,
+                  onClick: () => onArchiveSession(sessionMenu.id, !sessionMenu.archived),
+                },
+                {
+                  type: "item",
+                  label: "删除",
+                  danger: true,
+                  disabled: busy && sessionMenu.id === sessionId,
+                  onClick: () => onDeleteSession(sessionMenu.id),
+                },
+              ]
+            : []
+        }
+        onClose={() => setSessionMenu(null)}
+      />
     </div>
   );
 }

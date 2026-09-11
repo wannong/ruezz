@@ -15,6 +15,7 @@ type GraphViewProps = {
   onOpen: (id: string) => void;
   focusId?: string | null;
   compact?: boolean;
+  replayKey?: string;
 };
 
 const TYPE_COLOR: Record<"dark" | "light", Record<string, string>> = {
@@ -47,10 +48,23 @@ const THEME_PALETTE = {
   light: { bg: "#ffffff", ink: "#222222", line: "#d0d0d0", accent: "#222222" },
 };
 
-export function GraphView({ graph, theme, onOpen, focusId = null, compact = false }: GraphViewProps) {
+export function GraphView({
+  graph,
+  theme,
+  onOpen,
+  focusId = null,
+  compact = false,
+  replayKey = "",
+}: GraphViewProps) {
   const wrap = useRef<HTMLDivElement>(null);
+  const fgRef = useRef<{ zoomToFit: (durationMs?: number, padding?: number) => void } | undefined>(undefined);
+  const fitted = useRef(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const colors = THEME_PALETTE[theme];
+
+  useEffect(() => {
+    fitted.current = false;
+  }, [graph, theme, focusId, replayKey]);
 
   useEffect(() => {
     const el = wrap.current;
@@ -96,7 +110,8 @@ export function GraphView({ graph, theme, onOpen, focusId = null, compact = fals
     <div className="graph-wrap" ref={wrap}>
       {size.width > 0 && size.height > 0 && (
         <ForceGraph2D
-          key={`${theme}:${focusId ?? ""}:${data.nodes.length}`}
+          ref={fgRef as never}
+          key={`${theme}:${focusId ?? ""}:${replayKey}:${data.nodes.length}`}
           width={size.width}
           height={size.height}
           backgroundColor={colors.bg}
@@ -105,6 +120,11 @@ export function GraphView({ graph, theme, onOpen, focusId = null, compact = fals
           nodeLabel="label"
           cooldownTicks={compact ? 60 : 120}
           d3AlphaDecay={compact ? 0.04 : 0.0228}
+          onEngineStop={() => {
+            if (fitted.current || !fgRef.current) return;
+            fitted.current = true;
+            fgRef.current.zoomToFit(280, 36);
+          }}
           linkColor={() => colors.line}
           linkWidth={compact ? 1.2 : 1}
           linkDirectionalArrowLength={compact ? 3 : 4}

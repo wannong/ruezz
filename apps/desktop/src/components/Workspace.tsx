@@ -10,6 +10,7 @@ import {
   type PageSummary,
   type VaultSettings,
 } from "../api";
+import { clampGraphScope } from "../lib/graph";
 import { loadPref, savePref } from "../lib/prefs";
 import { parseOutline } from "../lib/outline";
 import { markdownBody } from "../lib/noteId";
@@ -21,7 +22,7 @@ import type { Theme } from "../theme";
 import { PanelRightOpen } from "lucide-react";
 import { CommandPalette, type PaletteCommand, type PaletteMode } from "./CommandPalette";
 import { IngestModal } from "./IngestModal";
-import { LeftSidebar } from "./LeftSidebar";
+import { LeftSidebar, type LinkPicker } from "./LeftSidebar";
 import { NewNoteModal } from "./NewNoteModal";
 import { NoteView } from "./NoteView";
 import { Presence } from "./Presence";
@@ -101,6 +102,8 @@ export function Workspace({
   const [notice, setNotice] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
   const graphDepth = clampHops(loadPref("agentGraphDepth", 0));
+  const [graphHops, setGraphHops] = useState(() => clampGraphScope(loadPref("graphViewDepth", 1)));
+  const [linkPicker, setLinkPicker] = useState<LinkPicker | null>(null);
   const [runnerProviders, setRunnerProviders] = useState<Array<{ name: string; models: string[] }>>([]);
   const sendingRef = useRef(false);
   const abortingRef = useRef(false);
@@ -232,6 +235,7 @@ export function Workspace({
           model: session.model,
           messageCount: session.messages.length,
           linkedPageIds: session.linkedPageIds,
+          archived: Boolean(session.archived),
         };
         const index = prev.findIndex((item) => item.id === session.id);
         if (index < 0) return [summary, ...prev];
@@ -316,6 +320,9 @@ export function Workspace({
   useEffect(() => {
     savePref("rightWidth", rightWidth);
   }, [rightWidth]);
+  useEffect(() => {
+    savePref("graphViewDepth", graphHops);
+  }, [graphHops]);
 
   useEffect(() => {
     if (palette) lastPaletteMode.current = palette;
@@ -358,6 +365,46 @@ export function Workspace({
       if (narrow) setLeftCollapsed(true);
     },
     [narrow],
+  );
+
+  const startLinkPicker = useCallback((fromId: string, range?: { start: number; end: number }) => {
+    setLinkPicker({ fromId, range });
+    setLeftCollapsed(false);
+  }, []);
+
+  const insertWikilink = useCallback(
+    async (fromId: string, toId: string, range?: { start: number; end: number }) => {
+      if (!fromId || !toId || fromId === toId) return;
+      const link = `[[${toId}]]`;
+      let current = noteDrafts[fromId] ?? pageCache[fromId]?.raw;
+      if (current == null) {
+        try {
+          const page = await api.vaultReadPage(fromId);
+          if (page) {
+            setPageCache((c) => ({ ...c, [page.id]: page }));
+            current = page.raw;
+          } else {
+            current = "";
+          }
+        } catch (e) {
+          onError(e instanceof Error ? e.message : String(e));
+          return;
+        }
+      }
+      let next: string;
+      if (range) {
+        const start = Math.max(0, Math.min(range.start, current.length));
+        const end = Math.max(start, Math.min(range.end, current.length));
+        next = current.slice(0, start) + link + current.slice(end);
+      } else {
+        const trimmed = current.replace(/\s+$/, "");
+        next = trimmed ? `${trimmed}\n\n${link}\n` : `${link}\n`;
+      }
+      setNoteDrafts((d) => ({ ...d, [fromId]: next }));
+      setNoteMode("edit");
+      openPage(fromId);
+    },
+    [noteDrafts, pageCache, onError, openPage],
   );
 
   const openAgent = useCallback(() => {
@@ -713,6 +760,39 @@ export function Workspace({
     }
   }
 
+  async function deleteAgentSession(id: string) {
+    if (agentBusy && id === sessionId) return;
+    try {
+      await api.agentSessionDelete(id);
+      const list = await refreshSessions();
+      if (id !== sessionId) return;
+      const next = list.find((item) => !item.archived);
+      if (next) {
+        sessionLoadGen.current += 1;
+        const { session } = await api.agentSessionGet(next.id);
+        applySession(session);
+        return;
+      }
+      sessionLoadGen.current += 1;
+      setSessionId(null);
+      setMessages([]);
+      savePref(`agentSession:${settings.vaultPath}`, null);
+      onAgentTitle?.(null);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function archiveAgentSession(id: string, archived: boolean) {
+    if (agentBusy && id === sessionId) return;
+    try {
+      await api.agentSessionArchive(id, archived);
+      await refreshSessions();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   async function switchModel(providerId: string, modelId: string) {
     if (!modelId.trim() || (providerId === activeProviderId && modelId === settings.model && !settings.mock)) {
       return;
@@ -874,6 +954,7 @@ export function Workspace({
           width={leftWidth}
           collapsed={leftCollapsed}
           overlay={narrow}
+          linkPicker={linkPicker}
           onOpen={openPage}
           onCopy={setClip}
           onPaste={(folderId) => void pasteInto(folderId)}
@@ -881,6 +962,13 @@ export function Workspace({
           onCreateNote={(folderId, name) => void createNoteIn(folderId, name)}
           onCreateFolder={(folderId, name) => void createFolderIn(folderId, name)}
           onReveal={(kind, id) => void revealEntry(kind, id)}
+          onLink={(id) => startLinkPicker(id)}
+          onPickLink={(toId) => {
+            if (!linkPicker) return;
+            void insertWikilink(linkPicker.fromId, toId, linkPicker.range);
+            setLinkPicker(null);
+          }}
+          onCloseLinkPicker={() => setLinkPicker(null)}
           onError={onError}
           onResize={(dx) => setLeftWidth((w) => clamp(w + dx, LEFT_MIN, LEFT_MAX))}
         />
@@ -932,6 +1020,7 @@ export function Workspace({
                 }
                 onSave={() => void saveNote(activePage.id)}
                 onOpen={openPage}
+                onLink={(range) => startLinkPicker(activePage.id, range)}
               />
             )}
           </div>
@@ -967,8 +1056,12 @@ export function Workspace({
           modelValue={modelValue}
           modelGroups={modelGroups}
           mock={settings.mock}
+          graphHops={graphHops}
+          onGraphHops={setGraphHops}
           onNewChat={() => void newChat()}
           onSelectSession={(id) => void selectSession(id)}
+          onDeleteSession={(id) => void deleteAgentSession(id)}
+          onArchiveSession={(id, archived) => void archiveAgentSession(id, archived)}
           onSwitchModel={(providerId, modelId) => void switchModel(providerId, modelId)}
         />
       </div>

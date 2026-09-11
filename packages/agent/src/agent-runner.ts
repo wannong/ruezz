@@ -135,6 +135,13 @@ export class AgentRunner {
   }
 
   /**
+   * Archive or unarchive a session.
+   */
+  async archiveSession(sessionId: string, archived: boolean): Promise<AgentSession | null> {
+    return this.storage.archive(sessionId, archived);
+  }
+
+  /**
    * Delete a session.
    */
   async deleteSession(sessionId: string): Promise<boolean> {

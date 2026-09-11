@@ -98,6 +98,7 @@ export type AgentSession = {
   updatedAt: string;
   model: { provider: string; modelId: string };
   linkedPageIds: string[];
+  archived?: boolean;
   messages: AgentSessionMessage[];
 };
 
@@ -109,6 +110,7 @@ export type AgentSessionSummary = {
   model: { provider: string; modelId: string };
   messageCount: number;
   linkedPageIds: string[];
+  archived?: boolean;
 };
 
 export type AgentPromptResult = {
@@ -251,6 +253,8 @@ export const api = {
     rpc<{ session: AgentSession }>("agent_session_create", opts ?? {}),
   agentSessionGet: (id: string) => rpc<{ session: AgentSession }>("agent_session_get", { id }),
   agentSessionDelete: (id: string) => rpc<{ ok: boolean }>("agent_session_delete", { id }),
+  agentSessionArchive: (id: string, archived = true) =>
+    rpc<{ session: AgentSession }>("agent_session_archive", { id, archived }),
   agentPrompt: (opts: {
     sessionId: string;
     message: string;

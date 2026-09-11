@@ -360,6 +360,13 @@ export class SidecarSession {
         const deleted = await runner.deleteSession(String(params.id ?? params.sessionId ?? ""));
         return { ok: deleted };
       }
+      case "agent_session_archive": {
+        const runner = await this.getAgentRunner();
+        const archived = params.archived == null ? true : Boolean(params.archived);
+        const session = await runner.archiveSession(String(params.id ?? params.sessionId ?? ""), archived);
+        if (!session) throw new Error(`Session not found: ${params.id ?? params.sessionId}`);
+        return { session };
+      }
       case "agent_prompt": {
         const runner = await this.getAgentRunner();
         const sessionId = String(params.sessionId ?? "");

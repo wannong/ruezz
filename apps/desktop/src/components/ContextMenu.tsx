@@ -5,7 +5,7 @@ import { Presence } from "./Presence";
 
 export type ContextMenuItem =
   | { type: "sep" }
-  | { type: "item"; label: string; disabled?: boolean; onClick: () => void };
+  | { type: "item"; label: string; disabled?: boolean; danger?: boolean; onClick: () => void };
 
 type ContextMenuProps = {
   open: boolean;
@@ -89,7 +89,7 @@ function ContextMenuSurface({ x, y, items, onClose }: SurfaceProps) {
             key={`${item.label}-${i}`}
             type="button"
             role="menuitem"
-            className="ctx-item"
+            className={`ctx-item${item.danger ? " danger" : ""}`}
             disabled={item.disabled}
             onClick={() => {
               if (item.disabled) return;

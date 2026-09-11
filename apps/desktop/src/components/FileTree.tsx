@@ -30,6 +30,7 @@ type FileTreeProps = {
   onCreateNote: (folderId: string, name: string) => void;
   onCreateFolder: (folderId: string, name: string) => void;
   onReveal: (kind: "root" | "page" | "folder", id?: string) => void;
+  onLink?: (pageId: string) => void;
 };
 
 export function FileTree({
@@ -45,6 +46,7 @@ export function FileTree({
   onCreateNote,
   onCreateFolder,
   onReveal,
+  onLink,
 }: FileTreeProps) {
   const tree = useMemo(() => buildFileTree(pages, folders), [pages, folders]);
   const taken = useMemo(() => {
@@ -117,6 +119,14 @@ export function FileTree({
       onClick: () => onPaste(folderId),
     });
     if (target.type === "node") {
+      if (target.node.page && onLink) {
+        items.push({
+          type: "item",
+          label: "链接",
+          disabled,
+          onClick: () => onLink(target.node.page!.id),
+        });
+      }
       items.push({ type: "sep" });
       items.push({ type: "item", label: "重命名", disabled, onClick: () => startRename(target.node) });
       const revealKind = target.node.page ? "page" : "folder";

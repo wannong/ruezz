@@ -108,6 +108,7 @@ export class SessionStorage {
             model: session.model,
             messageCount: session.messages.length,
             linkedPageIds: session.linkedPageIds,
+            archived: Boolean(session.archived),
           });
         } catch {
           // Skip corrupted session files
@@ -127,6 +128,18 @@ export class SessionStorage {
       }
       throw err;
     }
+  }
+
+  /**
+   * Mark a session as archived or restore it to the main list.
+   */
+  async archive(sessionId: string, archived: boolean): Promise<AgentSession | null> {
+    const session = await this.load(sessionId);
+    if (!session) return null;
+    session.archived = archived;
+    session.updatedAt = new Date().toISOString();
+    await this.save(session);
+    return session;
   }
 
   /**

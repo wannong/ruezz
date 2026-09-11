@@ -440,6 +440,25 @@ textarea:focus {
   color: var(--muted);
 }
 
+.sidebar-back {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0;
+  margin-left: -0.35rem;
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sidebar-back:hover {
+  color: var(--ink);
+}
+
 .sidebar-tabs {
   display: flex;
   align-items: stretch;
@@ -516,12 +535,26 @@ textarea:focus {
 .tab-bar {
   display: flex;
   align-items: stretch;
+  flex-wrap: nowrap;
   flex: 1;
   min-width: 0;
   height: 100%;
   min-height: 0;
   background: transparent;
   overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.tab-bar::-webkit-scrollbar {
+  height: 4px;
+  width: 0;
+}
+
+.tab-bar::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 4px;
 }
 
 .sidebar-expand {
@@ -546,9 +579,11 @@ textarea:focus {
   align-items: center;
   gap: 0.15rem;
   max-width: 180px;
+  flex: 0 0 auto;
   border-right: 1px solid var(--line);
   background: transparent;
   color: var(--muted);
+  cursor: pointer;
 }
 
 .tab.active {
@@ -936,6 +971,10 @@ textarea:focus {
   opacity: 0.7;
 }
 
+.ctx-item.danger {
+  color: var(--danger);
+}
+
 .ctx-sep {
   height: 1px;
   margin: 0.25rem 0.35rem;
@@ -943,9 +982,18 @@ textarea:focus {
 }
 
 .tree-label.search-hit {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.05rem;
+  width: 100%;
   padding: 0.4rem 0.7rem;
+}
+
+.search-hit .file-name,
+.search-hit .file-meta {
+  width: 100%;
+  min-width: 0;
 }
 
 .file-name {
@@ -964,6 +1012,19 @@ textarea:focus {
   flex-direction: column;
   min-height: 0;
   flex: 1;
+}
+
+.search-pane .search-hits,
+.search-pane .file-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  width: 100%;
+}
+
+.search-pane .file-tree > li {
+  display: block;
+  width: 100%;
 }
 
 .search-input {
@@ -1110,6 +1171,16 @@ textarea:focus {
   text-align: center;
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.agent-session-section {
+  margin: 0.45rem 0.15rem 0.15rem;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .agent-session-item {
@@ -1719,6 +1790,7 @@ button.ghost {
 }
 
 .local-graph {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -1727,6 +1799,41 @@ button.ghost {
 
 .local-graph .graph-wrap {
   background: var(--sidebar);
+}
+
+.graph-hops {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.graph-hop {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  display: grid;
+  place-items: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+html[data-theme="light"] .graph-hop {
+  background: #ececec;
+}
+
+.graph-hop.active {
+  background: var(--ink);
+  color: var(--panel);
 }
 
 .empty,
@@ -2003,7 +2110,9 @@ button.ghost {
 .provider-fold,
 .source-chip,
 .sidebar-expand,
-.sidebar-collapse {
+.sidebar-collapse,
+.graph-hop,
+.sidebar-back {
   transition:
     background-color var(--dur-fast) var(--ease-out),
     color var(--dur-fast) var(--ease-out),
