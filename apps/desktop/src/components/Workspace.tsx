@@ -19,7 +19,7 @@ import { tabKey, type Tab } from "../lib/tabs";
 import { activeProviderIdOf, modelSwitchKey, providersOf, syncSettings, uniqueModelIds } from "../lib/llmProviders";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import type { Theme } from "../theme";
-import { PanelRightOpen } from "lucide-react";
+import { PanelOpenGlyph } from "./iconGlyphs";
 import { CommandPalette, type PaletteCommand, type PaletteMode } from "./CommandPalette";
 import { IngestModal } from "./IngestModal";
 import { LeftSidebar, type LinkPicker } from "./LeftSidebar";
@@ -986,11 +986,12 @@ export function Workspace({
               <button
                 type="button"
                 className="sidebar-expand"
+                data-icon="expand"
                 title="展开右侧栏"
                 aria-label="展开右侧栏"
                 onClick={() => setRightCollapsed(false)}
               >
-                <PanelRightOpen size={14} />
+                <PanelOpenGlyph />
               </button>
             )}
           </div>

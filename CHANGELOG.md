@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-09-11
+
+### Added
+
+- One-shot hover motion on ribbon, Agent, sidebar, theme, and tab-close icon buttons
+
+### Changed
+
+- Settings gear and session-history hand ease back to rest when the pointer leaves
+
 ## [1.0.3] - 2026-09-11
 
 ### Fixed
@@ -150,7 +160,8 @@ WikiHome’s first feature-complete release: local wiki, graph, and a vertical A
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/wikihome/wikihome/releases/tag/v1.0.4
 [1.0.3]: https://github.com/wikihome/wikihome/releases/tag/v1.0.3
 [1.0.2]: https://github.com/wikihome/wikihome/releases/tag/v1.0.2
 [1.0.1]: https://github.com/wikihome/wikihome/releases/tag/v1.0.1

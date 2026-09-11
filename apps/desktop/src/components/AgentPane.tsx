@@ -1,4 +1,4 @@
-import { ArrowUp, Gauge, History, Plus, Square } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentSessionMessage, AgentSessionSummary, PageSummary } from "../api";
 import wikihomeIcon from "../assets/wikihome-icon.svg";
@@ -10,6 +10,7 @@ import { Presence } from "./Presence";
 import { PRESENCE_MS } from "../lib/usePresence";
 import { WikilinkText } from "./WikilinkText";
 import { ContextMenu } from "./ContextMenu";
+import { GaugeGlyph, HistoryGlyph, SendGlyph, StopGlyph } from "./iconGlyphs";
 
 const COMPOSER_MIN = 88;
 const COMPOSER_MAX = 360;
@@ -161,6 +162,7 @@ export function AgentPane({
         <button
           type="button"
           className={`agent-round-btn${historyOpen ? " active" : ""}`}
+          data-icon="history"
           title="会话记录"
           aria-label="会话记录"
           onClick={() => {
@@ -169,11 +171,12 @@ export function AgentPane({
             setUsageOpen(false);
           }}
         >
-          <History size={16} />
+          <HistoryGlyph />
         </button>
         <button
           type="button"
           className="agent-round-btn"
+          data-icon="plus"
           title="新对话"
           aria-label="新对话"
           disabled={busy}
@@ -382,6 +385,7 @@ export function AgentPane({
                   <button
                     type="button"
                     className="agent-round-btn"
+                    data-icon="gauge"
                     title="上下文用量"
                     aria-label="上下文用量"
                     onClick={() => {
@@ -389,7 +393,7 @@ export function AgentPane({
                       setModelOpen(false);
                     }}
                   >
-                    <Gauge size={16} />
+                    <GaugeGlyph />
                     {usage.totalTokens > 0 && (
                       <span className="agent-usage-badge">{formatTokens(usage.totalTokens)}</span>
                     )}
@@ -420,15 +424,16 @@ export function AgentPane({
                 <button
                   type="button"
                   className={`agent-round-btn agent-send-btn${busy ? " stop" : ""}`}
+                  data-icon={busy ? "stop" : "send"}
                   title={busy ? "停止" : "发送"}
                   aria-label={busy ? "停止生成" : "发送"}
                   disabled={!busy && !canSend}
                   onClick={busy ? onStop : onSend}
                 >
                   {busy ? (
-                    <Square size={13} key="stop" className="send-icon" />
+                    <StopGlyph key="stop" className="send-icon" />
                   ) : (
-                    <ArrowUp size={16} key="send" className="send-icon" />
+                    <SendGlyph key="send" className="send-icon" />
                   )}
                 </button>
               </div>

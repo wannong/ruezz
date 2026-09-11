@@ -37,7 +37,13 @@ export function StatusBar({
       {busy && <span className="status-item"><span className="status-dot" />工作中…</span>}
       {notice && <span className="status-item">{notice}</span>}
       <span className="status-spacer" />
-      <button type="button" className="icon-btn status-theme" onClick={onToggleTheme} title="切换深浅色">
+      <button
+        type="button"
+        className="icon-btn status-theme"
+        data-icon={theme === "dark" ? "sun" : "moon"}
+        onClick={onToggleTheme}
+        title="切换深浅色"
+      >
         {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
       </button>
     </footer>

@@ -1,12 +1,5 @@
-import {
-  Bot,
-  ClipboardPaste,
-  FilePlus,
-  FolderTree,
-  Search,
-  Settings,
-  Share2,
-} from "lucide-react";
+import { Search, Settings, Share2 } from "lucide-react";
+import { BotGlyph, FilePlusGlyph, FolderTreeGlyph, PasteGlyph } from "./iconGlyphs";
 
 type RibbonProps = {
   leftView: "files" | "search";
@@ -40,14 +33,16 @@ export function Ribbon({
       <button
         type="button"
         className={`icon-btn${ !leftCollapsed && leftView === "files" ? " active" : ""}`}
+        data-icon="files"
         title="文件列表"
         onClick={onFiles}
       >
-        <FolderTree size={18} />
+        <FolderTreeGlyph />
       </button>
       <button
         type="button"
         className={`icon-btn${ !leftCollapsed && leftView === "search" ? " active" : ""}`}
+        data-icon="search"
         title="搜索"
         onClick={onSearch}
       >
@@ -56,10 +51,11 @@ export function Ribbon({
       <button
         type="button"
         className={`icon-btn${agentOpen ? " active" : ""}`}
+        data-icon="bot"
         title="Agent"
         onClick={onAgent}
       >
-        <Bot size={18} />
+        <BotGlyph />
       </button>
       <button
         type="button"
@@ -70,13 +66,27 @@ export function Ribbon({
         <Share2 size={18} />
       </button>
       <div className="ribbon-spacer" />
-      <button type="button" className="icon-btn" title="入库" disabled={busy} onClick={onIngest}>
-        <FilePlus size={18} />
+      <button
+        type="button"
+        className="icon-btn"
+        data-icon="ingest"
+        title="入库"
+        disabled={busy}
+        onClick={onIngest}
+      >
+        <FilePlusGlyph />
       </button>
-      <button type="button" className="icon-btn" title="粘贴入库" disabled={busy} onClick={onIngest}>
-        <ClipboardPaste size={18} />
+      <button
+        type="button"
+        className="icon-btn"
+        data-icon="paste"
+        title="粘贴入库"
+        disabled={busy}
+        onClick={onIngest}
+      >
+        <PasteGlyph />
       </button>
-      <button type="button" className="icon-btn" title="设置" onClick={onSettings}>
+      <button type="button" className="icon-btn" data-icon="settings" title="设置" onClick={onSettings}>
         <Settings size={18} />
       </button>
     </nav>

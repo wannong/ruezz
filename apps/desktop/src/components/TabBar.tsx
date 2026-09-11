@@ -47,6 +47,7 @@ export function TabBar({ tabs, activeKey, titleFor, isDirty, onSelect, onClose }
             <button
               type="button"
               className="tab-close"
+              data-icon="tab-close"
               aria-label="关闭标签"
               onClick={(e) => {
                 e.stopPropagation();

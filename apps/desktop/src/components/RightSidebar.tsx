@@ -1,4 +1,4 @@
-import { PanelRightClose } from "lucide-react";
+import { PanelCloseGlyph } from "./iconGlyphs";
 import type { AgentSessionMessage, AgentSessionSummary, GraphDto, PageSummary } from "../api";
 import { attachResizeX } from "../lib/pointerResize";
 import type { OutlineItem } from "../lib/outline";
@@ -113,11 +113,12 @@ export function RightSidebar({
         <button
           type="button"
           className="sidebar-collapse"
+          data-icon="collapse"
           title="收起"
           aria-label="收起右侧栏"
           onClick={onCollapse}
         >
-          <PanelRightClose size={14} />
+          <PanelCloseGlyph />
         </button>
       </div>
       {view === "agent" && (

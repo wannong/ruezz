@@ -12,6 +12,7 @@
   --dur-fast: 100ms;
   --dur-base: 180ms;
   --dur-slow: 300ms;
+  --dur-icon: 250ms;
 }
 
 html[data-theme="dark"],
@@ -384,6 +385,105 @@ textarea:focus {
 
 .icon-btn.active {
   color: var(--accent);
+}
+
+[data-icon] svg {
+  overflow: visible;
+}
+
+[data-icon="stop"] .icon-motion {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+}
+
+[data-icon="settings"] svg {
+  transform: rotate(0deg);
+  transition: transform var(--dur-icon) var(--ease-out);
+}
+
+[data-icon="history"] .icon-motion {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transform: rotate(0deg);
+  transition: transform var(--dur-icon) var(--ease-out);
+}
+
+[data-icon="gauge"] .icon-motion {
+  transform-box: view-box;
+  transform-origin: 50% 58.333%;
+}
+
+[data-icon="ingest"] .icon-motion {
+  transform-box: view-box;
+  transform-origin: 50% 62.5%;
+}
+
+[data-icon="bot"]:hover .icon-motion {
+  animation: wk-icon-bot-eyes var(--dur-icon) var(--ease-in-out) 1 forwards;
+}
+
+[data-icon="paste"]:hover:not(:disabled) .icon-motion {
+  animation: wk-icon-paste-poke var(--dur-icon) var(--ease-out) 1 forwards;
+}
+
+[data-icon="settings"]:hover svg {
+  transform: rotate(40deg);
+}
+
+[data-icon="files"]:hover .icon-branch-a {
+  animation: wk-icon-files-a var(--dur-icon) var(--ease-out) 1 forwards;
+}
+
+[data-icon="files"]:hover .icon-branch-b {
+  animation: wk-icon-files-b var(--dur-icon) var(--ease-out) 1 forwards;
+}
+
+[data-icon="search"]:hover svg {
+  animation: wk-icon-search-shake var(--dur-icon) var(--ease-in-out) 1 forwards;
+}
+
+[data-icon="ingest"]:hover:not(:disabled) .icon-motion {
+  animation: wk-icon-plus-pop var(--dur-icon) var(--ease-out) 1 forwards;
+}
+
+[data-icon="plus"]:hover:not(:disabled) svg {
+  animation: wk-icon-plus-pop var(--dur-icon) var(--ease-out) 1 forwards;
+}
+
+[data-icon="history"]:hover .icon-motion {
+  transform: rotate(38deg);
+}
+
+[data-icon="gauge"]:hover .icon-motion {
+  animation: wk-icon-gauge-flick var(--dur-icon) var(--ease-out) 1 forwards;
+}
+
+[data-icon="send"]:hover:not(:disabled) .icon-motion {
+  animation: wk-icon-send-up var(--dur-icon) var(--ease-out) 1 forwards;
+}
+
+[data-icon="stop"]:hover .icon-motion {
+  animation: wk-icon-stop-in var(--dur-icon) var(--ease-out) 1 forwards;
+}
+
+[data-icon="sun"]:hover svg {
+  animation: wk-icon-sun-turn var(--dur-icon) var(--ease-out) 1 forwards;
+}
+
+[data-icon="moon"]:hover svg {
+  animation: wk-icon-moon-tilt var(--dur-icon) var(--ease-out) 1 forwards;
+}
+
+[data-icon="tab-close"]:hover svg {
+  animation: wk-icon-close-spin var(--dur-icon) var(--ease-out) 1 forwards;
+}
+
+[data-icon="collapse"]:hover .icon-motion {
+  animation: wk-icon-collapse-poke var(--dur-icon) var(--ease-out) 1 forwards;
+}
+
+[data-icon="expand"]:hover .icon-motion {
+  animation: wk-icon-expand-poke var(--dur-icon) var(--ease-out) 1 forwards;
 }
 
 .sidebar {
@@ -2085,6 +2185,88 @@ html[data-theme="light"] .graph-hop {
 @keyframes wk-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+@keyframes wk-icon-bot-eyes {
+  0% { transform: translateX(0); }
+  32% { transform: translateX(-1.6px); }
+  68% { transform: translateX(1.6px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes wk-icon-paste-poke {
+  0% { transform: translateX(0); }
+  45% { transform: translateX(2.4px); }
+  100% { transform: translateX(0.8px); }
+}
+
+@keyframes wk-icon-files-a {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(1.3px, -1px); }
+  100% { transform: translate(0.45px, -0.35px); }
+}
+
+@keyframes wk-icon-files-b {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(1.3px, 1px); }
+  100% { transform: translate(0.45px, 0.35px); }
+}
+
+@keyframes wk-icon-search-shake {
+  0%, 100% { transform: rotate(0deg); }
+  22% { transform: rotate(-8deg); }
+  48% { transform: rotate(7deg); }
+  72% { transform: rotate(-4deg); }
+}
+
+@keyframes wk-icon-plus-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.22); }
+  100% { transform: scale(1.08); }
+}
+
+@keyframes wk-icon-gauge-flick {
+  0% { transform: rotate(0deg); }
+  55% { transform: rotate(42deg); }
+  100% { transform: rotate(22deg); }
+}
+
+@keyframes wk-icon-send-up {
+  0% { transform: translateY(0); }
+  45% { transform: translateY(-2.4px); }
+  100% { transform: translateY(-0.8px); }
+}
+
+@keyframes wk-icon-stop-in {
+  from { transform: scale(1); }
+  to { transform: scale(0.86); }
+}
+
+@keyframes wk-icon-sun-turn {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(50deg); }
+}
+
+@keyframes wk-icon-moon-tilt {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-18deg); }
+}
+
+@keyframes wk-icon-close-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(90deg); }
+}
+
+@keyframes wk-icon-collapse-poke {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(2px); }
+  100% { transform: translateX(0.7px); }
+}
+
+@keyframes wk-icon-expand-poke {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(-2px); }
+  100% { transform: translateX(-0.7px); }
 }
 
 /* Hover / press. Transform only on press targets, not window chrome. */
