@@ -15,6 +15,12 @@ type GraphNode = {
   label: string;
   type: string;
   degree: number;
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
+  fx?: number;
+  fy?: number;
 };
 
 type GraphViewProps = {

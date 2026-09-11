@@ -112,7 +112,7 @@ type GraphForce = {
 };
 
 export type GraphForceApi = {
-  d3Force: (name: string) => GraphForce | undefined;
+  d3Force: (name: string) => unknown;
 };
 
 /**
@@ -121,16 +121,16 @@ export type GraphForceApi = {
  * follow, but cut repulsion beyond a few link-lengths.
  */
 export function applyGraphForces(fg: GraphForceApi, compact = false) {
-  const charge = fg.d3Force("charge");
+  const charge = fg.d3Force("charge") as GraphForce | undefined;
   charge?.strength?.(compact ? -42 : -48);
   charge?.distanceMin?.(4);
   charge?.distanceMax?.(compact ? 140 : 180);
 
-  const link = fg.d3Force("link");
+  const link = fg.d3Force("link") as GraphForce | undefined;
   link?.distance?.(compact ? 32 : 40);
   link?.strength?.(1);
 
-  const center = fg.d3Force("center");
+  const center = fg.d3Force("center") as GraphForce | undefined;
   center?.strength?.(0.12);
 }
 
