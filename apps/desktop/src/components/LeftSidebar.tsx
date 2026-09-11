@@ -2,6 +2,7 @@ import type { PageSummary } from "../api";
 import { attachResizeX } from "../lib/pointerResize";
 import type { WikiClip } from "../lib/fileTree";
 import { FileTree } from "./FileTree";
+import { Presence } from "./Presence";
 import { SearchPane } from "./SearchPane";
 
 type LeftSidebarProps = {
@@ -45,9 +46,7 @@ export function LeftSidebar({
   onError,
   onResize,
 }: LeftSidebarProps) {
-  if (collapsed) return null;
-
-  return (
+  const aside = (
     <aside
       className={`sidebar sidebar-left${overlay ? " overlay" : ""}`}
       style={{ width }}
@@ -79,4 +78,8 @@ export function LeftSidebar({
       />
     </aside>
   );
+
+  if (overlay) return <Presence open={!collapsed}>{aside}</Presence>;
+  if (collapsed) return null;
+  return aside;
 }

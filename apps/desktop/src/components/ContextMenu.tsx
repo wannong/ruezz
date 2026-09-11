@@ -1,18 +1,45 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { PRESENCE_MS } from "../lib/usePresence";
+import { Presence } from "./Presence";
 
 export type ContextMenuItem =
   | { type: "sep" }
   | { type: "item"; label: string; disabled?: boolean; onClick: () => void };
 
 type ContextMenuProps = {
+  open: boolean;
   x: number;
   y: number;
   items: ContextMenuItem[];
   onClose: () => void;
 };
 
-export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
+type SurfaceProps = {
+  x: number;
+  y: number;
+  items: ContextMenuItem[];
+  onClose: () => void;
+};
+
+export function ContextMenu({ open, x, y, items, onClose }: ContextMenuProps) {
+  const snap = useRef({ x, y, items });
+  if (open) snap.current = { x, y, items };
+
+  return createPortal(
+    <Presence open={open} duration={PRESENCE_MS.fast}>
+      <ContextMenuSurface
+        x={snap.current.x}
+        y={snap.current.y}
+        items={snap.current.items}
+        onClose={onClose}
+      />
+    </Presence>,
+    document.body,
+  );
+}
+
+function ContextMenuSurface({ x, y, items, onClose }: SurfaceProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
 
@@ -46,7 +73,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
     };
   }, [onClose]);
 
-  return createPortal(
+  return (
     <div
       ref={ref}
       className="ctx-menu"
@@ -74,7 +101,6 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
           </button>
         ),
       )}
-    </div>,
-    document.body,
+    </div>
   );
 }

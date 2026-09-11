@@ -6,6 +6,8 @@ import { parseModelSwitchKey } from "../lib/llmProviders";
 import { loadPref, savePref } from "../lib/prefs";
 import { attachResizeY } from "../lib/pointerResize";
 import { MarkdownPreview } from "./MarkdownPreview";
+import { Presence } from "./Presence";
+import { PRESENCE_MS } from "../lib/usePresence";
 import { WikilinkText } from "./WikilinkText";
 
 const COMPOSER_MIN = 88;
@@ -174,7 +176,7 @@ export function AgentPane({
       </div>
 
       <div className="agent-chat-main">
-        {historyOpen && (
+        <Presence open={historyOpen}>
           <div className="agent-session-sheet" role="dialog" aria-label="会话记录">
             <div className="agent-session-sheet-head">
               <span>会话</span>
@@ -198,7 +200,7 @@ export function AgentPane({
               ))}
             </div>
           </div>
-        )}
+        </Presence>
         <div className="agent-chat-view" ref={listRef}>
             {empty && (
               <div className="agent-welcome">
@@ -228,7 +230,10 @@ export function AgentPane({
                 <div className="msg-role">Agent</div>
                 <div className="msg-body">
                   {streamingText ? (
-                    <MarkdownPreview markdown={streamingText} pages={pages} onOpen={onOpen} />
+                    <>
+                      <MarkdownPreview markdown={streamingText} pages={pages} onOpen={onOpen} />
+                      <span className="stream-cursor" aria-hidden="true" />
+                    </>
                   ) : (
                     <span className="msg-thinking">思考中</span>
                   )}
@@ -271,7 +276,7 @@ export function AgentPane({
               >
                 {mock || modelGroups.length === 0 ? modelLabel : modelName || "选择模型"}
               </button>
-              {modelOpen && modelGroups.length > 0 && (
+              <Presence open={modelOpen && modelGroups.length > 0} duration={PRESENCE_MS.fast}>
                 <div className="agent-model-menu" role="listbox">
                   {modelGroups.map((group) => (
                     <div key={group.providerId} className="agent-model-group">
@@ -297,7 +302,7 @@ export function AgentPane({
                     </div>
                   ))}
                 </div>
-              )}
+              </Presence>
             </div>
 
             <div className="agent-input-row">
@@ -332,7 +337,7 @@ export function AgentPane({
                       <span className="agent-usage-badge">{formatTokens(usage.totalTokens)}</span>
                     )}
                   </button>
-                  {usageOpen && (
+                  <Presence open={usageOpen} duration={PRESENCE_MS.fast}>
                     <div className="agent-usage-pop">
                       {usage.totalTokens > 0 ? (
                         <>
@@ -353,30 +358,22 @@ export function AgentPane({
                         <p>暂无用量（发送后统计）</p>
                       )}
                     </div>
-                  )}
+                  </Presence>
                 </div>
-                {busy ? (
-                  <button
-                    type="button"
-                    className="agent-round-btn agent-send-btn stop"
-                    title="停止"
-                    aria-label="停止生成"
-                    onClick={onStop}
-                  >
-                    <Square size={13} />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="agent-round-btn agent-send-btn"
-                    title="发送"
-                    aria-label="发送"
-                    disabled={!canSend}
-                    onClick={onSend}
-                  >
-                    <ArrowUp size={16} />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className={`agent-round-btn agent-send-btn${busy ? " stop" : ""}`}
+                  title={busy ? "停止" : "发送"}
+                  aria-label={busy ? "停止生成" : "发送"}
+                  disabled={!busy && !canSend}
+                  onClick={busy ? onStop : onSend}
+                >
+                  {busy ? (
+                    <Square size={13} key="stop" className="send-icon" />
+                  ) : (
+                    <ArrowUp size={16} key="send" className="send-icon" />
+                  )}
+                </button>
               </div>
             </div>
           </div>

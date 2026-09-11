@@ -24,6 +24,7 @@ import { IngestModal } from "./IngestModal";
 import { LeftSidebar } from "./LeftSidebar";
 import { NewNoteModal } from "./NewNoteModal";
 import { NoteView } from "./NoteView";
+import { Presence } from "./Presence";
 import { Ribbon } from "./Ribbon";
 import { RightSidebar, type RightView } from "./RightSidebar";
 import { SettingsModal } from "./SettingsModal";
@@ -104,6 +105,9 @@ export function Workspace({
   const sendingRef = useRef(false);
   const abortingRef = useRef(false);
   const sessionLoadGen = useRef(0);
+  const lastPaletteMode = useRef<PaletteMode>("quick");
+  const lastError = useRef<string | null>(null);
+  if (error) lastError.current = error;
 
   const activeTab = tabs.find((t) => tabKey(t) === activeKey) ?? null;
   const activePageId = activeTab?.kind === "page" ? activeTab.id : null;
@@ -312,6 +316,10 @@ export function Workspace({
   useEffect(() => {
     savePref("rightWidth", rightWidth);
   }, [rightWidth]);
+
+  useEffect(() => {
+    if (palette) lastPaletteMode.current = palette;
+  }, [palette]);
 
   useEffect(() => {
     if (!activePageId) return;
@@ -908,7 +916,7 @@ export function Workspace({
               <div className="empty-center">页面不存在或尚未编译：{activeTab.id}</div>
             )}
             {activeTab && !activePage && !missingIds[activeTab.id] && (
-              <div className="empty-center">加载中…</div>
+              <div className="empty-center loading-breathe">加载中…</div>
             )}
             {activeTab && activePage && (
               <NoteView
@@ -975,20 +983,20 @@ export function Workspace({
         theme={theme}
         onToggleTheme={onToggleTheme}
       />
-      {error && (
+      <Presence open={!!error}>
         <div className="toast-error" onClick={() => setError(null)}>
-          {error}
+          {error ?? lastError.current}
         </div>
-      )}
-      {settingsOpen && (
+      </Presence>
+      <Presence open={settingsOpen}>
         <SettingsModal
           settings={settings}
           busy={busy}
           onClose={() => setSettingsOpen(false)}
           onSave={saveSettings}
         />
-      )}
-      {ingestOpen && (
+      </Presence>
+      <Presence open={ingestOpen}>
         <IngestModal
           busy={busy}
           canPickFiles={isTauriRuntime()}
@@ -999,23 +1007,23 @@ export function Workspace({
           }}
           onPaste={ingestPaste}
         />
-      )}
-      {newNoteOpen && (
+      </Presence>
+      <Presence open={newNoteOpen}>
         <NewNoteModal
           busy={busy}
           onClose={() => setNewNoteOpen(false)}
           onCreate={createNote}
         />
-      )}
-      {palette && (
+      </Presence>
+      <Presence open={palette !== null}>
         <CommandPalette
-          mode={palette}
+          mode={palette ?? lastPaletteMode.current}
           pages={pages}
           commands={commands}
           onClose={() => setPalette(null)}
           onOpenPage={openPage}
         />
-      )}
+      </Presence>
     </div>
   );
 }

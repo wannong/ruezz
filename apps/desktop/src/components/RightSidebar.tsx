@@ -6,6 +6,7 @@ import type { Theme } from "../theme";
 import { AgentPane } from "./AgentPane";
 import { LocalGraphPane } from "./LocalGraphPane";
 import { OutlinePane } from "./OutlinePane";
+import { Presence } from "./Presence";
 
 export type RightView = "agent" | "outline" | "graph";
 
@@ -80,9 +81,7 @@ export function RightSidebar({
   onSelectSession,
   onSwitchModel,
 }: RightSidebarProps) {
-  if (collapsed) return null;
-
-  return (
+  const aside = (
     <aside className={`sidebar sidebar-right${overlay ? " overlay" : ""}`} style={{ width }}>
       <div
         className="resize-handle resize-handle-left"
@@ -143,4 +142,8 @@ export function RightSidebar({
       )}
     </aside>
   );
+
+  if (overlay) return <Presence open={!collapsed}>{aside}</Presence>;
+  if (collapsed) return null;
+  return aside;
 }

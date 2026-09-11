@@ -21,7 +21,7 @@ export function LocalGraphPane({ graph, pageId, theme, onOpen }: LocalGraphPaneP
     return <div className="empty">打开一篇笔记查看相连图谱</div>;
   }
   if (!graph || !local) {
-    return <div className="empty">正在加载图谱…</div>;
+    return <div className="empty loading-breathe">正在加载图谱…</div>;
   }
   if (local.edges.length === 0) {
     return <div className="empty">当前笔记没有一次相连的节点</div>;

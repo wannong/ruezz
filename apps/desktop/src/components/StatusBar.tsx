@@ -32,9 +32,9 @@ export function StatusBar({
       </span>
       <span className="status-item">{pageCount} 页</span>
       {currentId && <span className="status-item">{currentId}</span>}
-      {saving && <span className="status-item">保存中…</span>}
+      {saving && <span className="status-item"><span className="status-dot" />保存中…</span>}
       {dirty && !saving && <span className="status-item">未保存</span>}
-      {busy && <span className="status-item">工作中…</span>}
+      {busy && <span className="status-item"><span className="status-dot" />工作中…</span>}
       {notice && <span className="status-item">{notice}</span>}
       <span className="status-spacer" />
       <button type="button" className="icon-btn status-theme" onClick={onToggleTheme} title="切换深浅色">

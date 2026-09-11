@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type MouseEvent } from "react";
-import { ChevronDown, ChevronRight, FileText, Folder } from "lucide-react";
+import { ChevronRight, FileText, Folder } from "lucide-react";
 import type { PageSummary } from "../api";
 import {
   buildFileTree,
@@ -169,14 +169,13 @@ export function FileTree({
           />
         ))}
       </ul>
-      {menu && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          items={menuItems(menu.target)}
-          onClose={() => setMenu(null)}
-        />
-      )}
+      <ContextMenu
+        open={menu !== null}
+        x={menu?.x ?? 0}
+        y={menu?.y ?? 0}
+        items={menu ? menuItems(menu.target) : []}
+        onClose={() => setMenu(null)}
+      />
     </div>
   );
 }
@@ -206,8 +205,8 @@ function TreeItem({
 }) {
   const hasChildren = node.children.length > 0;
   const [open, setOpen] = useState(true);
-    const expanded =
-      Boolean(forceOpen[node.path]) || open || (editor?.mode === "create" && editor.parent === node.path);
+  const expanded =
+    Boolean(forceOpen[node.path]) || open || (editor?.mode === "create" && editor.parent === node.path);
   const isActive = node.page != null && node.page.id === activeId;
   const renaming = editor?.mode === "rename" && editor.path === node.path;
   const creatingHere = editor?.mode === "create" && editor.parent === node.path;
@@ -226,7 +225,7 @@ function TreeItem({
             aria-label={expanded ? "折叠" : "展开"}
             onClick={() => setOpen((v) => !v)}
           >
-            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            <ChevronRight size={14} className={expanded ? "tree-twist-open" : undefined} />
           </button>
         ) : (
           <span className="tree-twist spacer" />

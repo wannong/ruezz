@@ -115,11 +115,11 @@ export function TitleBar({
           </button>
         </div>
       )}
-      {menu && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          items={[
+      <ContextMenu
+        open={menu !== null}
+        x={menu?.x ?? 0}
+        y={menu?.y ?? 0}
+        items={[
             { type: "item", label: "新建知识库…", onClick: onNewVault },
             { type: "item", label: "打开知识库…", onClick: onOpenVault },
             {
@@ -128,10 +128,9 @@ export function TitleBar({
               disabled: !hasVault,
               onClick: onRevealVault,
             },
-          ]}
-          onClose={() => setMenu(null)}
-        />
-      )}
+        ]}
+        onClose={() => setMenu(null)}
+      />
     </header>
   );
 }
