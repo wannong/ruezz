@@ -4,6 +4,12 @@ import path from "node:path";
 import type { IngestResult } from "@wikihome/engine-api";
 import { parseFrontmatter, sourceIdentityForPath } from "llmwiki-core";
 import { convertFileToMarkdown, isConvertibleExtension } from "./markitdown.js";
+import {
+  convertPdfToTemp,
+  isPdfExtension,
+  placePdfAssetsBesidePage,
+  type Pdf2mdLayoutResult,
+} from "./pdf2md-layout.js";
 
 export const TEXT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".text"]);
 
@@ -81,45 +87,62 @@ export async function ingestWholeDocument(opts: {
   await fs.mkdir(path.join(absRoot, "wiki", "sources"), { recursive: true });
 
   const archivedAbs = await archiveIntoSources(absRoot, absFile);
-  const markdown = await loadMarkdownText(archivedAbs);
-  if (!markdown.trim()) {
-    throw new Error(`入库内容为空：${path.basename(archivedAbs)}`);
+  const loaded = await loadDocumentContent(archivedAbs);
+  try {
+    if (!loaded.markdown.trim()) {
+      throw new Error(`入库内容为空：${path.basename(archivedAbs)}`);
+    }
+
+    const parsed = parseFrontmatter(loaded.markdown);
+    let body = parsed.body || loaded.markdown;
+    const fallbackTitle = path.basename(archivedAbs).replace(/\.[^.]+$/u, "") || "untitled";
+    const title = String(parsed.frontmatter?.title || titleFromMarkdown(body, fallbackTitle));
+    const day = new Date().toISOString().slice(0, 10);
+    const originalId = sourceIdentityForPath(absRoot, archivedAbs);
+    const sourceIds = uniqueStrings([originalId, ...asStringList(parsed.frontmatter?.sources)]);
+    const tags = asStringList(parsed.frontmatter?.tags);
+
+    const stem = path.basename(archivedAbs).replace(/\.[^.]+$/u, "") || "source";
+    const pageId = await uniqueSourcePageId(absRoot, slugify(stem), originalId);
+    const pageAbs = path.join(absRoot, "wiki", "sources", `${pageId.split("/").pop()}.md`);
+    await fs.mkdir(path.dirname(pageAbs), { recursive: true });
+
+    if (loaded.pdf) {
+      body = await placePdfAssetsBesidePage({
+        pageAbs,
+        markdown: body,
+        fromStem: loaded.pdf.stem,
+        assetsDir: loaded.pdf.assetsDir,
+        formulasManifestAbs: loaded.pdf.formulasManifestAbs,
+      });
+    }
+
+    const page = buildSourcePage({
+      title,
+      body,
+      tags: tags.length ? tags : ["imported"],
+      related: asStringList(parsed.frontmatter?.related),
+      sources: sourceIds,
+      created: String(parsed.frontmatter?.created || day),
+      updated: day,
+    });
+    await fs.writeFile(pageAbs, page, "utf8");
+
+    const wikiRel = `wiki/sources/${path.basename(pageAbs)}`;
+    await appendWikiLog(absRoot, `ingest | ${path.basename(archivedAbs)} — 1 page (whole document)`);
+    await appendIndexRow(absRoot, pageId, oneLineSummary(body), day);
+    await opts.reindex();
+
+    return {
+      files: [wikiRel],
+      reviews: 0,
+      sourcePath: path.relative(absRoot, archivedAbs).split(path.sep).join("/"),
+    };
+  } finally {
+    if (loaded.cleanupDir) {
+      await fs.rm(loaded.cleanupDir, { recursive: true, force: true }).catch(() => undefined);
+    }
   }
-
-  const parsed = parseFrontmatter(markdown);
-  const body = parsed.body || markdown;
-  const fallbackTitle = path.basename(archivedAbs).replace(/\.[^.]+$/u, "") || "untitled";
-  const title = String(parsed.frontmatter?.title || titleFromMarkdown(body, fallbackTitle));
-  const day = new Date().toISOString().slice(0, 10);
-  const originalId = sourceIdentityForPath(absRoot, archivedAbs);
-  const sourceIds = uniqueStrings([originalId, ...asStringList(parsed.frontmatter?.sources)]);
-  const tags = asStringList(parsed.frontmatter?.tags);
-  const page = buildSourcePage({
-    title,
-    body,
-    tags: tags.length ? tags : ["imported"],
-    related: asStringList(parsed.frontmatter?.related),
-    sources: sourceIds,
-    created: String(parsed.frontmatter?.created || day),
-    updated: day,
-  });
-
-  const stem = path.basename(archivedAbs).replace(/\.[^.]+$/u, "") || "source";
-  const pageId = await uniqueSourcePageId(absRoot, slugify(stem), originalId);
-  const pageAbs = path.join(absRoot, "wiki", "sources", `${pageId.split("/").pop()}.md`);
-  await fs.mkdir(path.dirname(pageAbs), { recursive: true });
-  await fs.writeFile(pageAbs, page, "utf8");
-
-  const wikiRel = `wiki/sources/${path.basename(pageAbs)}`;
-  await appendWikiLog(absRoot, `ingest | ${path.basename(archivedAbs)} — 1 page (whole document)`);
-  await appendIndexRow(absRoot, pageId, oneLineSummary(body), day);
-  await opts.reindex();
-
-  return {
-    files: [wikiRel],
-    reviews: 0,
-    sourcePath: path.relative(absRoot, archivedAbs).split(path.sep).join("/"),
-  };
 }
 
 async function archiveIntoSources(root: string, absFile: string): Promise<string> {
@@ -130,10 +153,24 @@ async function archiveIntoSources(root: string, absFile: string): Promise<string
   return dest;
 }
 
-async function loadMarkdownText(archivedAbs: string): Promise<string> {
+type LoadedDocument = {
+  markdown: string;
+  pdf?: Pdf2mdLayoutResult;
+  cleanupDir?: string;
+};
+
+async function loadDocumentContent(archivedAbs: string): Promise<LoadedDocument> {
   const ext = path.extname(archivedAbs).toLowerCase();
   if (TEXT_EXTENSIONS.has(ext)) {
-    return fs.readFile(archivedAbs, "utf8");
+    return { markdown: await fs.readFile(archivedAbs, "utf8") };
+  }
+  if (isPdfExtension(ext)) {
+    const result = await convertPdfToTemp(archivedAbs);
+    return {
+      markdown: result.markdown,
+      pdf: result,
+      cleanupDir: result.cleanupDir,
+    };
   }
   if (isConvertibleExtension(ext)) {
     const tmp = path.join(os.tmpdir(), `wikihome-md-${process.pid}-${Date.now()}.md`);
@@ -143,7 +180,7 @@ async function loadMarkdownText(archivedAbs: string): Promise<string> {
       if (!markdown.trim()) {
         throw new Error(`转换结果为空：${path.basename(archivedAbs)}`);
       }
-      return markdown;
+      return { markdown };
     } finally {
       await fs.unlink(tmp).catch(() => undefined);
     }
@@ -151,7 +188,7 @@ async function loadMarkdownText(archivedAbs: string): Promise<string> {
 
   const buf = await fs.readFile(archivedAbs);
   if (isProbablyText(buf)) {
-    return buf.toString("utf8");
+    return { markdown: buf.toString("utf8") };
   }
   throw new Error(
     `无法直接入库「${path.basename(archivedAbs)}」。请导入 Markdown / 文本，或 PDF / Word / PPT / Excel（会先转成一篇 Markdown，不拆页）。`,

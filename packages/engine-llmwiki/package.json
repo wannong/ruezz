@@ -1,6 +1,6 @@
 {
   "name": "@wikihome/engine-llmwiki",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "llmwiki-core adapter implementing @wikihome/engine-api",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,8 +12,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "node --test dist/ingest-document.test.js"
+    "build": "tsc -p tsconfig.json && node -e \"import('node:fs/promises').then(async (fs)=>{ await fs.mkdir('dist/pdf2md',{recursive:true}); for (const f of ['pdf2md.py','glyphmap.py','requirements.txt']) { try { await fs.copyFile('src/pdf2md/'+f, 'dist/pdf2md/'+f); } catch { /* ignore */ } } })\"",
+    "test": "node --test dist/ingest-document.test.js dist/markitdown.test.js"
   },
   "dependencies": {
     "@wikihome/engine-api": "workspace:*",

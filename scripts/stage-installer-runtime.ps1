@@ -92,12 +92,12 @@ Write-Host "==> WebView2Loader.dll"
 function Ensure-PythonRuntime {
   $pythonExe = Join-Path $PythonCache "python.exe"
   $env:PYTHONNOUSERSITE = "1"
-  $markitdownOk = $false
+  $runtimeOk = $false
   if ((Test-Path $pythonExe) -and -not $Force) {
-    & $pythonExe -c "import markitdown; assert 'Roaming' not in markitdown.__file__" 2>$null
-    if ($LASTEXITCODE -eq 0) { $markitdownOk = $true }
+    & $pythonExe -c "import markitdown, pymupdf4llm; assert 'Roaming' not in markitdown.__file__" 2>$null
+    if ($LASTEXITCODE -eq 0) { $runtimeOk = $true }
   }
-  if ($markitdownOk) {
+  if ($runtimeOk) {
     Write-Host "==> python runtime cache hit"
     return
   }
@@ -128,14 +128,14 @@ function Ensure-PythonRuntime {
   if (-not (Test-Path $getPip) -or $Force) {
     curl.exe -L --retry 3 -o $getPip "https://bootstrap.pypa.io/get-pip.py"
   }
-  Write-Host "==> pip + markitdown (bundled prefix only)"
+  Write-Host "==> pip + markitdown + pymupdf4llm (bundled prefix only)"
   & $pythonExe $getPip --no-warn-script-location --no-user
   if ($LASTEXITCODE -ne 0) { throw "get-pip failed" }
-  & $pythonExe -m pip install --no-user --no-warn-script-location --force-reinstall "markitdown[pdf,docx,pptx,xlsx]"
-  if ($LASTEXITCODE -ne 0) { throw "markitdown install failed" }
-  $installedAt = & $pythonExe -c "import markitdown; print(markitdown.__file__)"
+  & $pythonExe -m pip install --no-user --no-warn-script-location --force-reinstall "markitdown[docx,pptx,xlsx]" "pymupdf4llm>=1.28"
+  if ($LASTEXITCODE -ne 0) { throw "markitdown/pymupdf4llm install failed" }
+  $installedAt = & $pythonExe -c "import markitdown, pymupdf4llm; print(markitdown.__file__)"
   if ($LASTEXITCODE -ne 0 -or $installedAt -notlike "$PythonCache*") {
-    throw "markitdown did not install into bundled Python: $installedAt"
+    throw "markitdown/pymupdf4llm did not install into bundled Python: $installedAt"
   }
 }
 

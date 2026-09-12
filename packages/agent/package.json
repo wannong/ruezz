@@ -1,6 +1,6 @@
 {
   "name": "@wikihome/agent",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Ask/tool loop for WikiHome",
   "type": "module",
   "main": "./dist/index.js",
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@wikihome/engine-api": "workspace:*",
+    "@wikihome/engine-llmwiki": "workspace:*",
     "@earendil-works/pi-agent-core": "workspace:*",
     "@earendil-works/pi-ai": "workspace:*"
   },

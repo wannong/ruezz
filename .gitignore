@@ -30,3 +30,11 @@ apps/desktop/src-tauri/resources/runtime/
 apps/desktop/src-tauri/resources/sidecar/
 apps/desktop/src-tauri/resources/WebView2Loader.dll
 apps/desktop/src-tauri/webview2-runtime/
+
+# Local PDF conversion cache / test artifacts
+/models/
+__pycache__/
+*.pyc
+/test_paper*.pdf
+/test_paper*.md
+/tmp_*

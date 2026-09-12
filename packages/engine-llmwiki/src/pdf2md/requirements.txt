@@ -1,0 +1,3 @@
+# Born-digital PDF → Markdown (pdf2md-layout skill).
+# Installed into WikiHome's bundled Python alongside markitdown.
+pymupdf4llm>=1.28

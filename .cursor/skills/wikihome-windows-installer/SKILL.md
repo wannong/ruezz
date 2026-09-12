@@ -61,7 +61,7 @@ This script:
 2. `pnpm --filter @wikihome/sidecar deploy --prod --ignore-scripts --node-linker=hoisted` into `.cache/installer-runtime/sidecar-pkg` (not directly into `resources/`)
 3. `robocopy /E` (not `/MIR`) cache → `apps/desktop/src-tauri/resources/sidecar`
 4. Materializes any leftover reparse points (`scripts/materialize-node-modules.mjs`)
-5. Copies `node.exe` (from `node -p process.execPath`), WebView2Loader.dll, embeddable CPython 3.14 + `markitdown[pdf,docx,pptx,xlsx]` with `PYTHONNOUSERSITE=1` and `pip install --no-user`
+5. Copies `node.exe` (from `node -p process.execPath`), WebView2Loader.dll, embeddable CPython 3.14 + `markitdown[docx,pptx,xlsx]` + `pymupdf4llm>=1.28` with `PYTHONNOUSERSITE=1` and `pip install --no-user`
 
 ### 2. Smoke
 
@@ -72,7 +72,7 @@ $cli  = "apps\desktop\src-tauri\resources\sidecar\dist\cli.js"
 # kill after ~3s
 
 $env:PYTHONNOUSERSITE = "1"
-apps\desktop\src-tauri\resources\runtime\python\python.exe -c "import markitdown; print(markitdown.__file__)"
+apps\desktop\src-tauri\resources\runtime\python\python.exe -c "import markitdown, pymupdf4llm; print(markitdown.__file__); print(pymupdf4llm.__file__)"
 # must be under resources\runtime\python\Lib\site-packages, NEVER AppData\Roaming
 ```
 

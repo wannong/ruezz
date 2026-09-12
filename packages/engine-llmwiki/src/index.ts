@@ -13,6 +13,14 @@ import {
 import { createLlmClient, type LlmClient } from "@wikihome/llm";
 import { createWiki, type Wiki } from "llmwiki-core";
 import { ingestWholeDocument, slugify } from "./ingest-document.js";
+export { findBundledPython, pythonCandidates } from "./markitdown.js";
+export {
+  convertPdfToTemp,
+  convertPdfWithPdf2mdLayout,
+  isPdfExtension,
+  placePdfAssetsBesidePage,
+  PDF2MD_CONVERT_MS,
+} from "./pdf2md-layout.js";
 
 type WikiHandle = Wiki & {
   close(): void;

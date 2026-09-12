@@ -47,6 +47,56 @@ fn prepend_path(cmd: &mut Command, dir: &Path) {
     }
 }
 
+fn find_python_near(start: &Path) -> Option<PathBuf> {
+    for dir in start.ancestors().take(10) {
+        let candidates = [
+            dir.join("python").join("python.exe"),
+            dir.join("runtime").join("python").join("python.exe"),
+            dir.join("resources")
+                .join("runtime")
+                .join("python")
+                .join("python.exe"),
+            dir.join("apps")
+                .join("desktop")
+                .join("src-tauri")
+                .join("resources")
+                .join("runtime")
+                .join("python")
+                .join("python.exe"),
+        ];
+        for py in candidates {
+            if py.is_file() {
+                return Some(win_normal_path(&py));
+            }
+        }
+    }
+    None
+}
+
+fn attach_python(cmd: &mut Command, search_from: &Path) {
+    let python = if search_from
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.eq_ignore_ascii_case("python.exe"))
+        && search_from.is_file()
+    {
+        win_normal_path(search_from)
+    } else {
+        match find_python_near(search_from) {
+            Some(p) => p,
+            None => return,
+        }
+    };
+    cmd.env("WIKIHOME_PYTHON", &python);
+    cmd.env("PYTHONNOUSERSITE", "1");
+    cmd.env_remove("PYTHONHOME");
+    cmd.env_remove("PYTHONPATH");
+    if let Some(dir) = python.parent() {
+        prepend_path(cmd, dir);
+        cmd.env("PYTHONHOME", dir);
+    }
+}
+
 fn skip_walk_dir(name: &str) -> bool {
     matches!(
         name.to_ascii_lowercase().as_str(),
@@ -89,10 +139,9 @@ fn make_bundled_command(node: &Path, cli: &Path) -> Command {
     prepend_path(&mut cmd, &runtime_dir);
     let python = runtime_dir.join("python").join("python.exe");
     if python.exists() {
-        cmd.env("WIKIHOME_PYTHON", &python);
-        if let Some(dir) = python.parent() {
-            prepend_path(&mut cmd, dir);
-        }
+        attach_python(&mut cmd, &python);
+    } else {
+        attach_python(&mut cmd, &runtime_dir);
     }
     cmd.env(
         "WIKIHOME_MOCK",
@@ -248,17 +297,22 @@ fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
         if c.extension().and_then(|e| e.to_str()) == Some("js") && c.exists() {
             let mut cmd = Command::new("node.exe");
             cmd.arg(c);
+            cmd.env("PYTHONNOUSERSITE", "1");
             if let Some(root) = c
                 .ancestors()
                 .find(|p| p.join("pnpm-workspace.yaml").exists())
             {
                 cmd.current_dir(root);
+                attach_python(&mut cmd, root);
+            } else if let Some(parent) = c.parent() {
+                attach_python(&mut cmd, parent);
             }
             cmd.env(
                 "WIKIHOME_MOCK",
                 std::env::var("WIKIHOME_MOCK").unwrap_or_else(|_| "0".into()),
             );
             cmd.env("NODE_USE_ENV_PROXY", "1");
+            cmd.env_remove("NODE_OPTIONS");
             return Ok(cmd);
         }
         if c.exists() {

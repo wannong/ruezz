@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-09-12
+
+### Changed
+
+- PDF ingest and Agent `convert_to_markdown` now use the pdf2md-layout converter (`pymupdf4llm` + glyph repair + figure/formula crops). Office/HTML still use MarkItDown. Figures and equations land beside the Markdown as `{stem}_assets/`.
+
+### Fixed
+
+- PDF / Office import looks for WikiHome's bundled Python and retries if the first interpreter is missing MarkItDown, instead of failing with “未安装 Python 包”
+
 ## [1.0.6] - 2026-09-11
 
 ### Added
@@ -182,7 +192,8 @@ WikiHome’s first feature-complete release: local wiki, graph, and a vertical A
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.6...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.7...HEAD
+[1.0.7]: https://github.com/wikihome/wikihome/releases/tag/v1.0.7
 [1.0.6]: https://github.com/wikihome/wikihome/releases/tag/v1.0.6
 [1.0.5]: https://github.com/wikihome/wikihome/releases/tag/v1.0.5
 [1.0.4]: https://github.com/wikihome/wikihome/releases/tag/v1.0.4

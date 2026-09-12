@@ -1,5 +1,7 @@
+import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const CONVERT_MS = 120_000;
 
@@ -19,10 +21,59 @@ export function isConvertibleExtension(ext: string): boolean {
   return CONVERTIBLE_EXTENSIONS.has(ext.toLowerCase());
 }
 
+function pythonExeName(): string {
+  return process.platform === "win32" ? "python.exe" : "python3";
+}
+
+/** WikiHome-bundled CPython with MarkItDown, next to the sidecar/runtime. */
+export function findBundledPython(): string | undefined {
+  const exe = pythonExeName();
+  const seen = new Set<string>();
+  const hits: string[] = [];
+  const add = (candidate: string) => {
+    const abs = path.resolve(candidate);
+    const key = abs.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    hits.push(abs);
+  };
+
+  const execDir = path.dirname(process.execPath);
+  add(path.join(execDir, "python", exe));
+  add(path.join(execDir, exe));
+
+  const starts = [process.cwd(), execDir];
+  try {
+    starts.push(path.dirname(fileURLToPath(import.meta.url)));
+  } catch {
+    /* bundled without import.meta.url */
+  }
+  if (process.env.WIKIHOME_PYTHON?.trim()) {
+    starts.push(path.dirname(process.env.WIKIHOME_PYTHON.trim()));
+  }
+
+  for (const start of starts) {
+    let dir = path.resolve(start);
+    for (let i = 0; i < 12; i += 1) {
+      add(path.join(dir, "python", exe));
+      add(path.join(dir, "runtime", "python", exe));
+      add(path.join(dir, "resources", "runtime", "python", exe));
+      add(path.join(dir, "apps", "desktop", "src-tauri", "resources", "runtime", "python", exe));
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+
+  return hits.find((file) => existsSync(file));
+}
+
 export function pythonCandidates(): string[] {
-  const fromEnv = process.env.WIKIHOME_PYTHON?.trim();
   const bins: string[] = [];
+  const fromEnv = process.env.WIKIHOME_PYTHON?.trim();
   if (fromEnv) bins.push(fromEnv);
+  const bundled = findBundledPython();
+  if (bundled) bins.push(bundled);
   if (process.platform === "win32") bins.push("python", "py");
   else bins.push("python3", "python");
   return [...new Set(bins)];
@@ -46,6 +97,7 @@ export async function convertFileToMarkdown(
 ): Promise<void> {
   const args = [inputAbs, "-o", outputAbs];
   let lastError = "";
+  let sawMissingModule = false;
   for (const bin of pythonCandidates()) {
     const moduleArgs = isPyLauncher(bin) ? ["-3", "-m", "markitdown", ...args] : ["-m", "markitdown", ...args];
     try {
@@ -53,11 +105,10 @@ export async function convertFileToMarkdown(
       if (result.code === 0) return;
       lastError = result.stderr.trim() || result.stdout.trim() || `exit ${result.code}`;
       if (/no module named markitdown/i.test(lastError)) {
-        throw new Error(
-          '未安装 Python 包 markitdown。请运行：python -m pip install "markitdown[pdf,docx,pptx,xlsx]"',
-        );
+        sawMissingModule = true;
+        continue;
       }
-      throw new Error(`MarkItDown 转换失败：${lastError}`);
+      continue;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (/aborted|timeout/i.test(message)) {
@@ -67,8 +118,13 @@ export async function convertFileToMarkdown(
         lastError = `找不到 ${bin}`;
         continue;
       }
-      throw err instanceof Error ? err : new Error(message);
+      lastError = message;
     }
+  }
+  if (sawMissingModule) {
+    throw new Error(
+      "未找到带 MarkItDown 的 Python。请关掉 WikiHome 后用带 resources\\runtime\\python 的绿色包或安装包打开，不要只拷贝 WikiHome.exe。",
+    );
   }
   throw new Error(`MarkItDown 转换失败：${lastError || "未找到 Python"}`);
 }
@@ -77,7 +133,24 @@ function isPyLauncher(bin: string): boolean {
   return /^(?:py|py\.exe)$/i.test(path.basename(bin));
 }
 
-function spawnOnce(
+function spawnEnv(command: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PYTHONIOENCODING: "utf-8",
+    PYTHONUTF8: "1",
+    PYTHONNOUSERSITE: "1",
+  };
+  delete env.PYTHONPATH;
+  const abs = path.isAbsolute(command);
+  if (abs && /python(?:\.exe)?$/i.test(command) && !isPyLauncher(command)) {
+    env.PYTHONHOME = path.dirname(command);
+  } else {
+    delete env.PYTHONHOME;
+  }
+  return env;
+}
+
+export function spawnOnce(
   command: string,
   args: string[],
   signal: AbortSignal | undefined,
@@ -86,7 +159,7 @@ function spawnOnce(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       windowsHide: true,
-      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1", PYTHONNOUSERSITE: "1" },
+      env: spawnEnv(command),
     });
     let stdout = "";
     let stderr = "";

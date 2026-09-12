@@ -1,7 +1,13 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
+import {
+  convertPdfToTemp,
+  isPdfExtension,
+  placePdfAssetsBesidePage,
+} from "@wikihome/engine-llmwiki";
 import { spawn } from "node:child_process";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveInsideVault, toVaultRelative } from "./vault-path.js";
 
@@ -13,7 +19,7 @@ export function createConvertToMarkdownTool(vaultRoot: string): AgentTool {
     name: "convert_to_markdown",
     label: "转为 Markdown",
     description:
-      "用 MarkItDown 把 vault 内的 PDF / Word / PPT / Excel / HTML 等转成一篇 Markdown，写入 raw/sources/。只转写、不拆页。ingest_file 遇到这些格式会自行转换；需要先预览转写结果时再用本工具。",
+      "把 vault 内的文档转成一篇 Markdown，写入 raw/sources/。PDF 走 pdf2md-layout（图/公式资源旁路保存）；Word / PPT / Excel / HTML 等走 MarkItDown。只转写、不拆页。ingest_file 遇到这些格式会自行转换；需要先预览转写结果时再用本工具。",
     parameters: Type.Object({
       filePath: Type.String({ description: "要转换的文件路径（相对于 vault root）" }),
     }),
@@ -28,7 +34,12 @@ export function createConvertToMarkdownTool(vaultRoot: string): AgentTool {
       const outputAbs = defaultMarkdownOutput(vaultRoot, inputAbs);
       await mkdir(path.dirname(outputAbs), { recursive: true });
 
-      await runMarkitdown(inputAbs, outputAbs, signal);
+      const ext = path.extname(inputAbs);
+      if (isPdfExtension(ext)) {
+        await runPdf2md(inputAbs, outputAbs, signal);
+      } else {
+        await runMarkitdown(inputAbs, outputAbs, signal);
+      }
 
       const markdown = await readFile(outputAbs, "utf8");
       if (!markdown.trim()) {
@@ -41,6 +52,7 @@ export function createConvertToMarkdownTool(vaultRoot: string): AgentTool {
       const summary = [
         `已转换为 Markdown：${outputRel}`,
         `源文件：${toVaultRelative(vaultRoot, inputAbs)}`,
+        `引擎：${isPdfExtension(ext) ? "pdf2md-layout" : "MarkItDown"}`,
         `字符数：${markdown.length}`,
         "",
         preview,
@@ -65,10 +77,54 @@ function defaultMarkdownOutput(vaultRoot: string, inputAbs: string): string {
   return candidate;
 }
 
+async function runPdf2md(inputAbs: string, outputAbs: string, signal?: AbortSignal): Promise<void> {
+  const result = await convertPdfToTemp(inputAbs, signal);
+  try {
+    const rewritten = await placePdfAssetsBesidePage({
+      pageAbs: outputAbs,
+      markdown: result.markdown,
+      fromStem: result.stem,
+      assetsDir: result.assetsDir,
+      formulasManifestAbs: result.formulasManifestAbs,
+    });
+    await writeFile(outputAbs, rewritten.endsWith("\n") ? rewritten : `${rewritten}\n`, "utf8");
+  } finally {
+    await rm(result.cleanupDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+function findBundledPython(): string | undefined {
+  const exe = process.platform === "win32" ? "python.exe" : "python3";
+  const seen = new Set<string>();
+  const hits: string[] = [];
+  const add = (candidate: string) => {
+    const abs = path.resolve(candidate);
+    const key = abs.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    hits.push(abs);
+  };
+  const execDir = path.dirname(process.execPath);
+  add(path.join(execDir, "python", exe));
+  let dir = process.cwd();
+  for (let i = 0; i < 12; i += 1) {
+    add(path.join(dir, "python", exe));
+    add(path.join(dir, "runtime", "python", exe));
+    add(path.join(dir, "resources", "runtime", "python", exe));
+    add(path.join(dir, "apps", "desktop", "src-tauri", "resources", "runtime", "python", exe));
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return hits.find((file) => existsSync(file));
+}
+
 function pythonCandidates(): string[] {
-  const fromEnv = process.env.WIKIHOME_PYTHON?.trim();
   const bins: string[] = [];
+  const fromEnv = process.env.WIKIHOME_PYTHON?.trim();
   if (fromEnv) bins.push(fromEnv);
+  const bundled = findBundledPython();
+  if (bundled) bins.push(bundled);
   if (process.platform === "win32") bins.push("python", "py");
   else bins.push("python3", "python");
   return [...new Set(bins)];
@@ -92,11 +148,9 @@ async function runMarkitdown(inputAbs: string, outputAbs: string, signal?: Abort
       if (result.code === 0) return;
       lastError = result.stderr.trim() || result.stdout.trim() || `exit ${result.code}`;
       if (/no module named markitdown/i.test(lastError)) {
-        throw new Error(
-          "未安装 Python 包 markitdown。请运行：python -m pip install \"markitdown[pdf,docx,pptx,xlsx]\"",
-        );
+        continue;
       }
-      throw new Error(`MarkItDown 转换失败：${lastError}`);
+      continue;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (/aborted|timeout/i.test(message)) {
@@ -109,7 +163,25 @@ async function runMarkitdown(inputAbs: string, outputAbs: string, signal?: Abort
       throw err instanceof Error ? err : new Error(message);
     }
   }
-  throw new Error(`MarkItDown 转换失败：${lastError || "未找到 Python"}`);
+  throw new Error(
+    `MarkItDown 转换失败：${lastError || "未找到 Python"}。请关掉 WikiHome 后用带 resources\\runtime\\python 的绿色包打开，不要只拷贝 WikiHome.exe。`,
+  );
+}
+
+function spawnEnv(command: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PYTHONIOENCODING: "utf-8",
+    PYTHONUTF8: "1",
+    PYTHONNOUSERSITE: "1",
+  };
+  delete env.PYTHONPATH;
+  if (path.isAbsolute(command) && /python(?:\.exe)?$/i.test(command) && !isPyLauncher(command)) {
+    env.PYTHONHOME = path.dirname(command);
+  } else {
+    delete env.PYTHONHOME;
+  }
+  return env;
 }
 
 function spawnOnce(
@@ -121,7 +193,7 @@ function spawnOnce(
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       windowsHide: true,
-      env: { ...process.env, PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1", PYTHONNOUSERSITE: "1" },
+      env: spawnEnv(command),
     });
     let stdout = "";
     let stderr = "";

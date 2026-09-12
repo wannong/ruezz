@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 import readline from "node:readline";
+import { findBundledPython } from "@wikihome/engine-llmwiki";
 import { SidecarSession, type RpcRequest } from "./server.js";
+
+const bundledPython = findBundledPython();
+if (bundledPython) {
+  process.env.WIKIHOME_PYTHON = bundledPython;
+}
 
 process.on("uncaughtException", (err) => {
   process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
