@@ -1,5 +1,5 @@
 import { PanelCloseGlyph } from "./iconGlyphs";
-import type { AgentSessionMessage, AgentSessionSummary, GraphDto, PageSummary } from "../api";
+import type { AgentAttachment, AgentSessionMessage, AgentSessionSummary, GraphDto, PageSummary } from "../api";
 import { attachResizeX } from "../lib/pointerResize";
 import type { OutlineItem } from "../lib/outline";
 import type { Theme } from "../theme";
@@ -26,6 +26,7 @@ type RightSidebarProps = {
   pages: PageSummary[];
   sessions: AgentSessionSummary[];
   sessionId: string | null;
+  openSessionIds: string[];
   outline: OutlineItem[];
   pageId: string | null;
   graph: GraphDto | null;
@@ -40,6 +41,9 @@ type RightSidebarProps = {
   modelValue: string;
   modelGroups: Array<{ providerId: string; providerName: string; models: string[] }>;
   mock: boolean;
+  attachments: AgentAttachment[];
+  canAttachCurrent: boolean;
+  currentPageLabel: string;
   graphHops: GraphViewScope;
   onGraphHops: (scope: GraphViewScope) => void;
   onNewChat: () => void;
@@ -47,6 +51,10 @@ type RightSidebarProps = {
   onDeleteSession: (id: string) => void;
   onArchiveSession: (id: string, archived: boolean) => void;
   onSwitchModel: (providerId: string, modelId: string) => void;
+  onAttachCurrent: () => void;
+  onDetachAttachment: (id: string) => void;
+  onRelatedFiles: (session: AgentSessionSummary) => void;
+  onCloseSession: (id: string) => void;
   onResize: (dx: number) => void;
   onCollapse: () => void;
 };
@@ -66,6 +74,7 @@ export function RightSidebar({
   pages,
   sessions,
   sessionId,
+  openSessionIds,
   outline,
   pageId,
   graph,
@@ -89,6 +98,13 @@ export function RightSidebar({
   onDeleteSession,
   onArchiveSession,
   onSwitchModel,
+  attachments,
+  canAttachCurrent,
+  currentPageLabel,
+  onAttachCurrent,
+  onDetachAttachment,
+  onRelatedFiles,
+  onCloseSession,
 }: RightSidebarProps) {
   const aside = (
     <aside className={`sidebar sidebar-right${overlay ? " overlay" : ""}`} style={{ width }}>
@@ -131,7 +147,8 @@ export function RightSidebar({
           busy={busy}
           pages={pages}
           sessions={sessions}
-          sessionId={sessionId}
+           sessionId={sessionId}
+           openSessionIds={openSessionIds}
           onDraft={onDraft}
           onSend={onSend}
           onStop={onStop}
@@ -140,7 +157,14 @@ export function RightSidebar({
           modelMissing={modelMissing}
           modelValue={modelValue}
           modelGroups={modelGroups}
-          mock={mock}
+           mock={mock}
+           attachments={attachments}
+           canAttachCurrent={canAttachCurrent}
+           currentPageLabel={currentPageLabel}
+           onAttachCurrent={onAttachCurrent}
+           onDetach={onDetachAttachment}
+           onRelatedFiles={onRelatedFiles}
+           onCloseSession={onCloseSession}
           onNewChat={onNewChat}
           onSelectSession={onSelectSession}
           onDeleteSession={onDeleteSession}

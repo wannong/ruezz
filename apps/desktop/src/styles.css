@@ -1153,6 +1153,30 @@ textarea:focus {
   border-bottom: 1px solid var(--line);
 }
 
+.agent-session-tabs {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+  overflow-x: auto;
+}
+.agent-session-tabs button {
+  max-width: 130px;
+  overflow: hidden;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-session-tabs button.active,
+.agent-session-tabs button:hover { background: var(--panel-hover); color: var(--text); }
+.agent-session-tab { display: inline-flex; min-width: 0; align-items: center; border-radius: 6px; }
+.agent-session-tab-close { padding: 4px 5px !important; }
+
 .agent-chat-main {
   position: relative;
   flex: 1;
@@ -1347,6 +1371,7 @@ textarea:focus {
 .agent-model-wrap {
   position: relative;
   align-self: flex-start;
+  min-width: 0;
   max-width: 100%;
 }
 
@@ -1420,6 +1445,35 @@ textarea:focus {
   align-items: flex-end;
   gap: 0.45rem;
 }
+
+.agent-input-toolbar { display: flex; align-items: center; gap: 6px; min-width: 0; margin-bottom: 6px; }
+.agent-input-toolbar .agent-model-wrap { flex: 0 1 auto; min-width: 0; max-width: 42%; }
+.agent-attach-current { display: inline-flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; padding: 0.15rem 0.35rem; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--muted); font-size: 0.72rem; cursor: pointer; }
+.agent-attach-current span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-attach-current:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
+.agent-attach-current:disabled { cursor: default; opacity: 0.5; }
+.agent-attachments-wrap { position: relative; }
+.agent-attachments-btn { position: relative; }
+.agent-attachments-count { position: absolute; right: -4px; bottom: -4px; min-width: 1rem; padding: 0 0.2rem; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 0.58rem; line-height: 1.2; text-align: center; }
+.agent-attachments-pop { position: absolute; right: 0; bottom: calc(100% + 0.4rem); z-index: 9; width: min(300px, calc(100vw - 2rem)); max-width: calc(100% + 260px); padding: 0.65rem; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); box-shadow: var(--shadow); }
+.agent-attachments-pop-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem; color: var(--ink); font-size: 0.76rem; }
+.agent-attachments-pop-head span { color: var(--muted); font-size: 0.68rem; }
+.agent-attachment-list { display: grid; gap: 0.25rem; max-height: 180px; overflow: auto; }
+.agent-attachment-row { display: flex; align-items: center; gap: 0.4rem; min-width: 0; padding: 0.35rem 0.4rem; border-radius: 6px; color: var(--muted); font-size: 0.72rem; }
+.agent-attachment-row:hover { background: var(--hover); color: var(--ink); }
+.agent-attachment-row > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-attachment-row button { display: inline-flex; flex: 0 0 auto; border: 0; padding: 0.1rem; background: transparent; color: inherit; cursor: pointer; }
+.agent-attachments-empty { margin: 0.65rem 0; color: var(--muted); font-size: 0.72rem; }
+.agent-attach-pop-action { display: flex; align-items: center; gap: 0.35rem; width: 100%; min-width: 0; margin-top: 0.5rem; padding: 0.4rem 0.45rem; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--ink); text-align: left; font-size: 0.72rem; cursor: pointer; }
+.agent-attach-pop-action span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-attach-pop-action:hover:not(:disabled) { background: var(--hover); }
+.agent-attach-pop-action:disabled { color: var(--muted); cursor: default; opacity: 0.65; }
+
+.related-result-list { display: grid; gap: 6px; }
+.related-result { display: grid; gap: 3px; width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); text-align: left; cursor: pointer; }
+.related-result:hover { border-color: var(--accent); background: var(--panel-hover); }
+.related-result span { color: var(--muted); font-size: 12px; }
+.related-empty { padding: 20px; color: var(--muted); text-align: center; }
 
 .agent-input-row textarea {
   flex: 1;

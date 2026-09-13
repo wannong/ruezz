@@ -12,6 +12,7 @@ import {
 import { createWikiTools } from "./tools/index.js";
 import type {
   AgentPromptResult,
+  AgentAttachment,
   AgentSession,
   AgentStreamEvent,
   ContextBuildOptions,
@@ -112,7 +113,8 @@ export class AgentRunner {
       createdAt: now,
       updatedAt: now,
       model: defaultModel,
-      linkedPageIds: options.currentPageId ? [options.currentPageId] : [],
+      linkedPageIds: [],
+      attachments: [],
       messages: [],
     };
     await this.storage.save(session);
@@ -141,6 +143,37 @@ export class AgentRunner {
    */
   async listSessions() {
     return this.storage.list();
+  }
+
+  async attachSession(sessionId: string, options: { id: string; kind?: "page" | "source"; label?: string; path?: string }): Promise<AgentSession | null> {
+    const session = await this.storage.load(sessionId);
+    if (!session) return null;
+    const attachments = session.attachments ?? [];
+    if (!attachments.some((item) => item.id === options.id)) {
+      const attachment: AgentAttachment = {
+        id: options.id,
+        kind: options.kind ?? "page",
+        label: options.label ?? options.id,
+        path: options.path,
+        attachedAt: new Date().toISOString(),
+      };
+      session.attachments = [...attachments, attachment];
+      if (attachment.kind === "page" && !session.linkedPageIds.includes(attachment.id)) {
+        session.linkedPageIds.push(attachment.id);
+      }
+      session.updatedAt = new Date().toISOString();
+      await this.storage.save(session);
+    }
+    return session;
+  }
+
+  async detachSession(sessionId: string, attachmentId: string): Promise<AgentSession | null> {
+    const session = await this.storage.load(sessionId);
+    if (!session) return null;
+    session.attachments = (session.attachments ?? []).filter((item) => item.id !== attachmentId);
+    session.updatedAt = new Date().toISOString();
+    await this.storage.save(session);
+    return session;
   }
 
   /**
@@ -180,15 +213,18 @@ export class AgentRunner {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
-    const currentPageId = contextOptions?.currentPageId;
+    const attachedPageIds = (session.attachments ?? [])
+      .filter((attachment) => attachment.kind === "page")
+      .map((attachment) => attachment.id);
     const graphDepth = Number.isFinite(contextOptions?.graphDepth)
       ? Math.max(0, Math.min(3, Math.floor(contextOptions!.graphDepth!)))
       : 0;
     let neighborLine = "";
-    if (currentPageId && graphDepth > 0) {
+    const graphPageId = attachedPageIds[0];
+    if (graphPageId && graphDepth > 0) {
       try {
         const graph = await this.engine.getGraph(this.vaultRoot);
-        const neighborIds = collectNeighborIds(graph, currentPageId, graphDepth);
+        const neighborIds = collectNeighborIds(graph, graphPageId, graphDepth);
         if (neighborIds.length > 0) {
           neighborLine = `\n图谱 ${graphDepth} 跳邻居（仅 ID，无正文）：${neighborIds
             .map((id) => `[[${id}]]`)
@@ -202,8 +238,11 @@ export class AgentRunner {
       this.skills,
       selectSkillsForMessage(message, this.skills),
     );
-    const pageContext = currentPageId
-      ? `用户当前打开的页面是 [[${currentPageId}]]。需要正文、邻居或检索结果时请自行调用工具。${neighborLine}`
+    const attachedFiles = (session.attachments ?? []).map((attachment) =>
+      `${attachment.kind === "page" ? "页面" : "文件"}：${attachment.label}，定位：${attachment.id}${attachment.path ? `，路径：${attachment.path}` : ""}`,
+    );
+    const pageContext = attachedFiles.length > 0
+      ? `用户已明确提供以下资料作为本轮上下文：\n${attachedFiles.join("\n")}\n这些资料不是待用户补充的信息。请先使用对应工具读取资料正文，再回答或执行任务；不要反问用户资料位置。${neighborLine}`
       : "";
     const fullSystemPrompt = [SYSTEM_PROMPT, skillBlock, pageContext].filter(Boolean).join("\n\n");
 
@@ -420,9 +459,7 @@ export class AgentRunner {
 
     // Update linked pages
     const allLinkedPages = new Set(session.linkedPageIds);
-    if (contextOptions?.currentPageId) {
-      allLinkedPages.add(contextOptions.currentPageId);
-    }
+    attachedPageIds.forEach((id) => allLinkedPages.add(id));
     sources.forEach((s) => allLinkedPages.add(s));
     session.linkedPageIds = Array.from(allLinkedPages);
 

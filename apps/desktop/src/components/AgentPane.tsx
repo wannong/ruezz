@@ -1,6 +1,6 @@
-import { Plus } from "lucide-react";
+import { Paperclip, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AgentSessionMessage, AgentSessionSummary, PageSummary } from "../api";
+import type { AgentAttachment, AgentSessionMessage, AgentSessionSummary, PageSummary } from "../api";
 import wikihomeIcon from "../assets/wikihome-icon.svg";
 import { parseModelSwitchKey } from "../lib/llmProviders";
 import { loadPref, savePref } from "../lib/prefs";
@@ -29,11 +29,15 @@ type AgentPaneProps = {
   pages: PageSummary[];
   sessions: AgentSessionSummary[];
   sessionId: string | null;
+  openSessionIds: string[];
   modelLabel: string;
   modelMissing: boolean;
   modelValue: string;
   modelGroups: Array<{ providerId: string; providerName: string; models: string[] }>;
   mock: boolean;
+  attachments: AgentAttachment[];
+  canAttachCurrent: boolean;
+  currentPageLabel: string;
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
@@ -43,6 +47,10 @@ type AgentPaneProps = {
   onSend: () => void;
   onStop: () => void;
   onOpen: (id: string) => void;
+  onAttachCurrent: () => void;
+  onDetach: (id: string) => void;
+  onRelatedFiles: (session: AgentSessionSummary) => void;
+  onCloseSession: (id: string) => void;
 };
 
 function messageKey(message: AgentSessionMessage, index: number): string {
@@ -95,11 +103,15 @@ export function AgentPane({
   pages,
   sessions,
   sessionId,
+  openSessionIds,
   modelLabel,
   modelMissing,
   modelValue,
   modelGroups,
   mock,
+  attachments,
+  canAttachCurrent,
+  currentPageLabel,
   onNewChat,
   onSelectSession,
   onDeleteSession,
@@ -109,12 +121,17 @@ export function AgentPane({
   onSend,
   onStop,
   onOpen,
+  onAttachCurrent,
+  onDetach,
+  onRelatedFiles,
+  onCloseSession,
 }: AgentPaneProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [sessionMenu, setSessionMenu] = useState<{
     x: number;
     y: number;
@@ -159,6 +176,13 @@ export function AgentPane({
   return (
     <div className="agent-pane agent-chat">
       <div className="agent-chat-header">
+        <div className="agent-session-tabs" role="tablist" aria-label="已打开会话">
+          {openSessionIds.map((id) => {
+            const session = sessions.find((item) => item.id === id);
+            if (!session) return null;
+            return <div key={id} className={`agent-session-tab${id === sessionId ? " active" : ""}`}><button type="button" role="tab" aria-selected={id === sessionId} onClick={() => onSelectSession(id)}>{session.title || "新对话"}</button><button type="button" className="agent-session-tab-close" aria-label={`关闭 ${session.title || "新对话"}`} onClick={() => onCloseSession(id)}>×</button></div>;
+          })}
+        </div>
         <button
           type="button"
           className={`agent-round-btn${historyOpen ? " active" : ""}`}
@@ -214,7 +238,7 @@ export function AgentPane({
                     onSelectSession(session.id);
                     setHistoryOpen(false);
                   }}
-                  onContextMenu={(event) => {
+                   onContextMenu={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
                     setSessionMenu({
@@ -223,7 +247,7 @@ export function AgentPane({
                       id: session.id,
                       archived: false,
                     });
-                  }}
+                   }}
                 >
                   <span className="agent-session-title">{session.title || "新对话"}</span>
                   <span className="agent-session-meta">{formatSessionTime(session.updatedAt)}</span>
@@ -323,6 +347,7 @@ export function AgentPane({
                 attachResizeY(e, (dy) => setComposerHeight((h) => clampComposer(h - dy)))
               }
             />
+            <div className="agent-input-toolbar">
             <div className="agent-model-wrap">
               <button
                 type="button"
@@ -365,6 +390,19 @@ export function AgentPane({
               </Presence>
             </div>
 
+            <button
+              type="button"
+              className="agent-attach-current"
+              disabled={!canAttachCurrent || busy}
+              title={canAttachCurrent ? `附加当前文件：${currentPageLabel}` : "当前文件已附加或没有打开文件"}
+              onClick={onAttachCurrent}
+            >
+              <Paperclip size={13} />
+              <span>{canAttachCurrent ? currentPageLabel : "当前文件已附加"}</span>
+            </button>
+
+            </div>
+
             <div className="agent-input-row">
               <textarea
                 ref={inputRef}
@@ -381,6 +419,56 @@ export function AgentPane({
                 style={{ height: composerHeight }}
               />
               <div className="agent-input-actions">
+                <div className="agent-attachments-wrap">
+                  <button
+                    type="button"
+                    className={`agent-round-btn agent-attachments-btn${attachmentsOpen ? " active" : ""}`}
+                    title={attachments.length ? `已附加 ${attachments.length} 个文件` : "附件"}
+                    aria-label={attachments.length ? `已附加 ${attachments.length} 个文件` : "附件"}
+                    aria-expanded={attachmentsOpen}
+                    onClick={() => {
+                      setAttachmentsOpen((open) => !open);
+                      setUsageOpen(false);
+                      setModelOpen(false);
+                    }}
+                  >
+                    <Paperclip size={15} />
+                    {attachments.length > 0 && <span className="agent-attachments-count">{attachments.length}</span>}
+                  </button>
+                  <Presence open={attachmentsOpen} duration={PRESENCE_MS.fast}>
+                    <div className="agent-attachments-pop" role="dialog" aria-label="已附加文献">
+                      <div className="agent-attachments-pop-head">
+                        <strong>已附加文献</strong>
+                        <span>{attachments.length} 个</span>
+                      </div>
+                      {attachments.length > 0 ? (
+                        <div className="agent-attachment-list">
+                          {attachments.map((attachment) => (
+                            <div key={attachment.id} className="agent-attachment-row" title={attachment.id}>
+                              <Paperclip size={13} />
+                              <span>{attachment.label}</span>
+                              <button type="button" aria-label={`移除 ${attachment.label}`} onClick={() => onDetach(attachment.id)}>
+                                <X size={13} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="agent-attachments-empty">当前会话还没有附加文献</p>
+                      )}
+                      <button
+                        type="button"
+                        className="agent-attach-pop-action"
+                        disabled={!canAttachCurrent || busy}
+                        title={canAttachCurrent ? `附加当前文件：${currentPageLabel}` : "当前文件已附加或没有打开文件"}
+                        onClick={onAttachCurrent}
+                      >
+                        <Paperclip size={13} />
+                        <span>{canAttachCurrent ? `附加当前文件：${currentPageLabel}` : "没有可附加的当前文件"}</span>
+                      </button>
+                    </div>
+                  </Presence>
+                </div>
                 <div className="agent-usage-wrap">
                   <button
                     type="button"
@@ -459,6 +547,14 @@ export function AgentPane({
                   danger: true,
                   disabled: busy && sessionMenu.id === sessionId,
                   onClick: () => onDeleteSession(sessionMenu.id),
+                },
+                {
+                  type: "item",
+                  label: "查看相关文件",
+                  onClick: () => {
+                    const session = sessions.find((item) => item.id === sessionMenu.id);
+                    if (session) onRelatedFiles(session);
+                  },
                 },
               ]
             : []

@@ -18,6 +18,7 @@ type NoteViewProps = {
   onSave: () => void;
   onOpen: (id: string) => void;
   onLink: (range: { start: number; end: number }) => void;
+  assetRoot?: string;
 };
 
 export function NoteView({
@@ -32,6 +33,7 @@ export function NoteView({
   onSave,
   onOpen,
   onLink,
+  assetRoot,
 }: NoteViewProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; start: number; end: number } | null>(null);
@@ -140,12 +142,12 @@ export function NoteView({
             }}
           />
           <div className="note-edit-preview">
-            <MarkdownPreview markdown={markdownBody(draft)} pages={pages} onOpen={onOpen} />
+            <MarkdownPreview markdown={markdownBody(draft)} pages={pages} onOpen={onOpen} assetRoot={assetRoot} basePath={page.path} />
           </div>
         </div>
       ) : (
         <div className="note-read">
-          <MarkdownPreview markdown={page.body} pages={pages} onOpen={onOpen} />
+          <MarkdownPreview markdown={page.body} pages={pages} onOpen={onOpen} assetRoot={assetRoot} basePath={page.path} />
         </div>
       )}
       <ContextMenu

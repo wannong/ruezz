@@ -31,6 +31,7 @@ type LeftSidebarProps = {
   onCreateFolder: (folderId: string, name: string) => void;
   onReveal: (kind: "root" | "page" | "folder", id?: string) => void;
   onLink: (pageId: string) => void;
+  onRelatedSessions?: (pageId: string, label: string) => void;
   onPickLink: (toId: string) => void;
   onCloseLinkPicker: () => void;
   onError: (message: string) => void;
@@ -56,6 +57,7 @@ export function LeftSidebar({
   onCreateFolder,
   onReveal,
   onLink,
+  onRelatedSessions,
   onPickLink,
   onCloseLinkPicker,
   onError,
@@ -109,7 +111,8 @@ export function LeftSidebar({
           onCreateNote={onCreateNote}
           onCreateFolder={onCreateFolder}
           onReveal={onReveal}
-          onLink={onLink}
+           onLink={onLink}
+           onRelatedSessions={onRelatedSessions}
         />
       ) : (
         <SearchPane onOpen={onOpen} onError={onError} />

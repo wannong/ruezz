@@ -31,6 +31,7 @@ type FileTreeProps = {
   onCreateFolder: (folderId: string, name: string) => void;
   onReveal: (kind: "root" | "page" | "folder", id?: string) => void;
   onLink?: (pageId: string) => void;
+  onRelatedSessions?: (pageId: string, label: string) => void;
 };
 
 export function FileTree({
@@ -47,6 +48,7 @@ export function FileTree({
   onCreateFolder,
   onReveal,
   onLink,
+  onRelatedSessions,
 }: FileTreeProps) {
   const tree = useMemo(() => buildFileTree(pages, folders), [pages, folders]);
   const taken = useMemo(() => {
@@ -125,6 +127,14 @@ export function FileTree({
           label: "链接",
           disabled,
           onClick: () => onLink(target.node.page!.id),
+        });
+      }
+      if (target.node.page && onRelatedSessions) {
+        items.push({
+          type: "item",
+          label: "查看相关会话",
+          disabled,
+          onClick: () => onRelatedSessions(target.node.page!.id, target.node.page!.title ?? target.node.name),
         });
       }
       items.push({ type: "sep" });

@@ -188,6 +188,7 @@ export type LintIssue = z.infer<typeof LintIssueSchema>;
 
 export const IngestResultSchema = z.object({
   files: z.array(z.string()),
+  pageIds: z.array(z.string()).default([]),
   reviews: z.number().optional(),
   sourcePath: z.string().optional(),
 });

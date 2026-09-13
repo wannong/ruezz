@@ -108,6 +108,7 @@ export class SessionStorage {
             model: session.model,
             messageCount: session.messages.length,
             linkedPageIds: session.linkedPageIds,
+            attachments: session.attachments ?? [],
             archived: Boolean(session.archived),
           });
         } catch {

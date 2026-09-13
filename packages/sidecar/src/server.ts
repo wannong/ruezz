@@ -408,6 +408,26 @@ export class SidecarSession {
         if (!session) throw new Error(`Session not found: ${params.id ?? params.sessionId}`);
         return { session };
       }
+      case "agent_session_attach": {
+        const runner = await this.getAgentRunner();
+        const session = await runner.attachSession(String(params.sessionId ?? params.id ?? ""), {
+          id: String(params.attachmentId ?? params.pageId ?? params.path ?? ""),
+          kind: params.kind === "source" ? "source" : "page",
+          label: params.label == null ? undefined : String(params.label),
+          path: params.path == null ? undefined : String(params.path),
+        });
+        if (!session) throw new Error(`Session not found: ${params.sessionId ?? params.id}`);
+        return { session };
+      }
+      case "agent_session_detach": {
+        const runner = await this.getAgentRunner();
+        const session = await runner.detachSession(
+          String(params.sessionId ?? params.id ?? ""),
+          String(params.attachmentId ?? params.pageId ?? ""),
+        );
+        if (!session) throw new Error(`Session not found: ${params.sessionId ?? params.id}`);
+        return { session };
+      }
       case "agent_session_delete": {
         const runner = await this.getAgentRunner();
         const deleted = await runner.deleteSession(String(params.id ?? params.sessionId ?? ""));

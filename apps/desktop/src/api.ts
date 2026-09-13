@@ -98,8 +98,17 @@ export type AgentSession = {
   updatedAt: string;
   model: { provider: string; modelId: string };
   linkedPageIds: string[];
+  attachments: AgentAttachment[];
   archived?: boolean;
   messages: AgentSessionMessage[];
+};
+
+export type AgentAttachment = {
+  id: string;
+  kind: "page" | "source";
+  label: string;
+  path?: string;
+  attachedAt: string;
 };
 
 export type AgentSessionSummary = {
@@ -110,6 +119,7 @@ export type AgentSessionSummary = {
   model: { provider: string; modelId: string };
   messageCount: number;
   linkedPageIds: string[];
+  attachments?: AgentAttachment[];
   archived?: boolean;
 };
 
@@ -271,6 +281,10 @@ export const api = {
   agentSessionCreate: (opts?: { title?: string; currentPageId?: string }) =>
     rpc<{ session: AgentSession }>("agent_session_create", opts ?? {}),
   agentSessionGet: (id: string) => rpc<{ session: AgentSession }>("agent_session_get", { id }),
+  agentSessionAttach: (sessionId: string, attachment: Omit<AgentAttachment, "attachedAt">) =>
+    rpc<{ session: AgentSession }>("agent_session_attach", { sessionId, ...attachment }),
+  agentSessionDetach: (sessionId: string, attachmentId: string) =>
+    rpc<{ session: AgentSession }>("agent_session_detach", { sessionId, attachmentId }),
   agentSessionDelete: (id: string) => rpc<{ ok: boolean }>("agent_session_delete", { id }),
   agentSessionArchive: (id: string, archived = true) =>
     rpc<{ session: AgentSession }>("agent_session_archive", { id, archived }),

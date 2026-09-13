@@ -150,6 +150,7 @@ export async function ingestWholeDocument(opts: {
 
     return {
       files: [wikiRel],
+      pageIds: [pageId],
       reviews: 0,
       sourcePath: path.relative(absRoot, archivedAbs).split(path.sep).join("/"),
     };

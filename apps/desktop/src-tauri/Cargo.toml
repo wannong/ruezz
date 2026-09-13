@@ -1,6 +1,6 @@
 [package]
 name = "wikihome"
-version = "1.0.7"
+version = "1.0.8"
 description = "WikiHome desktop shell"
 authors = ["WikiHome Contributors"]
 edition = "2021"
@@ -13,7 +13,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }

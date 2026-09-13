@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-09-13
+
+### Added
+
+- Explicit Agent file attachments with a compact attachment panel and related-session/file navigation.
+- Automatic Agent internalization workflow after importing documents.
+- Up to three independently maintained Agent conversation tabs.
+
+### Changed
+
+- Graph preview labels now scale with graph zoom.
+- Markdown image references resolve relative to the current page and load local vault assets in the desktop app.
+
+### Fixed
+
+- Agent tab order no longer changes when a background session receives an update.
+- Imported-document internalization now exposes its progress and attached source pages to the Agent.
+
 ## [1.0.7] - 2026-09-12
 
 ### Changed
@@ -192,7 +210,8 @@ WikiHome’s first feature-complete release: local wiki, graph, and a vertical A
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.7...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.8...HEAD
+[1.0.8]: https://github.com/wikihome/wikihome/releases/tag/v1.0.8
 [1.0.7]: https://github.com/wikihome/wikihome/releases/tag/v1.0.7
 [1.0.6]: https://github.com/wikihome/wikihome/releases/tag/v1.0.6
 [1.0.5]: https://github.com/wikihome/wikihome/releases/tag/v1.0.5

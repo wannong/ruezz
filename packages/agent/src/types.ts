@@ -37,6 +37,14 @@ export type SessionMessage =
       timestamp: number;
     };
 
+export interface AgentAttachment {
+  id: string;
+  kind: "page" | "source";
+  label: string;
+  path?: string;
+  attachedAt: string;
+}
+
 /**
  * Agent session state persisted to disk.
  */
@@ -56,6 +64,7 @@ export interface AgentSession {
   };
   /** Wiki pages linked to this session (current page ∪ tool-accessed pages) */
   linkedPageIds: string[];
+  attachments: AgentAttachment[];
   /** Hidden from the main session list when true */
   archived?: boolean;
   /** Conversation history */
@@ -76,6 +85,7 @@ export interface AgentSessionSummary {
   };
   messageCount: number;
   linkedPageIds: string[];
+  attachments: AgentAttachment[];
   archived?: boolean;
 }
 

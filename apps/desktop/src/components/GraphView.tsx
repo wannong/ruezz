@@ -193,7 +193,8 @@ export function GraphView({
               ctx.stroke();
             }
             if (compact || globalScale > 1.1) {
-              const fontSize = 12 / globalScale;
+              // Compact graph labels live in graph space so they shrink with the preview.
+              const fontSize = compact ? Math.max(4, Math.min(12, 12 * globalScale)) : 12 / globalScale;
               ctx.font = `${focused ? "600 " : ""}${fontSize}px sans-serif`;
               ctx.fillStyle = colors.ink;
               ctx.fillText(n.label, x + r + 3, y + fontSize / 3);
