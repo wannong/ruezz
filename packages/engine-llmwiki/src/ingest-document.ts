@@ -74,17 +74,32 @@ export function buildSourcePage(opts: {
 export async function ingestWholeDocument(opts: {
   root: string;
   filePath: string;
+  allowExternalSource?: boolean;
   reindex: () => Promise<void>;
 }): Promise<IngestResult> {
   const absRoot = path.resolve(opts.root);
-  const absFile = path.resolve(opts.filePath);
-  const info = await fs.stat(absFile).catch(() => null);
+  const absFile = path.isAbsolute(opts.filePath)
+    ? path.resolve(opts.filePath)
+    : path.resolve(absRoot, opts.filePath);
+  const info = await fs.lstat(absFile).catch(() => null);
   if (!info?.isFile()) {
     throw new Error(`找不到文件：${opts.filePath}`);
   }
+  const realRoot = await fs.realpath(absRoot);
+  const realFile = await fs.realpath(absFile);
+  if (!isUnderDir(realRoot, realFile) && !opts.allowExternalSource) {
+    throw new Error("读取知识库外文件需要用户审核");
+  }
 
-  await fs.mkdir(path.join(absRoot, "raw", "sources"), { recursive: true });
-  await fs.mkdir(path.join(absRoot, "wiki", "sources"), { recursive: true });
+  const rawDir = path.join(absRoot, "raw", "sources");
+  const wikiSourcesDir = path.join(absRoot, "wiki", "sources");
+  await fs.mkdir(rawDir, { recursive: true });
+  await fs.mkdir(wikiSourcesDir, { recursive: true });
+  const realRawDir = await fs.realpath(rawDir);
+  const realWikiSourcesDir = await fs.realpath(wikiSourcesDir);
+  if (!isUnderDir(realRoot, realRawDir) || !isUnderDir(realRoot, realWikiSourcesDir)) {
+    throw new Error("知识库目录通过链接越出了 vault");
+  }
 
   const archivedAbs = await archiveIntoSources(absRoot, absFile);
   const loaded = await loadDocumentContent(archivedAbs);
@@ -104,7 +119,7 @@ export async function ingestWholeDocument(opts: {
 
     const stem = path.basename(archivedAbs).replace(/\.[^.]+$/u, "") || "source";
     const pageId = await uniqueSourcePageId(absRoot, slugify(stem), originalId);
-    const pageAbs = path.join(absRoot, "wiki", "sources", `${pageId.split("/").pop()}.md`);
+    const pageAbs = path.join(wikiSourcesDir, `${pageId.split("/").pop()}.md`);
     await fs.mkdir(path.dirname(pageAbs), { recursive: true });
 
     if (loaded.pdf) {
@@ -147,7 +162,11 @@ export async function ingestWholeDocument(opts: {
 
 async function archiveIntoSources(root: string, absFile: string): Promise<string> {
   const rawDir = path.join(root, "raw", "sources");
-  if (isUnderDir(rawDir, absFile)) return absFile;
+  const realRaw = await fs.realpath(rawDir);
+  const realFile = await fs.realpath(absFile);
+  if (isWithinDir(root, realRaw) && isUnderDir(realRaw, realFile)) {
+    return realFile;
+  }
   const dest = await uniqueFilePath(rawDir, path.basename(absFile));
   await fs.copyFile(absFile, dest);
   return dest;
@@ -216,7 +235,7 @@ function citesSource(sources: string[], identity: string): boolean {
   });
 }
 
-async function uniqueFilePath(dir: string, filename: string): Promise<string> {
+export async function uniqueFilePath(dir: string, filename: string): Promise<string> {
   const first = path.join(dir, filename);
   if (!(await pathExists(first))) return first;
   const ext = path.extname(filename);
@@ -257,6 +276,11 @@ async function appendIndexRow(root: string, pageId: string, summary: string, day
 function isUnderDir(dir: string, file: string): boolean {
   const rel = path.relative(path.resolve(dir), path.resolve(file));
   return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+function isWithinDir(dir: string, file: string): boolean {
+  const rel = path.relative(path.resolve(dir), path.resolve(file));
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
 async function pathExists(target: string): Promise<boolean> {

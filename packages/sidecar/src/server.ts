@@ -24,6 +24,14 @@ export type RpcResponse = {
   error?: { message: string };
 };
 
+export type RpcContext = {
+  allowExternalImport?: boolean;
+  exposeSecrets?: boolean;
+};
+
+const MAX_AGENT_MESSAGE_CHARS = 32_000;
+const MAX_INGEST_TEXT_CHARS = 2_000_000;
+
 export class SidecarSession {
   private settings: VaultSettings;
   private engine: WikiEngine;
@@ -169,6 +177,24 @@ export class SidecarSession {
     return { ...this.settings };
   }
 
+  private publicSettings(): VaultSettings {
+    return {
+      ...this.settings,
+      apiKey: "",
+      providers: this.settings.providers.map((provider) => ({ ...provider, apiKey: "" })),
+    };
+  }
+
+  private settingsPatchWithoutSecrets(patch: Partial<VaultSettings>): Partial<VaultSettings> {
+    if (patch.apiKey) throw new Error("HTTP 模式不能设置 API Key，请使用桌面应用或环境变量");
+    const providers = patch.providers?.map((provider) => {
+      if (provider.apiKey) throw new Error("HTTP 模式不能设置 API Key，请使用桌面应用或环境变量");
+      const current = this.settings.providers.find((item) => item.id === provider.id);
+      return { ...provider, apiKey: current?.apiKey ?? "" };
+    });
+    return { ...patch, apiKey: this.settings.apiKey, ...(providers ? { providers } : {}) };
+  }
+
   setSettings(patch: Partial<VaultSettings>): VaultSettings {
     const oldSettings = { ...this.settings };
     this.settings = ensureLlmProviders(
@@ -218,9 +244,17 @@ export class SidecarSession {
   async handle(
     req: RpcRequest,
     emit?: (event: AgentStreamEvent) => void,
+    context: RpcContext = {},
   ): Promise<RpcResponse> {
     try {
-      const result = await this.dispatch(req.method, req.params ?? {}, emit);
+      if (!req || (typeof req.id !== "string" && typeof req.id !== "number")) {
+        throw new Error("invalid request id");
+      }
+      if (typeof req.method !== "string" || !req.method) throw new Error("invalid request method");
+      if (req.params != null && (typeof req.params !== "object" || Array.isArray(req.params))) {
+        throw new Error("invalid request params");
+      }
+      const result = await this.dispatch(req.method, req.params ?? {}, emit, context);
       return { id: req.id, result };
     } catch (err) {
       return {
@@ -234,12 +268,19 @@ export class SidecarSession {
     method: string,
     params: Record<string, unknown>,
     emit?: (event: AgentStreamEvent) => void,
+    context: RpcContext = {},
   ): Promise<unknown> {
     switch (method) {
       case "settings_get":
-        return this.getSettings();
-      case "settings_set":
-        return this.setSettings(params as Partial<VaultSettings>);
+        return context.exposeSecrets ? this.getSettings() : this.publicSettings();
+      case "settings_set": {
+        const updated = this.setSettings(
+          context.exposeSecrets
+            ? (params as Partial<VaultSettings>)
+            : this.settingsPatchWithoutSecrets(params as Partial<VaultSettings>),
+        );
+        return context.exposeSecrets ? updated : this.publicSettings();
+      }
       case "vault_init": {
         const root = String(params.root ?? this.settings.vaultPath);
         if (!root) throw new Error("root 必填");
@@ -250,9 +291,13 @@ export class SidecarSession {
       case "vault_ingest": {
         const root = this.requireVault();
         if (params.text != null) {
-          return this.engine.ingestText(root, String(params.title ?? "untitled"), String(params.text));
+          const text = String(params.text);
+          if (text.length > MAX_INGEST_TEXT_CHARS) throw new Error("入库文本过大");
+          return this.engine.ingestText(root, String(params.title ?? "untitled"), text);
         }
-        return this.engine.ingestFile(root, String(params.path));
+        return this.engine.ingestFile(root, String(params.path), {
+          allowExternalSource: context.allowExternalImport && params.approvedExternal === true,
+        });
       }
       case "vault_ask": {
         const root = this.requireVault();
@@ -379,6 +424,8 @@ export class SidecarSession {
         const runner = await this.getAgentRunner();
         const sessionId = String(params.sessionId ?? "");
         const message = String(params.message ?? params.question ?? "");
+        if (!message.trim()) throw new Error("消息不能为空");
+        if (message.length > MAX_AGENT_MESSAGE_CHARS) throw new Error("消息过长");
         const currentPageId = params.currentPageId ? String(params.currentPageId) : undefined;
         const graphDepthRaw = Number(params.graphDepth ?? 0);
         const graphDepth = Number.isFinite(graphDepthRaw) ? graphDepthRaw : 0;

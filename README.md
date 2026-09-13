@@ -23,10 +23,11 @@ pnpm smoke          # mock LLM 端到端（Node）
 
 ```powershell
 pnpm build
-$env:WIKIHOME_MOCK="1"; node packages/sidecar/dist/http-main.js   # 终端 1
+$env:WIKIHOME_MOCK="1"; $env:WIKIHOME_HTTP_TOKEN="replace-with-at-least-24-random-characters"; node packages/sidecar/dist/http-main.js   # 终端 1
 # 终端 2：
 cd apps/desktop
 $env:VITE_SIDECAR_HTTP="http://127.0.0.1:8787"
+$env:VITE_SIDECAR_HTTP_TOKEN="replace-with-at-least-24-random-characters"
 pnpm dev
 ```
 

@@ -57,6 +57,28 @@ async function main() {
     throw new Error(`source page lost original sections: ${JSON.stringify(importedPage)}`);
   }
 
+  const externalDir = await fs.mkdtemp(path.join(os.tmpdir(), "wikihome-external-"));
+  const externalFile = path.join(externalDir, "approved.md");
+  await fs.writeFile(externalFile, "# Approved external source\n", "utf8");
+  const deniedExternal = await session.handle({
+    id: 101,
+    method: "vault_ingest",
+    params: { path: externalFile, approvedExternal: true },
+  });
+  if (!deniedExternal.error || !deniedExternal.error.message.includes("需要用户审核")) {
+    throw new Error(`expected external import denial, got ${JSON.stringify(deniedExternal)}`);
+  }
+  const approvedExternal = await session.handle(
+    {
+      id: 102,
+      method: "vault_ingest",
+      params: { path: externalFile, approvedExternal: true },
+    },
+    undefined,
+    { allowExternalImport: true, exposeSecrets: true },
+  );
+  if (approvedExternal.error) throw new Error(`approved import failed: ${approvedExternal.error.message}`);
+
   const ask = await session.handle({
     id: 4,
     method: "vault_ask",

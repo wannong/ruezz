@@ -6,7 +6,7 @@ import {
   parseSkillMarkdown,
   selectSkillsForMessage,
 } from "./skills.js";
-import { resolveInsideVault } from "./tools/vault-path.js";
+import { resolveExistingInsideVault, resolveInsideVault } from "./tools/vault-path.js";
 
 const SAMPLE = `---
 name: grill-me
@@ -50,4 +50,24 @@ test("selectSkillsForMessage activates markitdown for PDF conversion", () => {
 test("resolveInsideVault rejects path traversal", () => {
   const root = path.resolve("/tmp/wikihome-vault");
   assert.throws(() => resolveInsideVault(root, "../secret.txt"));
+});
+
+test("resolveExistingInsideVault rejects a symlink that escapes the vault", async (t) => {
+  const fs = await import("node:fs/promises");
+  const os = await import("node:os");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "wikihome-path-test-"));
+  const outside = await fs.mkdtemp(path.join(os.tmpdir(), "wikihome-path-outside-"));
+  const target = path.join(outside, "secret.txt");
+  const link = path.join(root, "secret-link.txt");
+  await fs.writeFile(target, "secret", "utf8");
+  try {
+    await fs.symlink(target, link, "file");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EPERM") {
+      t.skip("symlink creation is not permitted on this Windows host");
+      return;
+    }
+    throw error;
+  }
+  await assert.rejects(() => resolveExistingInsideVault(root, link), /越出了 vault/);
 });

@@ -1,7 +1,7 @@
 import type { WikiEngine } from "@wikihome/engine-api";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
-import { resolveInsideVault, toVaultRelative } from "./vault-path.js";
+import { resolveExistingInsideVault, toVaultRelative } from "./vault-path.js";
 
 export function createIngestTextTool(engine: WikiEngine, vaultRoot: string): AgentTool {
   return {
@@ -38,7 +38,7 @@ export function createIngestFileTool(engine: WikiEngine, vaultRoot: string): Age
     }),
     async execute(_toolCallId, params) {
       const { filePath } = params as { filePath: string };
-      const resolved = resolveInsideVault(vaultRoot, filePath);
+      const resolved = await resolveExistingInsideVault(vaultRoot, filePath);
       const result = await engine.ingestFile(vaultRoot, resolved);
       const shown = toVaultRelative(vaultRoot, resolved);
       const summary = `已整篇入库 ${shown}，写入 ${result.files.length} 页（未拆页）：\n${result.files.map((f) => `- ${f}`).join("\n")}`;

@@ -12,7 +12,7 @@ import {
 } from "@wikihome/engine-api";
 import { createLlmClient, type LlmClient } from "@wikihome/llm";
 import { createWiki, type Wiki } from "llmwiki-core";
-import { ingestWholeDocument, slugify } from "./ingest-document.js";
+import { ingestWholeDocument, slugify, uniqueFilePath } from "./ingest-document.js";
 export { findBundledPython, pythonCandidates } from "./markitdown.js";
 export {
   convertPdfToTemp,
@@ -45,6 +45,11 @@ function isInsideDir(dir: string, file: string): boolean {
   return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
 }
 
+function isWithinDir(dir: string, file: string): boolean {
+  const rel = path.relative(path.resolve(dir), path.resolve(file));
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
 function wikiDir(root: string): string {
   return path.join(path.resolve(root), "wiki");
 }
@@ -68,18 +73,98 @@ async function pathExists(target: string): Promise<boolean> {
   }
 }
 
+async function ensureDirectoryInsideRoot(root: string, relative: string): Promise<string> {
+  const realRoot = await fs.realpath(root);
+  const target = path.resolve(root, relative);
+  const current = await fs.lstat(target).catch(() => null);
+  if (current?.isSymbolicLink()) {
+    throw new Error(`知识库目录不能是符号链接：${relative}`);
+  }
+  if (current && !current.isDirectory()) {
+    throw new Error(`知识库目录无效：${relative}`);
+  }
+  if (!current) {
+    let ancestor = path.dirname(target);
+    while (!(await pathExists(ancestor))) {
+      const parent = path.dirname(ancestor);
+      if (parent === ancestor) throw new Error(`无法验证知识库目录：${relative}`);
+      ancestor = parent;
+    }
+    const realAncestor = await fs.realpath(ancestor);
+    if (!isWithinDir(realRoot, realAncestor)) {
+      throw new Error(`知识库目录通过链接越出了 vault：${relative}`);
+    }
+    await fs.mkdir(target, { recursive: true });
+  }
+  const realTarget = await fs.realpath(target);
+  if (!isInsideDir(realRoot, realTarget)) {
+    throw new Error(`知识库目录通过链接越出了 vault：${relative}`);
+  }
+  return realTarget;
+}
+
+async function rejectNestedLinks(directory: string): Promise<void> {
+  const info = await fs.lstat(directory).catch(() => null);
+  if (!info) return;
+  if (info.isSymbolicLink()) throw new Error(`知识库目录不能包含符号链接：${directory}`);
+  if (!info.isDirectory()) throw new Error(`知识库路径不是目录：${directory}`);
+  const entries = await fs.readdir(directory, { withFileTypes: true });
+  for (const entry of entries) {
+    const child = path.join(directory, entry.name);
+    if (entry.isSymbolicLink()) {
+      throw new Error(`知识库目录不能包含符号链接：${child}`);
+    }
+    if (entry.isDirectory()) await rejectNestedLinks(child);
+  }
+}
+
+async function prepareVault(root: string): Promise<string> {
+  const absRoot = path.resolve(root);
+  await fs.mkdir(absRoot, { recursive: true });
+  const realRoot = await fs.realpath(absRoot);
+  await ensureDirectoryInsideRoot(realRoot, "wiki");
+  await ensureDirectoryInsideRoot(realRoot, path.join("raw", "sources"));
+  await ensureDirectoryInsideRoot(realRoot, ".wikihome");
+  await ensureDirectoryInsideRoot(realRoot, ".llmwiki");
+  await rejectNestedLinks(path.join(realRoot, "wiki"));
+  await rejectNestedLinks(path.join(realRoot, "raw", "sources"));
+  return realRoot;
+}
+
 async function dirHasMarkdown(abs: string): Promise<boolean> {
   const entries = await fs.readdir(abs, { withFileTypes: true });
   for (const entry of entries) {
+    if (entry.isSymbolicLink()) {
+      throw new Error(`知识库目录不能包含符号链接：${path.join(abs, entry.name)}`);
+    }
     if (entry.isFile() && entry.name.toLowerCase().endsWith(".md")) return true;
     if (entry.isDirectory() && (await dirHasMarkdown(path.join(abs, entry.name)))) return true;
   }
   return false;
 }
 
-function assertInsideWiki(root: string, target: string): void {
+async function assertInsideWiki(root: string, target: string): Promise<void> {
   if (!isInsideDir(wikiDir(root), target)) {
     throw new Error("只能操作 wiki/ 下的路径");
+  }
+  const realRoot = await fs.realpath(root);
+  const realWiki = await fs.realpath(wikiDir(root));
+  if (!isInsideDir(realRoot, realWiki)) {
+    throw new Error("wiki/ 路径通过链接越出了 vault");
+  }
+  const existing = await fs.realpath(target).catch(() => null);
+  let realTarget = existing;
+  if (!realTarget) {
+    let ancestor = path.dirname(target);
+    while (!(await pathExists(ancestor))) {
+      const parent = path.dirname(ancestor);
+      if (parent === ancestor) throw new Error("无法验证目标路径");
+      ancestor = parent;
+    }
+    realTarget = path.resolve(await fs.realpath(ancestor), path.relative(ancestor, target));
+  }
+  if (!isInsideDir(realWiki, realTarget) || !isInsideDir(realRoot, realTarget)) {
+    throw new Error("路径通过链接越出了 wiki/");
   }
 }
 
@@ -127,10 +212,10 @@ export class LlmWikiEngine implements WikiEngine {
   }
 
   async initVault(root: string): Promise<void> {
-    const abs = path.resolve(root);
-    await fs.mkdir(abs, { recursive: true });
+    const abs = await prepareVault(root);
     const wiki = this.getWiki(abs);
     await wiki.init();
+    await prepareVault(abs);
     const metaDir = path.join(abs, ".wikihome");
     await fs.mkdir(metaDir, { recursive: true });
     await fs.writeFile(
@@ -149,30 +234,34 @@ export class LlmWikiEngine implements WikiEngine {
     );
   }
 
-  async ingestFile(root: string, filePath: string): Promise<IngestResult> {
-    const absRoot = path.resolve(root);
+  async ingestFile(
+    root: string,
+    filePath: string,
+    options: { allowExternalSource?: boolean } = {},
+  ): Promise<IngestResult> {
+    const absRoot = await prepareVault(root);
     const wiki = this.getWiki(absRoot);
     await wiki.init();
     return ingestWholeDocument({
       root: absRoot,
       filePath,
+      allowExternalSource: options.allowExternalSource,
       reindex: () => wiki.reindex(),
     });
   }
 
   async ingestText(root: string, title: string, body: string): Promise<IngestResult> {
-    const absRoot = path.resolve(root);
+    const absRoot = await prepareVault(root);
     const rawDir = path.join(absRoot, "raw", "sources");
-    await fs.mkdir(rawDir, { recursive: true });
-    const name = `${slugify(title)}.md`;
-    const dest = path.join(rawDir, name);
+    const dest = await uniqueFilePath(rawDir, `${slugify(title)}.md`);
     const content = `# ${title}\n\n${body}\n`;
-    await fs.writeFile(dest, content, "utf8");
+    await fs.writeFile(dest, content, { encoding: "utf8", flag: "wx" });
     return this.ingestFile(absRoot, dest);
   }
 
   async readIndex(root: string): Promise<string> {
-    const indexPath = path.join(path.resolve(root), "wiki", "index.md");
+    const absRoot = await prepareVault(root);
+    const indexPath = path.join(absRoot, "wiki", "index.md");
     try {
       return await fs.readFile(indexPath, "utf8");
     } catch {
@@ -181,7 +270,8 @@ export class LlmWikiEngine implements WikiEngine {
   }
 
   async listPages(root: string): Promise<PageSummary[]> {
-    const wiki = this.getWiki(root);
+    const absRoot = await prepareVault(root);
+    const wiki = this.getWiki(absRoot);
     const { pages } = await wiki.load();
     return pages.map((p) => ({
       id: p.id,
@@ -193,7 +283,8 @@ export class LlmWikiEngine implements WikiEngine {
   }
 
   async findPages(root: string, query: string): Promise<PageSummary[]> {
-    const wiki = this.getWiki(root);
+    const absRoot = await prepareVault(root);
+    const wiki = this.getWiki(absRoot);
     const hits = await wiki.search(query, { limit: 20 });
     const all = await this.listPages(root);
     const byId = new Map(all.map((p) => [p.id, p]));
@@ -201,10 +292,12 @@ export class LlmWikiEngine implements WikiEngine {
   }
 
   async readPage(root: string, idOrPath: string): Promise<PageContent | null> {
-    const wiki = this.getWiki(root);
+    const absRoot = await prepareVault(root);
+    const wiki = this.getWiki(absRoot);
     const id = normalizePageId(idOrPath);
     const page = await wiki.read(id);
     if (!page) return null;
+    await assertInsideWiki(absRoot, path.resolve(absRoot, page.path));
     return {
       id: page.id,
       path: page.path,
@@ -216,13 +309,13 @@ export class LlmWikiEngine implements WikiEngine {
   }
 
   async writePage(root: string, idOrPath: string, raw: string): Promise<PageContent> {
-    const absRoot = path.resolve(root);
+    const absRoot = await prepareVault(root);
     const id = normalizePageId(idOrPath);
     const existing = await this.readPage(absRoot, id);
     if (!existing) throw new Error(`页面不存在：${id}`);
 
     const absFile = path.resolve(absRoot, existing.path);
-    assertInsideWiki(absRoot, absFile);
+    await assertInsideWiki(absRoot, absFile);
 
     const content = raw.endsWith("\n") ? raw : `${raw}\n`;
     await fs.writeFile(absFile, content, "utf8");
@@ -233,10 +326,10 @@ export class LlmWikiEngine implements WikiEngine {
   }
 
   async createPage(root: string, idOrPath: string, title?: string): Promise<PageContent> {
-    const absRoot = path.resolve(root);
+    const absRoot = await prepareVault(root);
     const id = normalizePageId(idOrPath);
     const absFile = pageFile(absRoot, id);
-    assertInsideWiki(absRoot, absFile);
+    await assertInsideWiki(absRoot, absFile);
 
     try {
       await fs.access(absFile);
@@ -264,15 +357,15 @@ updated: ${day}
   }
 
   async copyPage(root: string, fromId: string, toId: string): Promise<PageContent> {
-    const absRoot = path.resolve(root);
+    const absRoot = await prepareVault(root);
     const srcId = normalizePageId(fromId);
     const destId = normalizePageId(toId);
     const src = await this.readPage(absRoot, srcId);
     if (!src) throw new Error(`页面不存在：${srcId}`);
     const srcFile = path.resolve(absRoot, src.path);
     const destFile = pageFile(absRoot, destId);
-    assertInsideWiki(absRoot, srcFile);
-    assertInsideWiki(absRoot, destFile);
+    await assertInsideWiki(absRoot, srcFile);
+    await assertInsideWiki(absRoot, destFile);
     if (await pathExists(destFile)) throw new Error(`页面已存在：${destId}`);
     await fs.mkdir(path.dirname(destFile), { recursive: true });
     await fs.copyFile(srcFile, destFile);
@@ -283,7 +376,7 @@ updated: ${day}
   }
 
   async renamePage(root: string, fromId: string, toId: string): Promise<PageContent> {
-    const absRoot = path.resolve(root);
+    const absRoot = await prepareVault(root);
     const srcId = normalizePageId(fromId);
     const destId = normalizePageId(toId);
     if (srcId === destId) {
@@ -295,8 +388,8 @@ updated: ${day}
     if (!src) throw new Error(`页面不存在：${srcId}`);
     const srcFile = path.resolve(absRoot, src.path);
     const destFile = pageFile(absRoot, destId);
-    assertInsideWiki(absRoot, srcFile);
-    assertInsideWiki(absRoot, destFile);
+    await assertInsideWiki(absRoot, srcFile);
+    await assertInsideWiki(absRoot, destFile);
     if (await pathExists(destFile)) throw new Error(`页面已存在：${destId}`);
     await fs.mkdir(path.dirname(destFile), { recursive: true });
     await fs.rename(srcFile, destFile);
@@ -307,7 +400,8 @@ updated: ${day}
   }
 
   async listFolders(root: string): Promise<string[]> {
-    const dir = wikiDir(root);
+    const absRoot = await prepareVault(root);
+    const dir = wikiDir(absRoot);
     if (!(await pathExists(dir))) return [];
     const out: string[] = [];
     const walk = async (abs: string, rel: string): Promise<void> => {
@@ -325,23 +419,23 @@ updated: ${day}
   }
 
   async createFolder(root: string, idOrPath: string): Promise<{ id: string }> {
-    const absRoot = path.resolve(root);
+    const absRoot = await prepareVault(root);
     const id = normalizePageId(idOrPath);
     const dest = folderDir(absRoot, id);
-    assertInsideWiki(absRoot, dest);
+    await assertInsideWiki(absRoot, dest);
     if (await pathExists(dest)) throw new Error(`文件夹已存在：${id}`);
     await fs.mkdir(dest, { recursive: true });
     return { id };
   }
 
   async copyFolder(root: string, fromId: string, toId: string): Promise<{ id: string }> {
-    const absRoot = path.resolve(root);
+    const absRoot = await prepareVault(root);
     const srcId = normalizePageId(fromId);
     const destId = normalizePageId(toId);
     const src = folderDir(absRoot, srcId);
     const dest = folderDir(absRoot, destId);
-    assertInsideWiki(absRoot, src);
-    assertInsideWiki(absRoot, dest);
+    await assertInsideWiki(absRoot, src);
+    await assertInsideWiki(absRoot, dest);
     if (!(await pathExists(src))) throw new Error(`文件夹不存在：${srcId}`);
     if (await pathExists(dest)) throw new Error(`文件夹已存在：${destId}`);
     await fs.mkdir(path.dirname(dest), { recursive: true });
@@ -351,15 +445,15 @@ updated: ${day}
   }
 
   async renameFolder(root: string, fromId: string, toId: string): Promise<{ id: string }> {
-    const absRoot = path.resolve(root);
+    const absRoot = await prepareVault(root);
     const srcId = normalizePageId(fromId);
     const destId = normalizePageId(toId);
     if (srcId === destId) return { id: destId };
     assertNotIntoSelf(srcId, destId);
     const src = folderDir(absRoot, srcId);
     const dest = folderDir(absRoot, destId);
-    assertInsideWiki(absRoot, src);
-    assertInsideWiki(absRoot, dest);
+    await assertInsideWiki(absRoot, src);
+    await assertInsideWiki(absRoot, dest);
     if (!(await pathExists(src))) throw new Error(`文件夹不存在：${srcId}`);
     if (await pathExists(dest)) throw new Error(`文件夹已存在：${destId}`);
     await fs.mkdir(path.dirname(dest), { recursive: true });
@@ -369,7 +463,8 @@ updated: ${day}
   }
 
   async lint(root: string): Promise<LintIssue[]> {
-    const wiki = this.getWiki(root);
+    const absRoot = await prepareVault(root);
+    const wiki = this.getWiki(absRoot);
     const issues = await wiki.lint({ fix: false });
     return issues.map((i) => ({
       pageId: i.pageId,
@@ -381,14 +476,16 @@ updated: ${day}
   }
 
   async ask(root: string, question: string): Promise<AskResult> {
-    const wiki = this.getWiki(root);
+    const absRoot = await prepareVault(root);
+    const wiki = this.getWiki(absRoot);
     const answer = await wiki.ask(question);
     const sources = Array.from(answer.matchAll(/\[\[([^\]]+)\]\]/g)).map((m) => m[1]);
     return { answer, sources };
   }
 
   async getGraph(root: string): Promise<GraphDto> {
-    const wiki = this.getWiki(root);
+    const absRoot = await prepareVault(root);
+    const wiki = this.getWiki(absRoot);
     const graph = await wiki.getGraph();
     return {
       nodes: [...graph.nodes.values()].map((n) => ({
@@ -407,7 +504,8 @@ updated: ${day}
   }
 
   async backlinks(root: string, pageId: string): Promise<PageSummary[]> {
-    const wiki = this.getWiki(root);
+    const absRoot = await prepareVault(root);
+    const wiki = this.getWiki(absRoot);
     const ids = await wiki.impactSurface(pageId);
     const all = await this.listPages(root);
     const byId = new Map(all.map((p) => [p.id, p]));

@@ -227,7 +227,11 @@ export type GraphDto = z.infer<typeof GraphDtoSchema>;
 /** Stable engine surface. Implement this to swap backends. */
 export interface WikiEngine {
   initVault(root: string): Promise<void>;
-  ingestFile(root: string, filePath: string): Promise<IngestResult>;
+  ingestFile(
+    root: string,
+    filePath: string,
+    options?: { allowExternalSource?: boolean },
+  ): Promise<IngestResult>;
   ingestText(root: string, title: string, body: string): Promise<IngestResult>;
   readIndex(root: string): Promise<string>;
   findPages(root: string, query: string): Promise<PageSummary[]>;

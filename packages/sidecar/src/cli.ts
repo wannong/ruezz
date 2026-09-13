@@ -43,7 +43,11 @@ rl.on("line", async (line) => {
           process.stdout.write(`${JSON.stringify({ method: "agent_event", params: event })}\n`);
         }
       : undefined;
-  const res = await session.handle(req, emit);
+  const res = await session.handle(req, emit, {
+    // The Tauri-owned stdin channel is trusted only for the explicit desktop import flag.
+    allowExternalImport: true,
+    exposeSecrets: true,
+  });
   process.stdout.write(`${JSON.stringify(res)}\n`);
 });
 

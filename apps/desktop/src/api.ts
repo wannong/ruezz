@@ -139,10 +139,12 @@ const isTauri = isTauriRuntime;
 /** Dev fallback: talk to sidecar over HTTP if VITE_SIDECAR_HTTP is set. */
 async function httpRpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
   const base = import.meta.env.VITE_SIDECAR_HTTP as string | undefined;
+  const token = import.meta.env.VITE_SIDECAR_HTTP_TOKEN as string | undefined;
   if (!base) throw new Error("非 Tauri 环境且未配置 VITE_SIDECAR_HTTP");
+  if (!token) throw new Error("HTTP sidecar 未配置访问令牌");
   const res = await fetch(`${base.replace(/\/$/, "")}/rpc`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify({ id: Date.now(), method, params }),
   });
   const json = (await res.json()) as { result?: T; error?: { message: string } };
@@ -216,10 +218,12 @@ async function httpPromptStream(
   signal?: AbortSignal,
 ): Promise<AgentPromptResult> {
   const base = import.meta.env.VITE_SIDECAR_HTTP as string | undefined;
+  const token = import.meta.env.VITE_SIDECAR_HTTP_TOKEN as string | undefined;
   if (!base) throw new Error("非 Tauri 环境且未配置 VITE_SIDECAR_HTTP");
+  if (!token) throw new Error("HTTP sidecar 未配置访问令牌");
   const res = await fetch(`${base.replace(/\/$/, "")}/rpc`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     body: JSON.stringify({
       id: Date.now(),
       method: "agent_prompt",
@@ -260,7 +264,7 @@ export const api = {
   settingsGet: () => rpc<VaultSettings>("settings_get"),
   settingsSet: (patch: Partial<VaultSettings>) => rpc<VaultSettings>("settings_set", patch),
   vaultInit: (root: string) => rpc<{ root: string }>("vault_init", { root }),
-  vaultIngestPath: (path: string) => rpc("vault_ingest", { path }),
+  vaultIngestPath: (path: string) => rpc("vault_ingest", { path, approvedExternal: true }),
   vaultIngestText: (title: string, text: string) => rpc("vault_ingest", { title, text }),
   vaultAsk: (question: string) => rpc<AskResult>("vault_ask", { question }),
   agentSessionList: () => rpc<{ sessions: AgentSessionSummary[] }>("agent_session_list"),

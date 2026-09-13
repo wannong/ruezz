@@ -9,7 +9,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { resolveInsideVault, toVaultRelative } from "./vault-path.js";
+import { resolveExistingInsideVault, toVaultRelative } from "./vault-path.js";
 
 const PREVIEW_CHARS = 12_000;
 const CONVERT_MS = 120_000;
@@ -25,7 +25,7 @@ export function createConvertToMarkdownTool(vaultRoot: string): AgentTool {
     }),
     async execute(_toolCallId, params, signal) {
       const { filePath } = params as { filePath: string };
-      const inputAbs = resolveInsideVault(vaultRoot, filePath);
+      const inputAbs = await resolveExistingInsideVault(vaultRoot, filePath);
       const info = await stat(inputAbs);
       if (!info.isFile()) {
         throw new Error(`不是文件：${filePath}`);
