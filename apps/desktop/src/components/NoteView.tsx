@@ -1,10 +1,11 @@
-import { useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { PageContent, PageSummary } from "../api";
 import { markdownBody } from "../lib/noteId";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { MarkdownPreview } from "./MarkdownPreview";
+import { DocumentPreview } from "./DocumentPreview";
 
-export type NoteMode = "read" | "edit";
+export type NoteMode = "read" | "edit" | "source";
 
 type NoteViewProps = {
   page: PageContent;
@@ -19,6 +20,8 @@ type NoteViewProps = {
   onOpen: (id: string) => void;
   onLink: (range: { start: number; end: number }) => void;
   assetRoot?: string;
+  onUpdateTags: (tags: string[]) => Promise<void>;
+  tagError?: string | null;
 };
 
 export function NoteView({
@@ -34,9 +37,34 @@ export function NoteView({
   onOpen,
   onLink,
   assetRoot,
+  onUpdateTags,
+  tagError,
 }: NoteViewProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; start: number; end: number } | null>(null);
+  const sourceType = page.sourceType?.toLowerCase();
+  const hasSource = sourceType === "pdf" || sourceType === "docx";
+  const [tags, setTags] = useState<string[]>(page.tags ?? []);
+  const [tagInput, setTagInput] = useState("");
+  const [tagSaving, setTagSaving] = useState(false);
+  useEffect(() => setTags(page.tags ?? []), [page.id, page.tags]);
+  useEffect(() => {
+    if (mode === "source" && !hasSource) onMode("read");
+  }, [hasSource, mode, onMode]);
+
+  const updateTags = async (next: string[]) => {
+    const normalized = [...new Set(next.map((tag) => tag.trim()).filter(Boolean))];
+    setTags(normalized);
+    setTagSaving(true);
+    try { await onUpdateTags(normalized); } catch { /* parent reports the error */ }
+    finally { setTagSaving(false); }
+  };
+  const addTag = () => {
+    const value = tagInput.trim();
+    if (!value || tags.includes(value)) { setTagInput(""); return; }
+    setTagInput("");
+    void updateTags([...tags, value]);
+  };
 
   const openEditorMenu = (e: MouseEvent<HTMLTextAreaElement>) => {
     e.preventDefault();
@@ -105,6 +133,12 @@ export function NoteView({
         <div>
           <h1 className="note-title">{page.title ?? page.id}</h1>
           <div className="note-id">{page.path}</div>
+          <div className="note-tags" aria-label="页面标签">
+            {tags.map((tag) => <span className="tag-chip" key={tag}>#{tag}<button type="button" aria-label={`删除标签 ${tag}`} disabled={tagSaving} onClick={() => void updateTags(tags.filter((item) => item !== tag))}>×</button></span>)}
+            <input className="tag-input" value={tagInput} disabled={tagSaving} placeholder="添加标签" aria-label="添加标签" onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }} />
+            {tagSaving && <span className="file-meta">保存中…</span>}
+          </div>
+          {tagError && <div className="error note-tag-error">{tagError}</div>}
         </div>
         <div className="note-toolbar">
           <div className="note-mode">
@@ -114,6 +148,7 @@ export function NoteView({
             <button type="button" className={mode === "edit" ? "active" : ""} onClick={() => onMode("edit")}>
               编辑
             </button>
+            {hasSource && <button type="button" className={mode === "source" ? "active" : ""} onClick={() => onMode("source")}>原件</button>}
           </div>
           <button
             type="button"
@@ -125,7 +160,9 @@ export function NoteView({
           </button>
         </div>
       </div>
-      {mode === "edit" ? (
+      {mode === "source" && hasSource ? (
+        <DocumentPreview pageId={page.id} type={sourceType!} name={page.sourcePath?.split(/[\\/]/).pop()} />
+      ) : mode === "edit" ? (
         <div className="note-edit-split">
           <textarea
             ref={editorRef}

@@ -68,6 +68,7 @@ export function SearchPane({
             <button type="button" className="tree-label search-hit" onClick={() => onOpen(p.id)}>
               <span className="file-name">{p.title ?? p.id}</span>
               <span className="file-meta">{p.id}</span>
+              {p.tags && p.tags.length > 0 && <span className="file-tags">{p.tags.map((tag) => `#${tag}`).join(" ")}</span>}
             </button>
           </li>
         ))}

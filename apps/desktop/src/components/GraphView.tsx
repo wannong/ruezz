@@ -194,10 +194,27 @@ export function GraphView({
             }
             if (compact || globalScale > 1.1) {
               // Compact graph labels live in graph space so they shrink with the preview.
-              const fontSize = compact ? Math.max(4, Math.min(12, 12 * globalScale)) : 12 / globalScale;
+              const fontSize = Math.max(compact ? 4 : 8, Math.min(compact ? 12 : 18, 12 / globalScale));
               ctx.font = `${focused ? "600 " : ""}${fontSize}px sans-serif`;
+              const maxWidth = compact ? 104 : 168;
+              const sourceLabel = n.label || n.id;
+              let label = sourceLabel;
+              if (ctx.measureText(label).width > maxWidth) {
+                while (label.length > 1 && ctx.measureText(`${label}...`).width > maxWidth) {
+                  label = label.slice(0, -1);
+                }
+                label = `${label}...`;
+              }
+              const labelWidth = ctx.measureText(label).width;
+              const labelX = x + r + (compact ? 2 : 3);
+              const labelY = y + fontSize / 3;
+              ctx.fillStyle = theme === "dark" ? "rgba(30, 30, 30, 0.92)" : "rgba(255, 255, 255, 0.94)";
+              ctx.fillRect(labelX - 2, labelY - fontSize, labelWidth + 4, fontSize + 3);
+              ctx.strokeStyle = theme === "dark" ? "rgba(220, 221, 222, 0.28)" : "rgba(34, 34, 34, 0.2)";
+              ctx.lineWidth = 1 / Math.max(globalScale, 1);
+              ctx.strokeRect(labelX - 2, labelY - fontSize, labelWidth + 4, fontSize + 3);
               ctx.fillStyle = colors.ink;
-              ctx.fillText(n.label, x + r + 3, y + fontSize / 3);
+              ctx.fillText(label, labelX, labelY);
             }
           }}
           nodePointerAreaPaint={(node, color, ctx) => {

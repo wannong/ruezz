@@ -97,9 +97,10 @@ export function Workspace({
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [pageCache, setPageCache] = useState<Record<string, PageContent>>({});
   const [missingIds, setMissingIds] = useState<Record<string, true>>({});
-  const [noteMode, setNoteMode] = useState<"read" | "edit">("read");
+  const [noteMode, setNoteMode] = useState<"read" | "edit" | "source">("read");
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [noteSaving, setNoteSaving] = useState(false);
+  const [tagError, setTagError] = useState<string | null>(null);
   const [leftView, setLeftView] = useState<"files" | "search">("files");
   const [rightView, setRightView] = useState<RightView>("agent");
   const [leftCollapsed, setLeftCollapsed] = useState(() => loadPref("leftCollapsed", false));
@@ -223,7 +224,7 @@ export function Workspace({
     async (id: string) => {
       const page = pageCache[id];
       const text = noteDrafts[id] ?? page?.raw;
-      if (!page || text == null || text === page.raw) return;
+      if (!page || text == null || text === page.raw) return true;
       setNoteSaving(true);
       setError(null);
       try {
@@ -237,14 +238,32 @@ export function Workspace({
         });
         await loadPages();
         await loadGraph();
+        return true;
       } catch (e) {
         onError(e instanceof Error ? e.message : String(e));
+        return false;
       } finally {
         setNoteSaving(false);
       }
     },
     [pageCache, noteDrafts, loadPages, loadGraph, onError, setError],
   );
+
+  const updatePageTags = useCallback(async (id: string, tags: string[]) => {
+    setTagError(null);
+    try {
+      // Save an edited body first so the tag write cannot be overwritten by the autosave timer.
+      if (isDirty(id) && !(await saveNote(id))) throw new Error("正文保存失败，未更新标签");
+      const updated = await api.vaultUpdatePageTags(id, tags);
+      setPageCache((cache) => ({ ...cache, [id]: updated }));
+      setPages((current) => current.map((page) => page.id === id ? { ...page, tags: updated.tags } : page));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setTagError(message);
+      onError(message);
+      throw e;
+    }
+  }, [isDirty, onError, saveNote]);
 
   useEffect(() => {
     if (!activePageId) return;
@@ -1126,6 +1145,8 @@ export function Workspace({
                 onOpen={openPage}
                 onLink={(range) => startLinkPicker(activePage.id, range)}
                 assetRoot={settings.vaultPath}
+                onUpdateTags={(tags) => updatePageTags(activePage.id, tags)}
+                tagError={tagError}
               />
             )}
           </div>

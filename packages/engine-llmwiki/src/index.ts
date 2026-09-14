@@ -1,5 +1,8 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+// js-yaml is a runtime dependency; this workspace does not ship its type package.
+// @ts-expect-error js-yaml has no declaration file in the locked dependency tree.
+import * as yaml from "js-yaml";
 import {
   type AskResult,
   type GraphDto,
@@ -11,7 +14,7 @@ import {
   type WikiEngine,
 } from "@wikihome/engine-api";
 import { createLlmClient, type LlmClient } from "@wikihome/llm";
-import { createWiki, type Wiki } from "llmwiki-core";
+import { createWiki, parseFrontmatter, sourceReferenceIdentity, type Wiki } from "llmwiki-core";
 import { ingestWholeDocument, slugify, uniqueFilePath } from "./ingest-document.js";
 export { findBundledPython, pythonCandidates } from "./markitdown.js";
 export {
@@ -71,6 +74,55 @@ async function pathExists(target: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
+const SOURCE_EXTENSIONS = new Set([".pdf", ".docx"]);
+
+function normalizeTags(tags: unknown): string[] {
+  const values = Array.isArray(tags) ? tags : [tags];
+  const seen = new Set<string>();
+  return values
+    .map((value) => String(value ?? "").trim())
+    .filter((value) => value && !seen.has(value) && seen.add(value));
+}
+
+async function sourceFileForPage(root: string, sources: unknown): Promise<string | null> {
+  const rawDir = path.join(root, "raw", "sources");
+  const realRawDir = await fs.realpath(rawDir).catch(() => null);
+  if (!realRawDir) return null;
+  const identities = Array.isArray(sources) ? sources : sources == null ? [] : [sources];
+  for (const value of identities) {
+    const identity = sourceReferenceIdentity(String(value)).replace(/\\/g, "/");
+    if (!identity || identity.startsWith("/") || identity.split("/").some((part) => part === ".." || part === ".")) continue;
+    const candidate = path.resolve(rawDir, ...identity.split("/"));
+    if (!isInsideDir(rawDir, candidate)) continue;
+    const info = await fs.lstat(candidate).catch(() => null);
+    if (!info?.isFile() || info.isSymbolicLink() || !SOURCE_EXTENSIONS.has(path.extname(candidate).toLowerCase())) continue;
+    const realFile = await fs.realpath(candidate);
+    if (!isInsideDir(realRawDir, realFile)) continue;
+    return realFile;
+  }
+  return null;
+}
+
+async function sourceInfoForPage(
+  root: string,
+  type: unknown,
+  sources: unknown,
+): Promise<{ sourcePath: string; sourceType: string } | null> {
+  if (String(type ?? "") !== "source") return null;
+  const sourceFile = await sourceFileForPage(root, sources);
+  if (!sourceFile) return null;
+  const rawDir = path.join(root, "raw", "sources");
+  return {
+    sourcePath: path.relative(rawDir, sourceFile).split(path.sep).join("/"),
+    sourceType: sourceTypeForFile(sourceFile),
+  };
+}
+
+function sourceTypeForFile(filePath: string): string {
+  return path.extname(filePath).slice(1).toLowerCase();
 }
 
 async function ensureDirectoryInsideRoot(root: string, relative: string): Promise<string> {
@@ -273,13 +325,21 @@ export class LlmWikiEngine implements WikiEngine {
     const absRoot = await prepareVault(root);
     const wiki = this.getWiki(absRoot);
     const { pages } = await wiki.load();
-    return pages.map((p) => ({
-      id: p.id,
-      title: p.fm?.title,
-      type: p.fm?.type ? String(p.fm.type) : undefined,
-      path: p.path,
-      tags: p.fm?.tags?.length ? p.fm.tags : undefined,
-    }));
+    return Promise.all(
+      pages.map(async (p) => {
+        const type = p.fm?.type ? String(p.fm.type) : undefined;
+        const source = await sourceInfoForPage(absRoot, type, p.fm?.sources);
+        return {
+          id: p.id,
+          title: p.fm?.title,
+          type,
+          path: p.path,
+          tags: p.fm?.tags?.length ? p.fm.tags : undefined,
+          sourcePath: source?.sourcePath,
+          sourceType: source?.sourceType,
+        };
+      }),
+    );
   }
 
   async findPages(root: string, query: string): Promise<PageSummary[]> {
@@ -298,13 +358,18 @@ export class LlmWikiEngine implements WikiEngine {
     const page = await wiki.read(id);
     if (!page) return null;
     await assertInsideWiki(absRoot, path.resolve(absRoot, page.path));
+    const type = page.fm?.type ? String(page.fm.type) : undefined;
+    const source = await sourceInfoForPage(absRoot, type, page.fm?.sources);
     return {
       id: page.id,
       path: page.path,
       title: page.fm?.title,
-      type: page.fm?.type,
+      type,
       body: page.body,
       raw: page.raw,
+      tags: page.fm?.tags?.length ? page.fm.tags : undefined,
+      sourcePath: source?.sourcePath,
+      sourceType: source?.sourceType,
     };
   }
 
@@ -323,6 +388,55 @@ export class LlmWikiEngine implements WikiEngine {
     const updated = await this.readPage(absRoot, id);
     if (!updated) throw new Error("写入后无法读取页面");
     return updated;
+  }
+
+  async updatePageTags(root: string, idOrPath: string, tags: string[]): Promise<PageContent> {
+    const absRoot = await prepareVault(root);
+    const id = normalizePageId(idOrPath);
+    const existing = await this.readPage(absRoot, id);
+    if (!existing) throw new Error(`页面不存在：${id}`);
+    const absFile = path.resolve(absRoot, existing.path);
+    await assertInsideWiki(absRoot, absFile);
+
+    const parsed = parseFrontmatter(existing.raw);
+    let fields: Record<string, unknown> = {};
+    if (parsed.rawBlock) {
+      const yamlText = parsed.rawBlock.replace(/^---\s*\r?\n/u, "").replace(/\r?\n---\s*\r?\n?$/u, "");
+      const loaded = yaml.load(yamlText);
+      if (loaded && typeof loaded === "object" && !Array.isArray(loaded)) fields = { ...(loaded as Record<string, unknown>) };
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    fields.type = String(fields.type ?? existing.type ?? "concept");
+    fields.title = String(fields.title ?? existing.title ?? id.split("/").pop() ?? id);
+    fields.tags = normalizeTags(tags);
+    if (!("related" in fields)) fields.related = [];
+    if (!("sources" in fields)) fields.sources = [];
+    fields.created = String(fields.created ?? today);
+    fields.updated = today;
+    const front = `---\n${yaml.dump(fields, { noRefs: true, lineWidth: -1 }).trimEnd()}\n---\n`;
+    const body = parsed.body.replace(/^\r?\n/u, "");
+    await fs.writeFile(absFile, `${front}\n${body}${body.endsWith("\n") ? "" : "\n"}`, "utf8");
+    await this.getWiki(absRoot).reindex();
+    const updated = await this.readPage(absRoot, id);
+    if (!updated) throw new Error("更新标签后无法读取页面");
+    return updated;
+  }
+
+  async readSource(root: string, pageId: string): Promise<{ path: string; name: string; type: string; bytes: string } | null> {
+    const absRoot = await prepareVault(root);
+    const page = await this.readPage(absRoot, pageId);
+    if (!page || page.type !== "source") return null;
+    const parsed = parseFrontmatter(page.raw);
+    const sourcePath = await sourceFileForPage(absRoot, parsed.frontmatter?.sources);
+    if (!sourcePath) return null;
+    const stat = await fs.stat(sourcePath);
+    if (stat.size > MAX_SOURCE_BYTES) throw new Error("来源文件超过 50 MiB 限制");
+    return {
+      path: path.relative(absRoot, sourcePath).split(path.sep).join("/"),
+      name: path.basename(sourcePath),
+      type: sourceTypeForFile(sourcePath),
+      bytes: (await fs.readFile(sourcePath)).toString("base64"),
+    };
   }
 
   async createPage(root: string, idOrPath: string, title?: string): Promise<PageContent> {

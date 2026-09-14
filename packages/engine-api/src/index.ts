@@ -161,6 +161,8 @@ export const PageSummarySchema = z.object({
   type: z.string().optional(),
   path: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  sourcePath: z.string().optional(),
+  sourceType: z.string().optional(),
 });
 
 export type PageSummary = z.infer<typeof PageSummarySchema>;
@@ -172,6 +174,9 @@ export const PageContentSchema = z.object({
   type: z.string().optional(),
   body: z.string(),
   raw: z.string(),
+  tags: z.array(z.string()).optional(),
+  sourcePath: z.string().optional(),
+  sourceType: z.string().optional(),
 });
 
 export type PageContent = z.infer<typeof PageContentSchema>;
@@ -239,6 +244,8 @@ export interface WikiEngine {
   listPages(root: string): Promise<PageSummary[]>;
   readPage(root: string, idOrPath: string): Promise<PageContent | null>;
   writePage(root: string, idOrPath: string, raw: string): Promise<PageContent>;
+  updatePageTags(root: string, idOrPath: string, tags: string[]): Promise<PageContent>;
+  readSource(root: string, pageId: string): Promise<{ path: string; name: string; type: string; bytes: string } | null>;
   createPage(root: string, id: string, title?: string): Promise<PageContent>;
   copyPage(root: string, fromId: string, toId: string): Promise<PageContent>;
   renamePage(root: string, fromId: string, toId: string): Promise<PageContent>;

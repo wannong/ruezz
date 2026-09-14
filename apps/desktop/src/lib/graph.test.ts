@@ -4,6 +4,7 @@ import {
   applyGraphForces,
   asLayoutNode,
   graphCollideRadius,
+  graphLabelWidth,
   graphLinkDistance,
   graphNodeRadius,
   type GraphForceApi,
@@ -29,6 +30,16 @@ test("graphLinkDistance grows with both node radii", () => {
   );
 });
 
+test("labels increase collision and link spacing without unbounded expansion", () => {
+  const short = { degree: 0, label: "A" };
+  const long = { degree: 0, label: "A very long page name that should be truncated in the graph" };
+  assert.ok(graphLabelWidth(long.label) > graphLabelWidth(short.label));
+  assert.ok(graphCollideRadius(long) > graphCollideRadius(short));
+  assert.ok(graphLinkDistance(long, short) > graphLinkDistance(short, short));
+  assert.ok(graphLabelWidth(long.label) <= 168);
+  assert.ok(graphCollideRadius(long) < 200);
+});
+
 test("graphCollideRadius is larger than the drawn disk", () => {
   const node = { degree: 40 };
   assert.ok(graphCollideRadius(node) > graphNodeRadius(node));
@@ -36,7 +47,8 @@ test("graphCollideRadius is larger than the drawn disk", () => {
 });
 
 test("asLayoutNode marks the focused id", () => {
-  assert.equal(asLayoutNode({ id: "hub", degree: 3 }, "hub").focused, true);
+  assert.equal(asLayoutNode({ id: "hub", label: "Hub", degree: 3 }, "hub").focused, true);
+  assert.equal(asLayoutNode({ id: "hub", label: "Hub" }).label, "Hub");
   assert.equal(asLayoutNode({ id: "other", degree: 3 }, "hub").focused, false);
   assert.equal(asLayoutNode("hub", "hub").degree, 0);
 });

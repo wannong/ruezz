@@ -2,6 +2,7 @@ import { forceCollide } from "d3-force-3d";
 
 export type GraphLayoutNode = {
   id?: string;
+  label?: string;
   degree?: number;
   focused?: boolean;
 };
@@ -27,30 +28,54 @@ export function graphNodeRadius(node: GraphLayoutNode, compact = false): number 
   return base + extra;
 }
 
-/** Collision radius: visual disk plus a gap so large nodes do not sit on top of each other. */
+const LABEL_MAX_WIDTH = 168;
+const COMPACT_LABEL_MAX_WIDTH = 104;
+const LABEL_FONT_SIZE = 12;
+
+/** The canvas uses the same bounded approximation before the font is available. */
+export function graphLabelWidth(label: string | undefined, compact = false): number {
+  if (!label) return 0;
+  const width = Array.from(label).reduce(
+    (sum, char) => sum + (char.charCodeAt(0) > 0xff ? LABEL_FONT_SIZE : LABEL_FONT_SIZE * 0.56),
+    0,
+  );
+  return Math.min(compact ? COMPACT_LABEL_MAX_WIDTH : LABEL_MAX_WIDTH, width);
+}
+
+export function graphLabelHeight(compact = false): number {
+  return compact ? 10 : LABEL_FONT_SIZE;
+}
+
+/** Collision radius includes the label's bounded horizontal footprint. */
 export function graphCollideRadius(node: GraphLayoutNode, compact = false): number {
-  return graphNodeRadius(node, compact) + (compact ? 6 : 8);
+  const radius = graphNodeRadius(node, compact);
+  const labelWidth = graphLabelWidth(node.label, compact);
+  const labelGap = compact ? 3 : 5;
+  const labelHeight = graphLabelHeight(compact);
+  const labelRadius = Math.hypot((labelGap + labelWidth) / 2, labelHeight / 2);
+  return Math.max(radius + (compact ? 6 : 8), labelRadius + 2);
 }
 
 export function graphLinkGap(compact = false): number {
-  return compact ? 18 : 26;
+  return compact ? 24 : 32;
 }
 
-/** Center-to-center link length from the two nodes' actual radii. */
+/** Center-to-center link length from the nodes' disks and bounded labels. */
 export function graphLinkDistance(
   source: GraphLayoutNode,
   target: GraphLayoutNode,
   compact = false,
 ): number {
-  return graphNodeRadius(source, compact) + graphNodeRadius(target, compact) + graphLinkGap(compact);
+  return graphCollideRadius(source, compact) + graphCollideRadius(target, compact) + graphLinkGap(compact);
 }
 
 export function asLayoutNode(value: unknown, focusId?: string | null): GraphLayoutNode {
   if (!value || typeof value !== "object") return { degree: 0 };
-  const node = value as { id?: unknown; degree?: unknown };
+  const node = value as { id?: unknown; label?: unknown; degree?: unknown };
   const id = node.id == null ? undefined : String(node.id);
   return {
     id,
+    label: node.label == null ? undefined : String(node.label),
     degree: Number(node.degree) || 0,
     focused: Boolean(focusId && id === focusId),
   };
@@ -62,7 +87,8 @@ export function asLayoutNode(value: unknown, focusId?: string | null): GraphLayo
  * follow, but cut repulsion beyond a few link-lengths.
  *
  * Link length and collide radius follow each node's drawn size, otherwise
- * high-degree disks sit on top of each other.
+ * high-degree disks sit on top of each other. Labels are bounded so this does
+ * not make a single long page name expand the whole graph without limit.
  */
 export function applyGraphForces(fg: GraphForceApi, compact = false, focusId?: string | null) {
   const layout = (value: unknown) => asLayoutNode(value, focusId);

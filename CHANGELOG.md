@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-09-14
+
+### Added
+
+- Editable, filterable page tags with full file-list hover metadata.
+- In-app PDF and DOCX source previews.
+- KaTeX rendering for Markdown and clickable blue links in Agent replies.
+
+### Changed
+
+- Increased graph node spacing and accounted for labels during layout.
+
+### Fixed
+
+- External Markdown links no longer get mistaken for internal pages.
+- Source preview reads only approved PDF/DOCX files under `raw/sources`.
+
 ## [1.0.8] - 2026-09-13
 
 ### Added
@@ -210,7 +227,8 @@ WikiHome’s first feature-complete release: local wiki, graph, and a vertical A
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.8...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.9...HEAD
+[1.0.9]: https://github.com/wikihome/wikihome/releases/tag/v1.0.9
 [1.0.8]: https://github.com/wikihome/wikihome/releases/tag/v1.0.8
 [1.0.7]: https://github.com/wikihome/wikihome/releases/tag/v1.0.7
 [1.0.6]: https://github.com/wikihome/wikihome/releases/tag/v1.0.6

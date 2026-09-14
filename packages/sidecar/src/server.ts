@@ -313,6 +313,20 @@ export class SidecarSession {
           String(params.id ?? params.path ?? ""),
           String(params.raw ?? ""),
         );
+      case "vault_update_page_tags": {
+        const rawTags = params.tags;
+        if (!Array.isArray(rawTags)) throw new Error("tags 必须是数组");
+        return this.engine.updatePageTags(
+          this.requireVault(),
+          String(params.id ?? params.path ?? ""),
+          rawTags.map(String),
+        );
+      }
+      case "vault_read_source":
+        return this.engine.readSource(
+          this.requireVault(),
+          String(params.id ?? params.pageId ?? ""),
+        );
       case "vault_create_page":
         return this.engine.createPage(
           this.requireVault(),

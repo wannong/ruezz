@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { ChevronRight, FileText, Folder } from "lucide-react";
 import type { PageSummary } from "../api";
 import {
@@ -50,7 +50,6 @@ export function FileTree({
   onLink,
   onRelatedSessions,
 }: FileTreeProps) {
-  const tree = useMemo(() => buildFileTree(pages, folders), [pages, folders]);
   const taken = useMemo(() => {
     const set = new Set<string>();
     for (const page of pages) set.add(page.id);
@@ -60,6 +59,27 @@ export function FileTree({
   const [editor, setEditor] = useState<TreeEditor | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; target: MenuTarget } | null>(null);
   const [forceOpen, setForceOpen] = useState<Record<string, true>>({});
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  useEffect(() => () => hideFileTooltip(), []);
+  const allTags = useMemo(() => {
+    const counts = new Map<string, number>();
+    pages.forEach((page) => page.tags?.forEach((tag) => counts.set(tag, (counts.get(tag) ?? 0) + 1)));
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh"));
+  }, [pages]);
+  const filteredPages = useMemo(
+    () => selectedTags.length === 0 ? pages : pages.filter((page) => selectedTags.every((tag) => page.tags?.includes(tag))),
+    [pages, selectedTags],
+  );
+  const filteredFolders = useMemo(() => {
+    if (selectedTags.length === 0) return folders;
+    const kept = new Set<string>();
+    filteredPages.forEach((page) => {
+      const parts = page.id.split("/");
+      parts.pop();
+      for (let i = 1; i <= parts.length; i++) kept.add(parts.slice(0, i).join("/"));
+    });
+    return folders.filter((folder) => kept.has(folder));
+  }, [filteredPages, folders, selectedTags.length]);
 
   const createParent = (node: FileTreeNode): string => {
     if (!node.page || node.children.length > 0) return node.path;
@@ -159,13 +179,25 @@ export function FileTree({
     return items;
   };
 
-  const empty = pages.length === 0 && folders.length === 0 && editor?.mode !== "create";
+  const empty = filteredPages.length === 0 && filteredFolders.length === 0 && editor?.mode !== "create";
 
   return (
     <div
       className="file-tree-wrap"
       onContextMenu={(e) => openMenu(e, { type: "blank" })}
     >
+      <div className="tag-filter">
+        <div className="tag-filter-head">
+          <span>标签筛选{selectedTags.length ? ` · ${selectedTags.length}` : ""}</span>
+          {selectedTags.length > 0 && <button type="button" className="tag-clear" onClick={() => setSelectedTags([])}>清除</button>}
+        </div>
+        {allTags.length > 0 ? <div className="tag-filter-list">
+          {allTags.map(([tag, count]) => <label key={tag} className="tag-filter-option">
+            <input type="checkbox" checked={selectedTags.includes(tag)} onChange={() => setSelectedTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])} />
+            <span>#{tag}</span><small>{count}</small>
+          </label>)}
+        </div> : <span className="file-meta">暂无标签</span>}
+      </div>
       {empty && (
         <div className="empty">暂无页面。笔记在知识库的 wiki 文件夹里，右键可新建或在资源管理器中打开。</div>
       )}
@@ -173,7 +205,7 @@ export function FileTree({
         {editor?.mode === "create" && editor.parent === "" && (
           <CreateRow editor={editor} onChange={(value) => setEditor({ ...editor, value })} onCommit={commitEditor} />
         )}
-        {tree.map((node) => (
+        {buildFileTree(filteredPages, filteredFolders).map((node) => (
           <TreeItem
             key={node.path}
             node={node}
@@ -262,7 +294,11 @@ function TreeItem({
             type="button"
             className={`tree-label${isActive ? " active" : ""}`}
             onClick={() => onOpen(node.page!.id)}
-            title={node.page.id}
+            aria-label={`${node.page.title ?? node.name}，${node.page.id}`}
+            onMouseEnter={(e) => showFileTooltip(e.currentTarget, node.page!)}
+            onMouseLeave={hideFileTooltip}
+            onFocus={(e) => showFileTooltip(e.currentTarget, node.page!)}
+            onBlur={hideFileTooltip}
           >
             <FileText size={14} />
             <span className="file-name">{node.page.title ?? node.name}</span>
@@ -303,6 +339,27 @@ function TreeItem({
       )}
     </li>
   );
+}
+
+let tooltipNode: HTMLDivElement | null = null;
+function showFileTooltip(element: HTMLElement, page: PageSummary) {
+  hideFileTooltip();
+  tooltipNode = document.createElement("div");
+  tooltipNode.className = "file-tooltip";
+  tooltipNode.innerHTML = `<strong></strong><span></span><span></span><span></span>`;
+  const children = tooltipNode.children;
+  children[0].textContent = page.title ?? page.id;
+  children[1].textContent = `ID：${page.id}`;
+  children[2].textContent = `路径：${page.path ?? page.id}`;
+  children[3].textContent = `标签：${page.tags?.length ? page.tags.map((tag) => `#${tag}`).join(" ") : "无"}`;
+  document.body.appendChild(tooltipNode);
+  const rect = element.getBoundingClientRect();
+  tooltipNode.style.left = `${Math.min(rect.right + 8, window.innerWidth - tooltipNode.offsetWidth - 8)}px`;
+  tooltipNode.style.top = `${Math.min(rect.top, window.innerHeight - tooltipNode.offsetHeight - 8)}px`;
+}
+function hideFileTooltip() {
+  tooltipNode?.remove();
+  tooltipNode = null;
 }
 
 function CreateRow({

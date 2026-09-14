@@ -25,6 +25,8 @@ export type PageSummary = {
   type?: string;
   path?: string;
   tags?: string[];
+  sourcePath?: string;
+  sourceType?: string;
 };
 
 export type GraphNodeDto = {
@@ -53,6 +55,16 @@ export type PageContent = {
   type?: string;
   body: string;
   raw: string;
+  tags?: string[];
+  sourcePath?: string;
+  sourceType?: string;
+};
+
+export type VaultSource = {
+  path: string;
+  name: string;
+  type: string;
+  bytes: string;
 };
 
 export type AskResult = {
@@ -312,7 +324,10 @@ export const api = {
     rpc<{ ok: true; reply: string }>("provider_test", opts ?? {}),
   vaultListPages: () => rpc<PageSummary[]>("vault_list_pages"),
   vaultReadPage: (id: string) => rpc<PageContent | null>("vault_read_page", { id }),
+  vaultReadSource: (id: string) => rpc<VaultSource | null>("vault_read_source", { id }),
   vaultWritePage: (id: string, raw: string) => rpc<PageContent>("vault_write_page", { id, raw }),
+  vaultUpdatePageTags: (id: string, tags: string[]) =>
+    rpc<PageContent>("vault_update_page_tags", { id, tags }),
   vaultCreatePage: (id: string, title?: string) =>
     rpc<PageContent>("vault_create_page", title ? { id, title } : { id }),
   vaultCopyPage: (from: string, to: string) => rpc<PageContent>("vault_copy_page", { from, to }),
