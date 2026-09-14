@@ -92,11 +92,13 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
         apiBaseUrl: provider.apiBaseUrl,
         apiKey: provider.apiKey,
       });
-      const merged = uniqueModelIds([...models, ...provider.models]);
+      // A remote refresh represents the provider's current catalog. Do not keep
+      // models that the provider no longer advertises.
+      const refreshed = uniqueModelIds(models);
       const nextProviders = providers.map((row) =>
-        row.id === provider.id ? { ...row, models: merged } : row,
+        row.id === provider.id ? { ...row, models: refreshed } : row,
       );
-      const nextModel = settings.model.trim() && merged.includes(settings.model) ? settings.model : merged[0] || "";
+      const nextModel = settings.model.trim() && refreshed.includes(settings.model) ? settings.model : refreshed[0] || "";
       onChange({
         ...syncSettings(settings, nextProviders, provider.id, nextModel),
         mock: false,

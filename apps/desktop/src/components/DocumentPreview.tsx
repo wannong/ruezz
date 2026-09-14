@@ -92,13 +92,20 @@ export function DocumentPreview({ pageId, type, name }: DocumentPreviewProps) {
     let renderTask: PdfRenderTask | undefined;
     void pdf.getPage(pageNumber).then((page) => {
       if (cancelled || !canvasRef.current) return;
-      const viewport = page.getViewport({ scale });
-      const canvas = canvasRef.current;
-      canvas.width = Math.ceil(viewport.width);
-      canvas.height = Math.ceil(viewport.height);
+       const viewport = page.getViewport({ scale });
+       const canvas = canvasRef.current;
+       const outputScale = Math.max(1, window.devicePixelRatio || 1);
+       canvas.width = Math.ceil(viewport.width * outputScale);
+       canvas.height = Math.ceil(viewport.height * outputScale);
+       canvas.style.width = `${Math.ceil(viewport.width)}px`;
+       canvas.style.height = `${Math.ceil(viewport.height)}px`;
       const context = canvas.getContext("2d");
       if (!context) throw new Error("当前环境不支持 Canvas");
-       renderTask = page.render({ canvasContext: context, viewport });
+       renderTask = page.render({
+         canvasContext: context,
+         viewport,
+         transform: outputScale === 1 ? undefined : [outputScale, 0, 0, outputScale, 0, 0],
+       });
       return renderTask.promise;
     }).catch((cause: unknown) => {
       if (!cancelled && !(cause instanceof Error && cause.name === "RenderingCancelledException")) setError("PDF 页面渲染失败");

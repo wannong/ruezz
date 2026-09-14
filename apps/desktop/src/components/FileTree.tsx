@@ -59,27 +59,7 @@ export function FileTree({
   const [editor, setEditor] = useState<TreeEditor | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; target: MenuTarget } | null>(null);
   const [forceOpen, setForceOpen] = useState<Record<string, true>>({});
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   useEffect(() => () => hideFileTooltip(), []);
-  const allTags = useMemo(() => {
-    const counts = new Map<string, number>();
-    pages.forEach((page) => page.tags?.forEach((tag) => counts.set(tag, (counts.get(tag) ?? 0) + 1)));
-    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh"));
-  }, [pages]);
-  const filteredPages = useMemo(
-    () => selectedTags.length === 0 ? pages : pages.filter((page) => selectedTags.every((tag) => page.tags?.includes(tag))),
-    [pages, selectedTags],
-  );
-  const filteredFolders = useMemo(() => {
-    if (selectedTags.length === 0) return folders;
-    const kept = new Set<string>();
-    filteredPages.forEach((page) => {
-      const parts = page.id.split("/");
-      parts.pop();
-      for (let i = 1; i <= parts.length; i++) kept.add(parts.slice(0, i).join("/"));
-    });
-    return folders.filter((folder) => kept.has(folder));
-  }, [filteredPages, folders, selectedTags.length]);
 
   const createParent = (node: FileTreeNode): string => {
     if (!node.page || node.children.length > 0) return node.path;
@@ -179,25 +159,13 @@ export function FileTree({
     return items;
   };
 
-  const empty = filteredPages.length === 0 && filteredFolders.length === 0 && editor?.mode !== "create";
+  const empty = pages.length === 0 && folders.length === 0 && editor?.mode !== "create";
 
   return (
     <div
       className="file-tree-wrap"
       onContextMenu={(e) => openMenu(e, { type: "blank" })}
     >
-      <div className="tag-filter">
-        <div className="tag-filter-head">
-          <span>标签筛选{selectedTags.length ? ` · ${selectedTags.length}` : ""}</span>
-          {selectedTags.length > 0 && <button type="button" className="tag-clear" onClick={() => setSelectedTags([])}>清除</button>}
-        </div>
-        {allTags.length > 0 ? <div className="tag-filter-list">
-          {allTags.map(([tag, count]) => <label key={tag} className="tag-filter-option">
-            <input type="checkbox" checked={selectedTags.includes(tag)} onChange={() => setSelectedTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])} />
-            <span>#{tag}</span><small>{count}</small>
-          </label>)}
-        </div> : <span className="file-meta">暂无标签</span>}
-      </div>
       {empty && (
         <div className="empty">暂无页面。笔记在知识库的 wiki 文件夹里，右键可新建或在资源管理器中打开。</div>
       )}
@@ -205,7 +173,7 @@ export function FileTree({
         {editor?.mode === "create" && editor.parent === "" && (
           <CreateRow editor={editor} onChange={(value) => setEditor({ ...editor, value })} onCommit={commitEditor} />
         )}
-        {buildFileTree(filteredPages, filteredFolders).map((node) => (
+        {buildFileTree(pages, folders).map((node) => (
           <TreeItem
             key={node.path}
             node={node}

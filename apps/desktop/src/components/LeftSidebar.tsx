@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import type { PageSummary } from "../api";
 import { attachResizeX } from "../lib/pointerResize";
@@ -63,6 +63,18 @@ export function LeftSidebar({
   onError,
   onResize,
 }: LeftSidebarProps) {
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const filteredPages = useMemo(() => selectedTags.length === 0 ? pages : pages.filter((page) => selectedTags.every((tag) => page.tags?.includes(tag))), [pages, selectedTags]);
+  const filteredFolders = useMemo(() => {
+    if (selectedTags.length === 0) return folders;
+    const kept = new Set<string>();
+    for (const page of filteredPages) {
+      const parts = page.id.split("/");
+      parts.pop();
+      for (let i = 1; i <= parts.length; i += 1) kept.add(parts.slice(0, i).join("/"));
+    }
+    return folders.filter((folder) => kept.has(folder));
+  }, [filteredPages, folders, selectedTags.length]);
   useEffect(() => {
     if (!linkPicker) return;
     const onKey = (event: KeyboardEvent) => {
@@ -96,11 +108,13 @@ export function LeftSidebar({
           browsePages={pages}
           placeholder="搜索要链接的页面…"
           emptyHint="选择一篇笔记插入链接"
+          selectedTags={selectedTags}
+          onTags={setSelectedTags}
         />
       ) : view === "files" ? (
         <FileTree
-          pages={pages}
-          folders={folders}
+          pages={filteredPages}
+          folders={filteredFolders}
           activeId={activeId}
           clipboard={clipboard}
           disabled={busy}
@@ -115,7 +129,7 @@ export function LeftSidebar({
            onRelatedSessions={onRelatedSessions}
         />
       ) : (
-        <SearchPane onOpen={onOpen} onError={onError} />
+        <SearchPane onOpen={onOpen} onError={onError} browsePages={pages} selectedTags={selectedTags} onTags={setSelectedTags} />
       )}
       <div
         className="resize-handle"

@@ -1,6 +1,6 @@
 [package]
 name = "wikihome"
-version = "1.0.9"
+version = "1.0.10"
 description = "WikiHome desktop shell"
 authors = ["WikiHome Contributors"]
 edition = "2021"

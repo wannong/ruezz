@@ -77,6 +77,7 @@ export function GraphView({
   const fgRef = useRef<ForceGraphMethods<GraphNode> | undefined>(undefined);
   const fitted = useRef(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const sizeRef = useRef(size);
   sizeRef.current = size;
   const compactRef = useRef(compact);
@@ -181,8 +182,9 @@ export function GraphView({
             const n = node as GraphNode & { x?: number; y?: number };
             const x = n.x ?? 0;
             const y = n.y ?? 0;
-            const focused = Boolean(focusId && n.id === focusId);
-            const r = graphNodeRadius({ degree: n.degree, focused }, compact);
+             const focused = Boolean(focusId && n.id === focusId);
+             const hovered = hoveredId === n.id;
+             const r = graphNodeRadius({ degree: n.degree, focused }, compact) * (hovered ? 1.18 : 1);
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
             ctx.fillStyle = TYPE_COLOR[theme][n.type] ?? (theme === "dark" ? "#a0a0a0" : "#808080");
@@ -206,8 +208,8 @@ export function GraphView({
                 label = `${label}...`;
               }
               const labelWidth = ctx.measureText(label).width;
-              const labelX = x + r + (compact ? 2 : 3);
-              const labelY = y + fontSize / 3;
+              const labelX = x - labelWidth / 2;
+              const labelY = y + r + fontSize + (compact ? 3 : 5);
               ctx.fillStyle = theme === "dark" ? "rgba(30, 30, 30, 0.92)" : "rgba(255, 255, 255, 0.94)";
               ctx.fillRect(labelX - 2, labelY - fontSize, labelWidth + 4, fontSize + 3);
               ctx.strokeStyle = theme === "dark" ? "rgba(220, 221, 222, 0.28)" : "rgba(34, 34, 34, 0.2)";
@@ -217,14 +219,15 @@ export function GraphView({
               ctx.fillText(label, labelX, labelY);
             }
           }}
-          nodePointerAreaPaint={(node, color, ctx) => {
+           nodePointerAreaPaint={(node, color, ctx) => {
             const n = node as GraphNode & { x?: number; y?: number };
             const r = graphNodeRadius({ degree: n.degree }, compact) + 4;
             ctx.fillStyle = color;
             ctx.beginPath();
             ctx.arc(n.x ?? 0, n.y ?? 0, r, 0, Math.PI * 2);
             ctx.fill();
-          }}
+           }}
+           onNodeHover={(node) => setHoveredId(node ? String((node as GraphNode).id) : null)}
           onNodeDrag={(node) => {
             const id = String((node as GraphNode).id);
             const nodes = data.nodes;

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.10] - 2026-09-14
+
+### Changed
+
+- Model refresh now replaces the provider's remote model catalog instead of retaining stale entries.
+- Tag filtering is consolidated into the compact search controls instead of occupying the file tree.
+- Graph labels are centered below nodes and hovered nodes receive a subtle scale emphasis.
+
+### Fixed
+
+- KaTeX display formulas receive independent line spacing and overflow handling.
+- PDF preview renders at the device pixel ratio for sharper text on high-DPI displays.
+
 ## [1.0.9] - 2026-09-14
 
 ### Added
@@ -227,7 +240,8 @@ WikiHome’s first feature-complete release: local wiki, graph, and a vertical A
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.9...HEAD
+[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.10...HEAD
+[1.0.10]: https://github.com/wikihome/wikihome/releases/tag/v1.0.10
 [1.0.9]: https://github.com/wikihome/wikihome/releases/tag/v1.0.9
 [1.0.8]: https://github.com/wikihome/wikihome/releases/tag/v1.0.8
 [1.0.7]: https://github.com/wikihome/wikihome/releases/tag/v1.0.7
