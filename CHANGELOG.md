@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.12] - 2026-09-14
+
+### Changed
+
+- Refined the tag filter row layout so names remain horizontal and checkboxes align at the far right.
+
 ## [1.0.11] - 2026-09-14
 
 ### Changed
