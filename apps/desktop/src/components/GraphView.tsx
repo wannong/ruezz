@@ -171,7 +171,7 @@ export function GraphView({
           onEngineStop={() => {
             if (fitted.current) return;
             fitted.current = true;
-            applyFit(compact ? 180 : 240);
+            applyFit(compact ? 360 : 480);
           }}
           linkColor={() => colors.line}
           linkWidth={compact ? 1.2 : 1}
@@ -210,11 +210,8 @@ export function GraphView({
               const labelWidth = ctx.measureText(label).width;
               const labelX = x - labelWidth / 2;
               const labelY = y + r + fontSize + (compact ? 3 : 5);
-              ctx.fillStyle = theme === "dark" ? "rgba(30, 30, 30, 0.92)" : "rgba(255, 255, 255, 0.94)";
+              ctx.fillStyle = theme === "dark" ? "rgba(30, 30, 30, 0.5)" : "rgba(255, 255, 255, 0.5)";
               ctx.fillRect(labelX - 2, labelY - fontSize, labelWidth + 4, fontSize + 3);
-              ctx.strokeStyle = theme === "dark" ? "rgba(220, 221, 222, 0.28)" : "rgba(34, 34, 34, 0.2)";
-              ctx.lineWidth = 1 / Math.max(globalScale, 1);
-              ctx.strokeRect(labelX - 2, labelY - fontSize, labelWidth + 4, fontSize + 3);
               ctx.fillStyle = colors.ink;
               ctx.fillText(label, labelX, labelY);
             }

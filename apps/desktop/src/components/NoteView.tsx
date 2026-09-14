@@ -51,6 +51,9 @@ export function NoteView({
   useEffect(() => {
     if (mode === "source" && !hasSource) onMode("read");
   }, [hasSource, mode, onMode]);
+  useEffect(() => {
+    if (sourceType === "pdf") onMode("source");
+  }, [page.id, sourceType, onMode]);
 
   const updateTags = async (next: string[]) => {
     const normalized = [...new Set(next.map((tag) => tag.trim()).filter(Boolean))];

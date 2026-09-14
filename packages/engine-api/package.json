@@ -1,6 +1,6 @@
 {
   "name": "@wikihome/engine-api",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Stable WikiHome engine contract",
   "type": "module",
   "main": "./dist/index.js",

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.11] - 2026-09-14
+
+### Changed
+
+- Search history can be cleared, tag filters align names left and checkboxes right, and PDF pages open in the original document preview.
+- Graph label backgrounds are borderless and 50% transparent, with a slower entrance animation.
+- KaTeX formulas use a MathType-like body size with native subscript and superscript proportions.
+
 ## [1.0.10] - 2026-09-14
 
 ### Changed

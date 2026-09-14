@@ -1,4 +1,4 @@
-import { Filter, X } from "lucide-react";
+import { Filter, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api, type PageSummary } from "../api";
 
@@ -27,6 +27,14 @@ export function SearchPane({
   const [results, setResults] = useState<PageSummary[]>([]);
   const [searching, setSearching] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [history, setHistory] = useState<string[]>(() => {
+    try {
+      const value = JSON.parse(localStorage.getItem("wikihome.search-history") ?? "[]");
+      return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+    } catch {
+      return [];
+    }
+  });
   const allTags = useMemo(() => {
     const counts = new Map<string, number>();
     (browsePages ?? []).forEach((page) => page.tags?.forEach((tag) => counts.set(tag, (counts.get(tag) ?? 0) + 1)));
@@ -44,7 +52,14 @@ export function SearchPane({
     const timer = window.setTimeout(() => {
       api
         .vaultSearch(q)
-        .then(setResults)
+        .then((next) => {
+          setResults(next);
+          setHistory((current) => {
+            const updated = [q, ...current.filter((item) => item !== q)].slice(0, 10);
+            localStorage.setItem("wikihome.search-history", JSON.stringify(updated));
+            return updated;
+          });
+        })
         .catch((e) => onError(e instanceof Error ? e.message : String(e)))
         .finally(() => setSearching(false));
     }, 220);
@@ -78,10 +93,14 @@ export function SearchPane({
           {selectedTags.map((tag) => <button key={tag} type="button" className="search-filter-chip" onClick={() => onTags(selectedTags.filter((item) => item !== tag))}>#{tag}<X size={11} /></button>)}
           {filtersOpen && <div className="search-filter-popover">
             <div className="search-filter-popover-head"><strong>按标签筛选</strong>{selectedTags.length > 0 && <button type="button" onClick={() => onTags([])}>清除</button>}</div>
-            {allTags.length ? allTags.map(([tag, count]) => <label key={tag}><input type="checkbox" checked={selectedTags.includes(tag)} onChange={() => onTags(selectedTags.includes(tag) ? selectedTags.filter((item) => item !== tag) : [...selectedTags, tag])} />#{tag}<small>{count}</small></label>) : <span className="file-meta">暂无标签</span>}
+            {allTags.length ? allTags.map(([tag, count]) => <label key={tag}><span>#{tag}</span><input type="checkbox" checked={selectedTags.includes(tag)} onChange={() => onTags(selectedTags.includes(tag) ? selectedTags.filter((item) => item !== tag) : [...selectedTags, tag])} /><small>{count}</small></label>) : <span className="file-meta">暂无标签</span>}
           </div>}
         </div>
       )}
+      {history.length > 0 && <div className="search-history">
+        <div className="search-history-head"><strong>搜索历史</strong><button type="button" onClick={() => { localStorage.removeItem("wikihome.search-history"); setHistory([]); }}><Trash2 size={12} /> 清除</button></div>
+        <div className="search-history-items">{history.map((item) => <button type="button" key={item} onClick={() => setQuery(item)}>{item}</button>)}</div>
+      </div>}
       <ul className="file-tree search-hits">
         {!query.trim() && !browsing && <li className="empty">{emptyHint}</li>}
         {query.trim() && searching && <li className="empty">搜索中…</li>}
