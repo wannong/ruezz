@@ -218,7 +218,7 @@ fn sidecar_log_path() -> PathBuf {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
         .unwrap_or_else(std::env::temp_dir);
-    let dir = base.join("WikiHome");
+    let dir = base.join("Centaur");
     let _ = std::fs::create_dir_all(&dir);
     dir.join("sidecar-stderr.log")
 }
@@ -231,11 +231,11 @@ fn explain_io(what: &str, err: &std::io::Error) -> String {
         || raw.contains("being closed");
     if broken {
         return format!(
-            "{what}：引擎进程已退出。请关掉 WikiHome 再打开。若仍失败，查看 %APPDATA%\\WikiHome\\sidecar-stderr.log"
+            "{what}：引擎进程已退出。请关掉 Centaur 再打开。若仍失败，查看 %APPDATA%\\Centaur\\sidecar-stderr.log"
         );
     }
     if err.kind() == std::io::ErrorKind::NotFound {
-        return format!("{what}：找不到引擎文件，请重新安装 WikiHome");
+        return format!("{what}：找不到引擎文件，请重新安装 Centaur");
     }
     format!("{what}：{raw}")
 }
@@ -321,7 +321,7 @@ fn sidecar_command(app: &AppHandle) -> Result<Command, String> {
     }
 
     Err(format!(
-        "找不到 WikiHome 引擎。请重新安装。已尝试：{}",
+        "找不到 Centaur 引擎。请重新安装。已尝试：{}",
         candidates
             .iter()
             .map(|p| p.display().to_string())
@@ -398,7 +398,7 @@ fn spawn_sidecar(app: &AppHandle) -> Result<SidecarProc, String> {
         let detail = sidecar_log_tail();
         return Err(if detail.is_empty() {
             format!(
-                "引擎启动后立即退出（{status}）。请查看 %APPDATA%\\WikiHome\\sidecar-stderr.log"
+                "引擎启动后立即退出（{status}）。请查看 %APPDATA%\\Centaur\\sidecar-stderr.log"
             )
         } else {
             format!("引擎启动后立即退出（{status}）。{detail}")
@@ -492,7 +492,7 @@ fn user_webview2_dir() -> PathBuf {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("APPDATA").map(PathBuf::from))
         .unwrap_or_else(std::env::temp_dir)
-        .join("WikiHome")
+        .join("Centaur")
         .join("webview2-runtime")
 }
 
@@ -531,7 +531,7 @@ mod win_msg {
     }
     pub fn info(text: &str) {
         let text: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
-        let caption: Vec<u16> = "WikiHome".encode_utf16().chain(std::iter::once(0)).collect();
+        let caption: Vec<u16> = "Centaur".encode_utf16().chain(std::iter::once(0)).collect();
         unsafe {
             MessageBoxW(std::ptr::null_mut(), text.as_ptr(), caption.as_ptr(), 0x40);
         }
@@ -663,7 +663,7 @@ async fn rpc(
         .await
         .map_err(|_| format!("rpc timeout id={id}"))?
         .map_err(|_| {
-            "引擎连接已断开。请关掉 WikiHome 再打开。若仍失败，查看 %APPDATA%\\WikiHome\\sidecar-stderr.log"
+            "引擎连接已断开。请关掉 Centaur 再打开。若仍失败，查看 %APPDATA%\\Centaur\\sidecar-stderr.log"
                 .to_string()
         })?;
 
@@ -708,5 +708,5 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running WikiHome");
+        .expect("error while running Centaur");
 }

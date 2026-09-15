@@ -1,6 +1,6 @@
 export type Theme = "dark" | "light";
 
-const KEY = "wikihome.theme";
+const KEY = "centaur.theme";
 
 export function loadTheme(): Theme {
   try {

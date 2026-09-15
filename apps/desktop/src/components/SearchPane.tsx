@@ -29,7 +29,7 @@ export function SearchPane({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [history, setHistory] = useState<string[]>(() => {
     try {
-      const value = JSON.parse(localStorage.getItem("wikihome.search-history") ?? "[]");
+      const value = JSON.parse(localStorage.getItem("centaur.search-history") ?? "[]");
       return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
     } catch {
       return [];
@@ -56,7 +56,7 @@ export function SearchPane({
           setResults(next);
           setHistory((current) => {
             const updated = [q, ...current.filter((item) => item !== q)].slice(0, 10);
-            localStorage.setItem("wikihome.search-history", JSON.stringify(updated));
+            localStorage.setItem("centaur.search-history", JSON.stringify(updated));
             return updated;
           });
         })
@@ -98,7 +98,7 @@ export function SearchPane({
         </div>
       )}
       {history.length > 0 && <div className="search-history">
-        <div className="search-history-head"><strong>搜索历史</strong><button type="button" onClick={() => { localStorage.removeItem("wikihome.search-history"); setHistory([]); }}><Trash2 size={12} /> 清除</button></div>
+        <div className="search-history-head"><strong>搜索历史</strong><button type="button" onClick={() => { localStorage.removeItem("centaur.search-history"); setHistory([]); }}><Trash2 size={12} /> 清除</button></div>
         <div className="search-history-items">{history.map((item) => <button type="button" key={item} onClick={() => setQuery(item)}>{item}</button>)}</div>
       </div>}
       <ul className="file-tree search-hits">

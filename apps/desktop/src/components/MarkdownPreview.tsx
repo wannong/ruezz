@@ -77,6 +77,15 @@ function safeHref(href: string | undefined): string | undefined {
   }
 }
 
+function externalLabel(href: string): string {
+  try {
+    const url = new URL(href);
+    return `${url.hostname}${url.pathname === "/" ? "" : url.pathname}`.replace(/\/$/, "");
+  } catch {
+    return href;
+  }
+}
+
 export function MarkdownPreview({ markdown, pages, onOpen, assetRoot, basePath }: MarkdownPreviewProps) {
   const source = rewriteWikilinks(markdown);
   const imageSrc = (src: string): string => {
@@ -123,9 +132,11 @@ export function MarkdownPreview({ markdown, pages, onOpen, assetRoot, basePath }
               );
             }
             if (!safe) return <span>{children}</span>;
+            const label = external ? externalLabel(safe) : children;
             return (
               <a
                 href={safe}
+                title={safe}
                 target={external ? "_blank" : undefined}
                 rel={external ? "noreferrer" : undefined}
                 onClick={
@@ -138,7 +149,7 @@ export function MarkdownPreview({ markdown, pages, onOpen, assetRoot, basePath }
                     : undefined
                 }
               >
-                {children}
+                {external && typeof children === "string" && children === safe ? label : children}
               </a>
             );
           },

@@ -1,8 +1,8 @@
 [package]
 name = "wikihome"
-version = "1.0.12"
-description = "WikiHome desktop shell"
-authors = ["WikiHome Contributors"]
+version = "1.0.13"
+description = "Centaur desktop shell"
+authors = ["Centaur Contributors"]
 edition = "2021"
 
 [lib]

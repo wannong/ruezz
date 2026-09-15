@@ -1,6 +1,6 @@
 export function loadPref<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(`wikihome.${key}`);
+    const raw = localStorage.getItem(`centaur.${key}`);
     if (raw == null) return fallback;
     return JSON.parse(raw) as T;
   } catch {
@@ -10,7 +10,7 @@ export function loadPref<T>(key: string, fallback: T): T {
 
 export function savePref(key: string, value: unknown): void {
   try {
-    localStorage.setItem(`wikihome.${key}`, JSON.stringify(value));
+    localStorage.setItem(`centaur.${key}`, JSON.stringify(value));
   } catch {
     /* ignore */
   }

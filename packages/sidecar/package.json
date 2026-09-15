@@ -1,7 +1,7 @@
 {
   "name": "@wikihome/sidecar",
-  "version": "1.0.12",
-  "description": "JSON-RPC sidecar for WikiHome Tauri shell",
+  "version": "1.0.13",
+  "description": "JSON-RPC sidecar for Centaur Tauri shell",
   "type": "module",
   "bin": {
     "wikihome-sidecar": "./dist/cli.js"

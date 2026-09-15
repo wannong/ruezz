@@ -1,7 +1,7 @@
 import { Paperclip, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentAttachment, AgentSessionMessage, AgentSessionSummary, PageSummary } from "../api";
-import wikihomeIcon from "../assets/wikihome-icon.svg";
+import centaurIcon from "../assets/centaur-icon.svg";
 import { parseModelSwitchKey } from "../lib/llmProviders";
 import { loadPref, savePref } from "../lib/prefs";
 import { attachResizeY } from "../lib/pointerResize";
@@ -24,6 +24,7 @@ type AgentPaneProps = {
   pendingUser: string | null;
   streamingText: string;
   streamingTools: Array<{ id: string; name: string }>;
+  streamingPhase: "thinking" | "tool" | "answer" | null;
   draft: string;
   busy: boolean;
   pages: PageSummary[];
@@ -98,6 +99,7 @@ export function AgentPane({
   pendingUser,
   streamingText,
   streamingTools,
+  streamingPhase,
   draft,
   busy,
   pages,
@@ -290,7 +292,7 @@ export function AgentPane({
             {empty && (
               <div className="agent-welcome">
                 <div className="agent-welcome-icon">
-                  <img src={wikihomeIcon} alt="" width={64} height={64} />
+                  <img src={centaurIcon} alt="" width={64} height={64} />
                 </div>
                 {modelMissing ? (
                   <p>当前没有可用模型。请在设置中填写 API，并拉取或输入模型名。</p>
@@ -302,34 +304,31 @@ export function AgentPane({
             {messages.map((m, index) => (
               <SessionMessageView key={messageKey(m, index)} message={m} pages={pages} onOpen={onOpen} />
             ))}
-            {pendingUser && (
-              <div className="msg msg-user msg-pending">
-                <div className="msg-role">你</div>
-                <div className="msg-body">
-                  <WikilinkText text={pendingUser} pages={pages} onOpen={onOpen} />
-                </div>
-              </div>
-            )}
-            {busy && (
-              <div className="msg msg-assistant msg-streaming">
-                <div className="msg-role">Agent</div>
-                <div className="msg-body">
-                  {streamingText ? (
-                    <>
-                      <MarkdownPreview markdown={streamingText} pages={pages} onOpen={onOpen} />
-                      <span className="stream-cursor" aria-hidden="true" />
-                    </>
-                  ) : (
-                    <span className="msg-thinking">思考中</span>
-                  )}
-                </div>
-                {streamingTools.length > 0 && (
-                  <div className="msg-tools">
-                    {streamingTools.map((tool) => (
-                      <span key={tool.id} className="tool-chip">
-                        {tool.name}
-                      </span>
-                    ))}
+            {(pendingUser || busy) && (
+              <div className="agent-turn agent-turn-pending">
+                {pendingUser && (
+                  <div className="msg msg-user msg-pending">
+                    <div className="msg-role">你</div>
+                    <div className="msg-body">
+                      <WikilinkText text={pendingUser} pages={pages} onOpen={onOpen} />
+                    </div>
+                  </div>
+                )}
+                {busy && (
+                  <div className="msg msg-assistant msg-streaming">
+                    <div className="msg-role">Agent</div>
+                    <div className="msg-body">
+                      {streamingText ? (
+                        <>
+                          <MarkdownPreview markdown={streamingText} pages={pages} onOpen={onOpen} />
+                          <span className="stream-cursor" aria-hidden="true" />
+                        </>
+                      ) : (
+                        <span className="msg-thinking">
+                          {streamingPhase === "tool" || streamingTools.length > 0 ? "正在查阅知识库" : "准备回答"}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -586,16 +585,8 @@ function SessionMessageView({
   }
 
   if (message.role === "toolResult") {
-    return (
-      <details className={`msg msg-tool${message.isError ? " msg-tool-error" : ""}`}>
-        <summary className="msg-role">
-          {message.isError ? "工具失败" : "工具"} · {message.toolName}
-        </summary>
-        <div className="msg-body">
-          <WikilinkText text={message.content} pages={pages} onOpen={onOpen} />
-        </div>
-      </details>
-    );
+    // Tool traffic is retained for the next model turn, but is not part of the conversation transcript.
+    return null;
   }
 
   const hasText = Boolean(message.content.trim());
@@ -613,20 +604,11 @@ function SessionMessageView({
           <MarkdownPreview markdown={message.content} pages={pages} onOpen={onOpen} />
         </div>
       )}
-      {toolCalls.length > 0 && (
-        <div className="msg-tools">
-          {toolCalls.map((call) => (
-            <span key={call.id} className="tool-chip">
-              {call.name}
-            </span>
-          ))}
-        </div>
-      )}
       {sources.length > 0 && (
         <div className="msg-sources">
           {sources.map((src) => (
-            <button key={src} type="button" className="source-chip" onClick={() => onOpen(src)}>
-              {src}
+            <button key={src} type="button" className="source-chip" title={src} onClick={() => onOpen(src)}>
+              {pages.find((page) => page.id === src)?.title ?? src.split("/").pop() ?? src}
             </button>
           ))}
         </div>

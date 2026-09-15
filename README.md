@@ -1,4 +1,4 @@
-# WikiHome
+# Centaur
 
 本地知识库管理 Agent：拖入 Markdown / PDF / Word → 整篇归档进 wiki → 提问与浏览。
 
@@ -37,17 +37,17 @@ pnpm dev
 
 给完全没有开发环境的电脑用 **安装包**：
 
-1. 把 `release/WikiHome_*_x64-setup.exe` 拷到那台电脑
+1. 把 `release/Centaur_*_x64-setup.exe` 拷到那台电脑
 2. 双击安装，一直点「下一步」
-3. 开始菜单或桌面打开 WikiHome
+3. 开始菜单或桌面打开 Centaur
 
 安装包已内置 Node 引擎、PDF/Office 转换（MarkItDown）和 WebView2 运行时。不需要再装 Node、Python、Git，也不要求系统事先装过 WebView2。默认装到当前用户目录，不用管理员权限。
 
 开发机本地验收仍可用绿色目录 `release/`：
 
-- `WikiHome.exe`
+- `Centaur.exe`
 - `WebView2Loader.dll`（GNU 工具链必需，运行 `pnpm release:prepare` 自动复制）
-- `启动WikiHome.bat`
+- `启动Centaur.bat`
 
 ```bash
 pnpm dev:desktop

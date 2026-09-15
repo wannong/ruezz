@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.13
+
+- Rename the desktop product branding from WikiHome to Centaur.
+
 All notable changes to WikiHome are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),

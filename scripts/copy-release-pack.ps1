@@ -3,7 +3,6 @@ $ErrorActionPreference = "Stop"
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Release = Join-Path $Root "release"
 $NsisDir = Join-Path $Root "apps\desktop\src-tauri\target\release\bundle\nsis"
-$ExeDir = Join-Path $Root "apps\desktop\src-tauri\target\release"
 
 New-Item -ItemType Directory -Force -Path $Release | Out-Null
 
@@ -21,24 +20,12 @@ if (-not $setup) {
 if (-not $setup) { throw "NSIS setup.exe not found in $NsisDir" }
 Copy-Item -Force $setup.FullName (Join-Path $Release $setup.Name)
 
-$exe = Join-Path $ExeDir "WikiHome.exe"
-if (-not (Test-Path $exe)) { $exe = Join-Path $ExeDir "wikihome.exe" }
-if (Test-Path $exe) {
-  try {
-    Copy-Item -Force $exe (Join-Path $Release "WikiHome.exe")
-  } catch {
-    Write-Host "skip WikiHome.exe (file in use)"
-  }
-}
-
-$dll = Join-Path $ExeDir "WebView2Loader.dll"
-if (Test-Path $dll) {
-  Copy-Item -Force $dll (Join-Path $Release "WebView2Loader.dll")
-}
-
 $guideSrc = Join-Path $PSScriptRoot "install-readme.zh-CN.txt"
 if (Test-Path $guideSrc) {
-  Copy-Item -Force $guideSrc (Join-Path $Release "install-readme.txt")
+  $guide = Get-Content $guideSrc -Raw -Encoding UTF8
+  $guide = $guide.Replace("1.0.5", $Version)
+  $guide = $guide -replace "\r?\n绿色目录.*", ""
+  Set-Content -Encoding utf8 (Join-Path $Release "install-readme.txt") $guide
 }
 
 Write-Host "Release pack:"

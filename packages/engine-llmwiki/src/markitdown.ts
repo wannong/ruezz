@@ -25,7 +25,7 @@ function pythonExeName(): string {
   return process.platform === "win32" ? "python.exe" : "python3";
 }
 
-/** WikiHome-bundled CPython with MarkItDown, next to the sidecar/runtime. */
+/** Centaur-bundled CPython with MarkItDown, next to the sidecar/runtime. */
 export function findBundledPython(): string | undefined {
   const exe = pythonExeName();
   const seen = new Set<string>();

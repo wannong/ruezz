@@ -11,7 +11,7 @@
 | `@wikihome/sidecar` | JSON-RPC process. Wire protocol breaks → major. |
 | `@wikihome/desktop` | App UX. Must match Tauri `version` in `tauri.conf.json`. |
 
-Root app and all packages ship together as **WikiHome `vX.Y.Z`** (git tag).
+Root app and all packages ship together as **Centaur `vX.Y.Z`** (git tag).
 
 ## Vault on-disk format
 

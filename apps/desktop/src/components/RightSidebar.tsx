@@ -21,6 +21,7 @@ type RightSidebarProps = {
   pendingUser: string | null;
   streamingText: string;
   streamingTools: Array<{ id: string; name: string }>;
+  streamingPhase: "thinking" | "tool" | "answer" | null;
   draft: string;
   busy: boolean;
   pages: PageSummary[];
@@ -69,6 +70,7 @@ export function RightSidebar({
   pendingUser,
   streamingText,
   streamingTools,
+  streamingPhase,
   draft,
   busy,
   pages,
@@ -142,7 +144,8 @@ export function RightSidebar({
           messages={messages}
           pendingUser={pendingUser}
           streamingText={streamingText}
-          streamingTools={streamingTools}
+           streamingTools={streamingTools}
+           streamingPhase={streamingPhase}
           draft={draft}
           busy={busy}
           pages={pages}

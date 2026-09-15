@@ -98,7 +98,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <TitleBar
-        label={settings.vaultPath ? vaultName(settings.vaultPath) : "WikiHome"}
+        label={settings.vaultPath ? vaultName(settings.vaultPath) : "Centaur"}
         sessionTitle={screen === "main" ? agentTitle : null}
         hasVault={Boolean(settings.vaultPath)}
         onNewVault={() => void chooseVault("new")}

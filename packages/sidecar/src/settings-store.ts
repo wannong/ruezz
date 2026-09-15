@@ -15,6 +15,12 @@ import { VaultSettingsSchema, type VaultSettings } from "@wikihome/engine-api";
 
 export function configDir(): string {
   if (process.env.WIKIHOME_CONFIG_DIR) return process.env.WIKIHOME_CONFIG_DIR;
+  if (process.env.APPDATA) return path.join(process.env.APPDATA, "Centaur");
+  return path.join(os.homedir(), ".centaur");
+}
+
+function legacyConfigDir(): string {
+  if (process.env.WIKIHOME_CONFIG_DIR) return process.env.WIKIHOME_CONFIG_DIR;
   if (process.env.APPDATA) return path.join(process.env.APPDATA, "WikiHome");
   return path.join(os.homedir(), ".wikihome");
 }
@@ -32,8 +38,11 @@ export function settingsFromEnv(): Partial<VaultSettings> {
 
 export function loadPersistedSettings(): Partial<VaultSettings> {
   try {
-    const file = path.join(configDir(), "settings.json");
-    if (!existsSync(file)) return {};
+    const files = [path.join(configDir(), "settings.json")];
+    const legacyFile = path.join(legacyConfigDir(), "settings.json");
+    if (legacyFile !== files[0]) files.push(legacyFile);
+    const file = files.find((candidate) => existsSync(candidate));
+    if (!file) return {};
     const parsed = decryptSettings(JSON.parse(readFileSync(file, "utf8")) as unknown);
     return VaultSettingsSchema.partial().parse(parsed);
   } catch {

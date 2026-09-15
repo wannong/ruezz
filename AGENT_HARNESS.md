@@ -1,10 +1,10 @@
-# WikiHome Agent Harness 对接说明
+# Centaur Agent Harness 对接说明
 
-本文档说明 WikiHome 本地知识库 Agent harness 的设计和使用方式，供前端界面开发者参考。
+本文档说明 Centaur 本地知识库 Agent harness 的设计和使用方式，供前端界面开发者参考。
 
 ## 概述
 
-WikiHome Agent 基于 `@earendil-works/pi-agent-core` 和 `@earendil-works/pi-ai`，实现了面向本地 wiki 的工具循环：
+Centaur Agent 基于 `@earendil-works/pi-agent-core` 和 `@earendil-works/pi-ai`，实现了面向本地 wiki 的工具循环：
 
 - **Session 模型**：每个会话持久化到 `.wikihome/sessions/<session-id>.json`，包含标题、消息历史、链接的页面、模型配置
 - **工具循环**：Agent 通过 WikiEngine 工具（search、read、write、create 等）访问知识库，而非直接文件操作
@@ -319,7 +319,7 @@ Agent 可使用以下工具（封装 WikiEngine，见 `packages/agent/src/tools/
 
 ## Agent 技能
 
-WikiHome Agent 内置技能目录（`packages/agent/skills/`），每轮按用户消息启用完整说明：
+Centaur Agent 内置技能目录（`packages/agent/skills/`），每轮按用户消息启用完整说明：
 
 - **grill-me** / **grilling**：用户说 grill-me、拷问、追问方案时，按轮次追问并给出推荐答案，得到确认前不入库、不写页面
 - **markitdown**：把 vault 里的 PDF / Office 转成一篇 Markdown；`ingest_file` 会自动转写，`convert_to_markdown` 用于预览（调用 `WIKIHOME_PYTHON` 或本机 `python -m markitdown`）

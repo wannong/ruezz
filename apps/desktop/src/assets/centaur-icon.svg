@@ -1,11 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" role="img" aria-label="WikiHome">
-  <!-- Warm cream ground (WikiHome bg) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" role="img" aria-label="Centaur">
   <rect width="256" height="256" rx="56" fill="#F6F3EE"/>
-
-  <!-- Robot head, scaled to fill the mark -->
   <rect x="48" y="54" width="160" height="148" rx="48" fill="#D6D3D1"/>
-
-  <!-- Black capsule eyes with cream highlight -->
   <rect x="78" y="98" width="36" height="52" rx="18" fill="#1C1917"/>
   <rect x="86" y="106" width="12" height="12" rx="6" fill="#F6F3EE"/>
   <rect x="142" y="98" width="36" height="52" rx="18" fill="#1C1917"/>

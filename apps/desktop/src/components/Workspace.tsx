@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   api,
   isTauriRuntime,
@@ -57,6 +58,7 @@ type AgentUiState = {
   pendingUser: string | null;
   streamingText: string;
   streamingTools: Array<{ id: string; name: string }>;
+  streamingPhase: "thinking" | "tool" | "answer" | null;
   draft: string;
   busy: boolean;
 };
@@ -65,7 +67,7 @@ type RelatedPanel =
   | { kind: "files"; label: string; files: Array<{ id: string; label: string }> };
 
 const emptyAgentState = (): AgentUiState => ({
-  messages: [], attachments: [], pendingUser: null, streamingText: "", streamingTools: [], draft: "", busy: false,
+  messages: [], attachments: [], pendingUser: null, streamingText: "", streamingTools: [], streamingPhase: null, draft: "", busy: false,
 });
 
 function clamp(n: number, min: number, max: number): number {
@@ -95,6 +97,8 @@ export function Workspace({
   const [clip, setClip] = useState<WikiClip | null>(null);
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [pageHistory, setPageHistory] = useState<string[]>([]);
+  const [pageHistoryIndex, setPageHistoryIndex] = useState(-1);
   const [pageCache, setPageCache] = useState<Record<string, PageContent>>({});
   const [missingIds, setMissingIds] = useState<Record<string, true>>({});
   const [noteMode, setNoteMode] = useState<"read" | "edit" | "source">("read");
@@ -134,7 +138,7 @@ export function Workspace({
   const activePageId = activeTab?.kind === "page" ? activeTab.id : null;
   const activePage = activePageId ? (pageCache[activePageId] ?? null) : null;
   const activeAgentState = sessionId ? (agentStates[sessionId] ?? emptyAgentState()) : emptyAgentState();
-  const { messages, attachments, pendingUser, streamingText, streamingTools } = activeAgentState;
+  const { messages, attachments, pendingUser, streamingText, streamingTools, streamingPhase } = activeAgentState;
   const draft = sessionId ? activeAgentState.draft : draftFallback;
   const agentBusy = activeAgentState.busy;
   const updateAgentState = useCallback((id: string, update: Partial<AgentUiState> | ((state: AgentUiState) => AgentUiState)) => {
@@ -422,16 +426,37 @@ export function Workspace({
   }, [activePageId, onError]);
 
   const openPage = useCallback(
-    (id: string) => {
+    (id: string, recordHistory = true) => {
       setTabs((prev) => {
         if (prev.some((t) => t.kind === "page" && t.id === id)) return prev;
         return [...prev, { kind: "page", id }];
       });
       setActiveKey(`page:${id}`);
+      if (recordHistory) {
+        setPageHistory((prev) => {
+          const current = pageHistoryIndex >= 0 ? prev[pageHistoryIndex] : undefined;
+          if (current === id) return prev;
+          const next = prev.slice(0, pageHistoryIndex + 1);
+          next.push(id);
+          setPageHistoryIndex(next.length - 1);
+          return next;
+        });
+      }
       if (narrow) setLeftCollapsed(true);
     },
-    [narrow],
+    [narrow, pageHistoryIndex],
   );
+
+  const navigatePageHistory = useCallback((direction: -1 | 1) => {
+    setPageHistoryIndex((index) => {
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= pageHistory.length) return index;
+      const id = pageHistory[nextIndex];
+      setTabs((prev) => prev.some((tab) => tab.id === id) ? prev : [...prev, { kind: "page", id }]);
+      setActiveKey(`page:${id}`);
+      return nextIndex;
+    });
+  }, [pageHistory]);
 
   const startLinkPicker = useCallback((fromId: string, range?: { start: number; end: number }) => {
     setLinkPicker({ fromId, range });
@@ -1096,6 +1121,14 @@ export function Workspace({
         />
         <section className="center-pane">
           <div className="center-header">
+            <div className="page-history-controls" aria-label="页面浏览历史">
+              <button type="button" title="后退" aria-label="后退" disabled={pageHistoryIndex <= 0} onClick={() => navigatePageHistory(-1)}>
+                <ChevronLeft size={15} />
+              </button>
+              <button type="button" title="前进" aria-label="前进" disabled={pageHistoryIndex < 0 || pageHistoryIndex >= pageHistory.length - 1} onClick={() => navigatePageHistory(1)}>
+                <ChevronRight size={15} />
+              </button>
+            </div>
             <TabBar
               tabs={tabs}
               activeKey={activeKey}
@@ -1159,8 +1192,9 @@ export function Workspace({
           overlay={narrow}
           messages={messages}
           pendingUser={pendingUser}
-          streamingText={streamingText}
-          streamingTools={streamingTools}
+           streamingText={streamingText}
+           streamingTools={streamingTools}
+           streamingPhase={streamingPhase}
           draft={draft}
           busy={agentBusy}
           pages={pages}

@@ -1,17 +1,17 @@
 ---
 name: wikihome-windows-installer
 description: >-
-  Builds WikiHome's self-contained Windows NSIS installer (setup.exe) for
+  Builds Centaur's self-contained Windows NSIS installer (setup.exe) for
   machines with no Node, Python, Git, or toolchain. Use when the user asks to
   打包, 打安装包, 正式安装包, NSIS, setup.exe, 给小白打包, ship a Windows installer,
-  or release WikiHome.exe for a blank PC.
+   or release a Centaur NSIS installer for a blank PC.
 ---
 
-# WikiHome Windows installer
+# Centaur Windows installer
 
 Self-contained **current-user** NSIS setup for a PC with nothing installed. Bundles Node sidecar and embeddable CPython + MarkItDown. Uses the machine's WebView2 when present; GNU builds still need `WebView2Loader.dll` **next to the exe** (NSIS post-install copies it from `resources\`).
 
-Deliverable: `release/WikiHome_<version>_x64-setup.exe` (typically ~300MB). Do not commit `release/`, `.cache/`, or staged runtimes.
+Deliverable: `release/Centaur_<version>_x64-setup.exe` (typically ~150MB). Do not commit `release/`, `.cache/`, or staged runtimes.
 
 ## Preconditions
 
@@ -25,7 +25,7 @@ $env:PATH = "D:\winlibs\mingw64\bin;" + $env:PATH
 
 Confirm `windres.exe` exists. PowerShell 5.1: use `;`, never `&&`.
 
-- Stop WikiHome **dev** processes first (`pnpm --filter @wikihome/desktop dev`, vite, sidecar http). They lock `node_modules` binaries and make `pnpm install` / deploy fail with EPERM.
+- Stop Centaur **dev** processes first (`pnpm --filter @wikihome/desktop dev`, vite, sidecar http). They lock `node_modules` binaries and make `pnpm install` / deploy fail with EPERM.
 - Do not bump versions or commit unless the user asked. If they want a new version, follow `docs/VERSIONING.md` and `pnpm version:check`.
 
 ## Workflow
@@ -85,7 +85,7 @@ $env:PATH = "D:\winlibs\mingw64\bin;" + $env:PATH
 pnpm --filter @wikihome/desktop tauri build
 ```
 
-Expect: compile, pack sidecar, then `makensis`. Success log: `Finished 1 bundle at: ...\bundle\nsis\WikiHome_*_x64-setup.exe`.
+Expect: compile, pack sidecar, then `makensis`. Success log: `Finished 1 bundle at: ...\bundle\nsis\Centaur_*_x64-setup.exe`.
 
 A **~4MB** setup.exe is the old shell-only pack. A real 小白 installer is **tens to ~150MB** (sidecar + Python; WebView2 is *not* embedded). If it is ~4MB, resources were not packed — restage and rebuild. If it is ~300MB, the old Fixed Runtime is still being packed — `webviewInstallMode` must be `skip`.
 
@@ -95,15 +95,15 @@ A **~4MB** setup.exe is the old shell-only pack. A real 小白 installer is **te
 pnpm release:pack
 ```
 
-If `WikiHome.exe` is in use, the script skips that copy; setup.exe still copies. It copies the setup.exe whose name matches `tauri.conf.json` `version`, not the alphabetically first `*setup.exe` (an old 0.1.0 stub would otherwise win).
+`release:pack` copies only the setup.exe whose name matches `tauri.conf.json` `version`, not the alphabetically first `*setup.exe` (an old stub would otherwise win).
 
 Write/copy `release/安装说明.txt` (UTF-8) from `scripts/install-readme.zh-CN.txt`. PowerShell 5.1 `.ps1` files cannot hold Chinese string literals without a BOM.
 
-Remove leftover older `WikiHome_*_x64-setup.exe` in `release/` so 小白 only sees the current version.
+Remove leftover older `Centaur_*_x64-setup.exe` in `release/` so 小白 only sees the current version.
 
 ### 5. Hand off
 
-Give the user **one file**: `release/WikiHome_<ver>_x64-setup.exe`.
+Give the user **one file**: `release/Centaur_<ver>_x64-setup.exe`.
 
 小白 steps:
 
@@ -113,7 +113,7 @@ Give the user **one file**: `release/WikiHome_<ver>_x64-setup.exe`.
 4. First launch: pick a vault folder, then fill AI base URL + key in settings
 5. Needs 64-bit Windows 10/11. If the PC already has Edge/WebView2, that is used. If not, first launch downloads a user-local copy (no admin).
 
-Do not tell them to run `WikiHome.exe` from `release/` unless they are on this dev machine.
+Do not give users a standalone exe from `release/`; deliver the NSIS installer.
 
 ## Hard rules (do not improvise)
 

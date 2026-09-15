@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "WikiHome",
-  "version": "1.0.12",
-  "identifier": "app.wikihome.desktop",
+  "productName": "Centaur",
+  "version": "1.0.13",
+  "identifier": "app.centaur.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "WikiHome",
+        "title": "Centaur",
         "width": 1280,
         "height": 860,
         "minWidth": 960,

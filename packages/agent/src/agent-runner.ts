@@ -29,7 +29,7 @@ const EMPTY_USAGE = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
-const SYSTEM_PROMPT = `你是 WikiHome 本地知识库助手。对话里不会预先放入页面正文；需要知识库内容时，请主动调用工具：
+const SYSTEM_PROMPT = `你是 Centaur 本地知识库助手。对话里不会预先放入页面正文；需要知识库内容时，请主动调用工具：
 
 - search_pages：搜索页面
 - read_page：读取页面内容
@@ -285,10 +285,17 @@ export class AgentRunner {
 
     agent.subscribe((event) => {
       if (event.type === "message_update" && event.message?.role === "assistant") {
+        if (assistantHasBlock(event.message, "thinking")) {
+          emitStream(onEvent, { type: "phase", phase: "thinking" });
+        }
         const text = assistantTextFromMessage(event.message);
-        if (text) emitStream(onEvent, { type: "text", text });
+        if (text) {
+          emitStream(onEvent, { type: "phase", phase: "answer" });
+          emitStream(onEvent, { type: "text", text });
+        }
       }
       if (event.type === "tool_execution_start") {
+        emitStream(onEvent, { type: "phase", phase: "tool" });
         emitStream(onEvent, {
           type: "tool_start",
           name: event.toolName,
@@ -589,4 +596,10 @@ function assistantTextFromMessage(message: { content?: unknown }): string {
       return "";
     })
     .join("");
+}
+
+function assistantHasBlock(message: { content?: unknown }, type: string): boolean {
+  return Array.isArray(message.content) && message.content.some(
+    (block) => block && typeof block === "object" && (block as { type?: string }).type === type,
+  );
 }

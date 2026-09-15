@@ -70,9 +70,9 @@ export function TitleBar({
           <Menu size={16} />
         </button>
         <span className="titlebar-brand" data-tauri-drag-region>
-          WikiHome
+           Centaur
         </span>
-        {label && label !== "WikiHome" && (
+        {label && label !== "Centaur" && (
           <span className="titlebar-label" data-tauri-drag-region>
             {label}
           </span>

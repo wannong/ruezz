@@ -1,4 +1,4 @@
-# Copy WebView2Loader.dll next to WikiHome.exe (required for GNU toolchain builds).
+# Copy WebView2Loader.dll next to Centaur.exe (required for GNU toolchain builds).
 param(
   [string]$TargetDir = (Join-Path $PSScriptRoot "..\release")
 )

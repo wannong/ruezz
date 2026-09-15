@@ -1,6 +1,6 @@
 # Start HTTP sidecar + Vite UI (no Rust required)
 
-Write-Host "Starting WikiHome web mode (mock LLM)..."
+Write-Host "Starting Centaur web mode (mock LLM)..."
 $env:WIKIHOME_MOCK = "1"
 $env:VITE_SIDECAR_HTTP = "http://127.0.0.1:8787"
 

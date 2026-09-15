@@ -123,6 +123,7 @@ export interface ContextBuildOptions {
 /** Live events while `prompt()` is running. */
 export type AgentStreamEvent =
   | { type: "text"; text: string }
+  | { type: "phase"; phase: "thinking" | "tool" | "answer" }
   | { type: "tool_start"; name: string; id: string }
   | { type: "tool_end"; name: string; id: string; isError?: boolean }
   | { type: "usage"; input: number; output: number; totalTokens: number };
