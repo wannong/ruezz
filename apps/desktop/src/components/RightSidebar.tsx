@@ -1,5 +1,5 @@
 import { PanelCloseGlyph } from "./iconGlyphs";
-import type { AgentAttachment, AgentSessionMessage, AgentSessionSummary, GraphDto, PageSummary } from "../api";
+import type { AgentAttachment, AgentSessionMessage, AgentSessionSummary, GraphDto, Idea, IdeaSelector, PageSummary } from "../api";
 import { attachResizeX } from "../lib/pointerResize";
 import type { OutlineItem } from "../lib/outline";
 import type { Theme } from "../theme";
@@ -8,8 +8,9 @@ import { AgentPane } from "./AgentPane";
 import { LocalGraphPane } from "./LocalGraphPane";
 import { OutlinePane } from "./OutlinePane";
 import { Presence } from "./Presence";
+import { IdeasPane } from "./IdeasPane";
 
-export type RightView = "agent" | "outline" | "graph";
+export type RightView = "agent" | "outline" | "ideas" | "graph";
 
 type RightSidebarProps = {
   view: RightView;
@@ -31,6 +32,8 @@ type RightSidebarProps = {
   outline: OutlineItem[];
   pageId: string | null;
   graph: GraphDto | null;
+  ideas: Idea[];
+  ideasVisible: boolean;
   theme: Theme;
   onDraft: (value: string) => void;
   onSend: () => void;
@@ -58,6 +61,11 @@ type RightSidebarProps = {
   onCloseSession: (id: string) => void;
   onResize: (dx: number) => void;
   onCollapse: () => void;
+  onIdeasVisible: (visible: boolean) => void;
+  onNavigateIdea: (idea: Idea) => void;
+  onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
+  onDeleteIdea: (id: string) => Promise<void>;
+  onCreateAgentIdea: (messageId: string, selector: IdeaSelector, content: string) => Promise<boolean>;
 };
 
 export function RightSidebar({
@@ -80,6 +88,8 @@ export function RightSidebar({
   outline,
   pageId,
   graph,
+  ideas,
+  ideasVisible,
   theme,
   onDraft,
   onSend,
@@ -107,6 +117,11 @@ export function RightSidebar({
   onDetachAttachment,
   onRelatedFiles,
   onCloseSession,
+  onIdeasVisible,
+  onNavigateIdea,
+  onUpdateIdea,
+  onDeleteIdea,
+  onCreateAgentIdea,
 }: RightSidebarProps) {
   const aside = (
     <aside className={`sidebar sidebar-right${overlay ? " overlay" : ""}`} style={{ width }}>
@@ -124,6 +139,9 @@ export function RightSidebar({
           onClick={() => onView("outline")}
         >
           大纲
+        </button>
+        <button type="button" className={view === "ideas" ? "active" : ""} onClick={() => onView("ideas")}>
+          Idea
         </button>
         <button type="button" className={view === "graph" ? "active" : ""} onClick={() => onView("graph")}>
           图谱
@@ -167,7 +185,10 @@ export function RightSidebar({
            onAttachCurrent={onAttachCurrent}
            onDetach={onDetachAttachment}
            onRelatedFiles={onRelatedFiles}
-           onCloseSession={onCloseSession}
+            onCloseSession={onCloseSession}
+            ideas={ideas}
+            ideasVisible={ideasVisible}
+            onCreateIdea={onCreateAgentIdea}
           onNewChat={onNewChat}
           onSelectSession={onSelectSession}
           onDeleteSession={onDeleteSession}
@@ -176,6 +197,18 @@ export function RightSidebar({
         />
       )}
       {view === "outline" && <OutlinePane items={outline} onJump={onJump} />}
+      {view === "ideas" && (
+        <IdeasPane
+          ideas={ideas}
+          pageId={pageId}
+          sessionId={sessionId}
+          visible={ideasVisible}
+          onVisible={onIdeasVisible}
+          onNavigate={onNavigateIdea}
+          onUpdate={onUpdateIdea}
+          onDelete={onDeleteIdea}
+        />
+      )}
       {view === "graph" && (
         <LocalGraphPane
           graph={graph}

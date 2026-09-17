@@ -11,6 +11,7 @@ import path from "node:path";
 import { revealInExplorer } from "./reveal.js";
 import { anthropicMessagesBaseUrl, listOpenAiModels, looksLikeClaudeModel, testOpenAiConnection } from "./openai-compat.js";
 import { loadPersistedSettings, savePersistedSettings, settingsFromEnv } from "./settings-store.js";
+import { IdeaStorage } from "./idea-storage.js";
 
 export type RpcRequest = {
   id: string | number;
@@ -37,6 +38,7 @@ export class SidecarSession {
   private engine: WikiEngine;
   private agentRunner: AgentRunner | null = null;
   private listedModelIds: string[] = [];
+  private ideaStorage: IdeaStorage | null = null;
 
   constructor(initial?: Partial<VaultSettings>) {
     const persisted = loadPersistedSettings();
@@ -215,6 +217,10 @@ export class SidecarSession {
       oldSettings.activeProviderId !== this.settings.activeProviderId ||
       JSON.stringify(oldSettings.providers) !== JSON.stringify(this.settings.providers);
 
+    if (oldSettings.vaultPath !== this.settings.vaultPath) {
+      this.ideaStorage = null;
+    }
+
     if (oldSettings.apiBaseUrl !== this.settings.apiBaseUrl) {
       this.listedModelIds = [];
     }
@@ -239,6 +245,15 @@ export class SidecarSession {
   requireVault(): string {
     if (!this.settings.vaultPath) throw new Error("尚未设置知识库路径");
     return this.settings.vaultPath;
+  }
+
+  private async getIdeaStorage(): Promise<IdeaStorage> {
+    const root = this.requireVault();
+    if (!this.ideaStorage) {
+      this.ideaStorage = new IdeaStorage(root);
+      await this.ideaStorage.init();
+    }
+    return this.ideaStorage;
   }
 
   async handle(
@@ -285,6 +300,7 @@ export class SidecarSession {
         const root = String(params.root ?? this.settings.vaultPath);
         if (!root) throw new Error("root 必填");
         this.setSettings({ vaultPath: root });
+        this.ideaStorage = null;
         await this.engine.initVault(root);
         return { root };
       }
@@ -339,12 +355,14 @@ export class SidecarSession {
           String(params.from ?? params.id ?? ""),
           String(params.to ?? ""),
         );
-      case "vault_rename_page":
-        return this.engine.renamePage(
-          this.requireVault(),
-          String(params.from ?? params.id ?? ""),
-          String(params.to ?? ""),
-        );
+      case "vault_rename_page": {
+        const root = this.requireVault();
+        const from = String(params.from ?? params.id ?? "");
+        const to = String(params.to ?? "");
+        const page = await this.engine.renamePage(root, from, to);
+        await (await this.getIdeaStorage()).remapPage(from, to);
+        return page;
+      }
       case "vault_list_folders":
         return this.engine.listFolders(this.requireVault());
       case "vault_create_folder":
@@ -355,12 +373,14 @@ export class SidecarSession {
           String(params.from ?? params.id ?? ""),
           String(params.to ?? ""),
         );
-      case "vault_rename_folder":
-        return this.engine.renameFolder(
-          this.requireVault(),
-          String(params.from ?? params.id ?? ""),
-          String(params.to ?? ""),
-        );
+      case "vault_rename_folder": {
+        const root = this.requireVault();
+        const from = String(params.from ?? params.id ?? "");
+        const to = String(params.to ?? "");
+        const folder = await this.engine.renameFolder(root, from, to);
+        await (await this.getIdeaStorage()).remapPage(from, to, true);
+        return folder;
+      }
       case "vault_reveal": {
         const root = this.requireVault();
         const kind = String(params.kind ?? "root");
@@ -390,6 +410,26 @@ export class SidecarSession {
           this.requireVault(),
           String(params.id ?? params.pageId ?? ""),
         );
+      case "idea_list":
+        return { ideas: await (await this.getIdeaStorage()).list() };
+      case "idea_create":
+        return {
+          idea: await (await this.getIdeaStorage()).create({
+            content: params.content,
+            color: params.color,
+            target: params.target,
+            selector: params.selector,
+          }),
+        };
+      case "idea_update":
+        return {
+          idea: await (await this.getIdeaStorage()).update(
+            String(params.id ?? ""),
+            params,
+          ),
+        };
+      case "idea_delete":
+        return { ok: await (await this.getIdeaStorage()).delete(String(params.id ?? "")) };
       case "agent_session_list": {
         const runner = await this.getAgentRunner();
         const sessions = await runner.listSessions();

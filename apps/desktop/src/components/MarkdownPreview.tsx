@@ -1,14 +1,16 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import "katex/dist/katex.min.css";
-import type { PageSummary } from "../api";
+import type { Idea, IdeaSelector, IdeaTarget, PageSummary } from "../api";
 import { resolvePageId, rewriteWikilinks, slugHeading, WIKI_HREF_PREFIX } from "../lib/wikilinks";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { isTauriRuntime } from "../api";
+import { rangeFromSelector, selectorFromRange } from "../lib/ideaAnchors";
+import { ContextMenu } from "./ContextMenu";
 
 type MarkdownPreviewProps = {
   markdown: string;
@@ -16,7 +18,13 @@ type MarkdownPreviewProps = {
   onOpen: (id: string) => void;
   assetRoot?: string;
   basePath?: string;
+  ideaTarget?: IdeaTarget;
+  ideas?: Idea[];
+  ideasVisible?: boolean;
+  onCreateIdea?: (selector: IdeaSelector, content: string) => Promise<boolean>;
 };
+
+type MarkRect = { id: string; color: Idea["color"]; left: number; top: number; width: number; height: number };
 
 function headingText(children: ReactNode): string {
   if (typeof children === "string" || typeof children === "number") return String(children);
@@ -86,7 +94,23 @@ function externalLabel(href: string): string {
   }
 }
 
-export function MarkdownPreview({ markdown, pages, onOpen, assetRoot, basePath }: MarkdownPreviewProps) {
+export function MarkdownPreview({
+  markdown,
+  pages,
+  onOpen,
+  assetRoot,
+  basePath,
+  ideaTarget,
+  ideas = [],
+  ideasVisible = true,
+  onCreateIdea,
+}: MarkdownPreviewProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [selection, setSelection] = useState<{ selector: IdeaSelector; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ selector: IdeaSelector; x: number; y: number } | null>(null);
+  const [composer, setComposer] = useState<{ selector: IdeaSelector; x: number; y: number } | null>(null);
+  const [content, setContent] = useState("");
+  const [marks, setMarks] = useState<MarkRect[]>([]);
   const source = rewriteWikilinks(markdown);
   const imageSrc = (src: string): string => {
     if (!assetRoot || !isTauriRuntime() || /^(?:[a-z]+:|\/\/|data:|#)/i.test(src)) return src;
@@ -105,8 +129,124 @@ export function MarkdownPreview({ markdown, pages, onOpen, assetRoot, basePath }
     return convertFileSrc(parts.join("/"));
   };
 
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || !ideasVisible) {
+      setMarks([]);
+      return;
+    }
+    const update = () => {
+      const rootRect = root.getBoundingClientRect();
+      const next: MarkRect[] = [];
+      for (const idea of ideas) {
+        if (idea.status === "resolved") continue;
+        const range = rangeFromSelector(root, idea.selector);
+        if (!range) continue;
+        for (const rect of range.getClientRects()) {
+          if (rect.width <= 0 || rect.height <= 0) continue;
+          next.push({
+            id: idea.id,
+            color: idea.color,
+            left: rect.left - rootRect.left,
+            top: rect.top - rootRect.top,
+            width: rect.width,
+            height: rect.height,
+          });
+        }
+      }
+      setMarks(next);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(root);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [ideas, ideasVisible, source]);
+
+  const captureSelection = (event: MouseEvent<HTMLDivElement>) => {
+    if (!ideaTarget || !onCreateIdea) return;
+    const root = rootRef.current;
+    const browserSelection = window.getSelection();
+    if (!root || !browserSelection) {
+      setSelection(null);
+      return;
+    }
+    let range = browserSelection.rangeCount > 0 && !browserSelection.isCollapsed
+      ? browserSelection.getRangeAt(0).cloneRange()
+      : null;
+    if (!range && event.type === "contextmenu") {
+      const documentWithCaret = document as Document & {
+        caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+        caretRangeFromPoint?: (x: number, y: number) => Range | null;
+      };
+      const position = documentWithCaret.caretPositionFromPoint?.(event.clientX, event.clientY);
+      range = position ? document.createRange() : documentWithCaret.caretRangeFromPoint?.(event.clientX, event.clientY) ?? null;
+      if (range && position) range.setStart(position.offsetNode, position.offset);
+      if (range && position) range.collapse(true);
+      if (range?.startContainer.nodeType === Node.TEXT_NODE) {
+        const text = range.startContainer.textContent ?? "";
+        let start = range.startOffset;
+        let end = range.startOffset;
+        while (start > 0 && !/\s/u.test(text[start - 1])) start -= 1;
+        while (end < text.length && !/\s/u.test(text[end])) end += 1;
+        range.setStart(range.startContainer, start);
+        range.setEnd(range.startContainer, end);
+      }
+    }
+    if (!range) {
+      setSelection(null);
+      return;
+    }
+    const selector = selectorFromRange(root, range);
+    if (!selector) return;
+    const rangeRect = range.getBoundingClientRect();
+    setSelection({ selector, x: rangeRect.right, y: rangeRect.bottom + 6 });
+    if (event.type === "contextmenu") {
+      event.preventDefault();
+      setMenu({ selector, x: event.clientX, y: event.clientY });
+      setSelection(null);
+    }
+  };
+
+  const openComposer = (picked: { selector: IdeaSelector; x: number; y: number }) => {
+    setContent("");
+    setComposer(picked);
+    setSelection(null);
+    setMenu(null);
+  };
+
+  const submitIdea = async () => {
+    const note = content.trim();
+    if (!composer || !note || !onCreateIdea) return;
+    const saved = await onCreateIdea(composer.selector, note);
+    if (!saved) return;
+    setComposer(null);
+    setContent("");
+    window.getSelection()?.removeAllRanges();
+  };
+
   return (
-    <div className="md-body">
+    <div
+      ref={rootRef}
+      className={`md-body${ideaTarget ? " md-annotatable" : ""}`}
+      onMouseUp={captureSelection}
+      onContextMenu={captureSelection}
+    >
+      {marks.length > 0 && (
+        <div className="idea-mark-layer" aria-hidden="true">
+          {marks.map((mark, index) => (
+            <span
+              key={`${mark.id}:${index}`}
+              data-idea-mark={mark.id}
+              className={`idea-mark idea-mark-${mark.color}`}
+              style={{ left: mark.left, top: mark.top, width: mark.width, height: mark.height }}
+            />
+          ))}
+        </div>
+      )}
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
@@ -174,6 +314,44 @@ export function MarkdownPreview({ markdown, pages, onOpen, assetRoot, basePath }
       >
         {source}
       </ReactMarkdown>
+      {selection && (
+        <button
+          type="button"
+          className="idea-selection-action"
+          style={{ left: selection.x, top: selection.y }}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => openComposer(selection)}
+        >
+          + Idea
+        </button>
+      )}
+      {composer && (
+        <div className="idea-composer" style={{ left: composer.x, top: composer.y }}>
+          <div className="idea-composer-quote">“{composer.selector.exact.slice(0, 120)}”</div>
+          <textarea
+            autoFocus
+            value={content}
+            maxLength={20_000}
+            placeholder="记下你的想法…"
+            onChange={(event) => setContent(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.ctrlKey || event.metaKey) && event.key === "Enter") void submitIdea();
+              if (event.key === "Escape") setComposer(null);
+            }}
+          />
+          <div className="idea-composer-actions">
+            <button type="button" onClick={() => setComposer(null)}>取消</button>
+            <button type="button" className="primary" disabled={!content.trim()} onClick={() => void submitIdea()}>保存 Idea</button>
+          </div>
+        </div>
+      )}
+      <ContextMenu
+        open={menu !== null}
+        x={menu?.x ?? 0}
+        y={menu?.y ?? 0}
+        items={menu ? [{ type: "item", label: "添加 Idea", onClick: () => openComposer(menu) }] : []}
+        onClose={() => setMenu(null)}
+      />
     </div>
   );
 }

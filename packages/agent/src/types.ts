@@ -6,11 +6,13 @@ import type { AskResult, WikiEngine } from "@wikihome/engine-api";
  */
 export type SessionMessage =
   | {
+      id: string;
       role: "user";
       content: string;
       timestamp: number;
     }
   | {
+      id: string;
       role: "assistant";
       content: string;
       timestamp: number;
@@ -29,6 +31,7 @@ export type SessionMessage =
       };
     }
   | {
+      id: string;
       role: "toolResult";
       toolCallId: string;
       toolName: string;

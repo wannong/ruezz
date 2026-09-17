@@ -80,11 +80,13 @@ export type AgentToolCall = {
 
 export type AgentSessionMessage =
   | {
+      id: string;
       role: "user";
       content: string;
       timestamp: number;
     }
   | {
+      id: string;
       role: "assistant";
       content: string;
       timestamp: number;
@@ -95,6 +97,7 @@ export type AgentSessionMessage =
       usage?: { input: number; output: number; totalTokens: number };
     }
   | {
+      id: string;
       role: "toolResult";
       toolCallId: string;
       toolName: string;
@@ -102,6 +105,30 @@ export type AgentSessionMessage =
       isError: boolean;
       timestamp: number;
     };
+
+export type IdeaTarget =
+  | { kind: "page"; pageId: string }
+  | { kind: "assistant"; sessionId: string; messageId: string };
+
+export type IdeaSelector = {
+  exact: string;
+  prefix: string;
+  suffix: string;
+  start: number;
+  end: number;
+  revision: string;
+};
+
+export type Idea = {
+  id: string;
+  content: string;
+  color: "yellow" | "blue" | "green" | "pink" | "violet";
+  status: "open" | "resolved";
+  createdAt: string;
+  updatedAt: string;
+  target: IdeaTarget;
+  selector: IdeaSelector;
+};
 
 export type AgentSession = {
   id: string;
@@ -319,6 +346,12 @@ export const api = {
   agentSetModel: (opts: { sessionId: string; provider: string; model: string }) =>
     rpc<{ session: AgentSession }>("agent_set_model", opts),
   agentListProviders: () => rpc<AgentProviderCatalog>("agent_list_providers"),
+  ideaList: () => rpc<{ ideas: Idea[] }>("idea_list"),
+  ideaCreate: (input: { content: string; color?: Idea["color"]; target: IdeaTarget; selector: IdeaSelector }) =>
+    rpc<{ idea: Idea }>("idea_create", input),
+  ideaUpdate: (id: string, patch: Partial<Pick<Idea, "content" | "color" | "status">>) =>
+    rpc<{ idea: Idea }>("idea_update", { id, ...patch }),
+  ideaDelete: (id: string) => rpc<{ ok: boolean }>("idea_delete", { id }),
   providerListModels: (opts?: { apiBaseUrl?: string; apiKey?: string }) =>
     rpc<{ models: string[] }>("provider_list_models", opts ?? {}),
   providerTest: (opts?: { apiBaseUrl?: string; apiKey?: string; model?: string }) =>

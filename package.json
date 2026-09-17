@@ -1,7 +1,7 @@
 {
   "name": "centaur",
   "private": true,
-  "version": "1.0.13",
+  "version": "1.1.0",
   "description": "Beginner-friendly local knowledge base agent (Tauri + LLM Wiki engine)",
   "type": "module",
   "packageManager": "pnpm@9.15.0",

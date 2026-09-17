@@ -1,6 +1,9 @@
 import { promises as fs } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import type { AgentSession, AgentSessionSummary } from "./types.js";
+
+const SAFE_MESSAGE_ID = /^[a-zA-Z0-9_-]+$/;
 
 /**
  * Session storage backed by JSON files in .wikihome/sessions/
@@ -26,6 +29,13 @@ export class SessionStorage {
     const timestamp = Date.now().toString(36);
     const random = Math.random().toString(36).substring(2, 9);
     return `sess_${timestamp}_${random}`;
+  }
+
+  /**
+   * Generate a unique message ID with safe characters only.
+   */
+  generateMessageId(): string {
+    return `msg_${randomUUID().replaceAll("-", "")}`;
   }
 
   /**
@@ -77,13 +87,52 @@ export class SessionStorage {
     const sessionPath = this.getSessionPath(sessionId);
     try {
       const content = await fs.readFile(sessionPath, "utf-8");
-      return JSON.parse(content) as AgentSession;
+      const session = JSON.parse(content) as AgentSession;
+      if (this.migrateMessageIds(session)) {
+        await this.save(session);
+      }
+      return session;
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") {
         return null;
       }
       throw err;
     }
+  }
+
+  /** Add stable IDs to legacy messages and repair invalid or duplicate IDs. */
+  private migrateMessageIds(session: AgentSession): boolean {
+    const seen = new Set<string>();
+    let migrated = false;
+
+    session.messages.forEach((message, index) => {
+      const legacyMessage = message as typeof message & { id?: unknown };
+      if (
+        typeof legacyMessage.id === "string" &&
+        SAFE_MESSAGE_ID.test(legacyMessage.id) &&
+        !seen.has(legacyMessage.id)
+      ) {
+        seen.add(legacyMessage.id);
+        return;
+      }
+
+      const serialized = JSON.stringify({ ...message, id: undefined });
+      const digest = createHash("sha256")
+        .update(`${session.id}\0${index}\0${serialized}`)
+        .digest("hex")
+        .slice(0, 24);
+      const baseId = `msg_legacy_${digest}`;
+      let id = baseId;
+      let suffix = 2;
+      while (seen.has(id)) {
+        id = `${baseId}_${suffix++}`;
+      }
+      legacyMessage.id = id;
+      seen.add(id);
+      migrated = true;
+    });
+
+    return migrated;
   }
 
   /**

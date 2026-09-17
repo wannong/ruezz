@@ -1,6 +1,6 @@
 import { Paperclip, Plus, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AgentAttachment, AgentSessionMessage, AgentSessionSummary, PageSummary } from "../api";
+import type { AgentAttachment, AgentSessionMessage, AgentSessionSummary, Idea, IdeaSelector, PageSummary } from "../api";
 import centaurIcon from "../assets/centaur-icon.svg";
 import { parseModelSwitchKey } from "../lib/llmProviders";
 import { loadPref, savePref } from "../lib/prefs";
@@ -52,13 +52,13 @@ type AgentPaneProps = {
   onDetach: (id: string) => void;
   onRelatedFiles: (session: AgentSessionSummary) => void;
   onCloseSession: (id: string) => void;
+  ideas: Idea[];
+  ideasVisible: boolean;
+  onCreateIdea: (messageId: string, selector: IdeaSelector, content: string) => Promise<boolean>;
 };
 
-function messageKey(message: AgentSessionMessage, index: number): string {
-  if (message.role === "toolResult") {
-    return `${index}-tool-${message.toolCallId}`;
-  }
-  return `${index}-${message.role}-${message.timestamp}`;
+function messageKey(message: AgentSessionMessage): string {
+  return message.id;
 }
 
 function formatTokens(n: number): string {
@@ -127,6 +127,9 @@ export function AgentPane({
   onDetach,
   onRelatedFiles,
   onCloseSession,
+  ideas,
+  ideasVisible,
+  onCreateIdea,
 }: AgentPaneProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -301,8 +304,17 @@ export function AgentPane({
                 )}
               </div>
             )}
-            {messages.map((m, index) => (
-              <SessionMessageView key={messageKey(m, index)} message={m} pages={pages} onOpen={onOpen} />
+            {messages.map((m) => (
+              <SessionMessageView
+                key={messageKey(m)}
+                message={m}
+                pages={pages}
+                ideas={ideas}
+                ideasVisible={ideasVisible}
+                sessionId={sessionId}
+                onCreateIdea={onCreateIdea}
+                onOpen={onOpen}
+              />
             ))}
             {(pendingUser || busy) && (
               <div className="agent-turn agent-turn-pending">
@@ -568,10 +580,18 @@ function SessionMessageView({
   message,
   pages,
   onOpen,
+  ideas,
+  ideasVisible,
+  sessionId,
+  onCreateIdea,
 }: {
   message: AgentSessionMessage;
   pages: PageSummary[];
   onOpen: (id: string) => void;
+  ideas: Idea[];
+  ideasVisible: boolean;
+  sessionId: string | null;
+  onCreateIdea: (messageId: string, selector: IdeaSelector, content: string) => Promise<boolean>;
 }) {
   if (message.role === "user") {
     return (
@@ -597,11 +617,19 @@ function SessionMessageView({
   }
 
   return (
-    <div className="msg msg-assistant">
+    <div className="msg msg-assistant" data-message-id={message.id}>
       <div className="msg-role">Agent</div>
       {hasText && (
         <div className="msg-body">
-          <MarkdownPreview markdown={message.content} pages={pages} onOpen={onOpen} />
+          <MarkdownPreview
+            markdown={message.content}
+            pages={pages}
+            onOpen={onOpen}
+            ideaTarget={{ kind: "assistant", sessionId: sessionId ?? "", messageId: message.id }}
+            ideas={ideas.filter((idea) => idea.target.kind === "assistant" && idea.target.sessionId === sessionId && idea.target.messageId === message.id)}
+            ideasVisible={ideasVisible}
+            onCreateIdea={(selector, content) => onCreateIdea(message.id, selector, content)}
+          />
         </div>
       )}
       {sources.length > 0 && (

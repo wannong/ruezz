@@ -8,6 +8,8 @@ import {
   type AgentSessionMessage,
   type AgentSessionSummary,
   type GraphDto,
+  type Idea,
+  type IdeaSelector,
   type PageContent,
   type PageSummary,
   type VaultSettings,
@@ -116,6 +118,8 @@ export function Workspace({
   const [newNoteOpen, setNewNoteOpen] = useState(false);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [graph, setGraph] = useState<GraphDto | null>(null);
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [ideasVisible, setIdeasVisible] = useState(() => loadPref("ideasVisible", true));
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [openSessionIds, setOpenSessionIds] = useState<string[]>([]);
   const [sessions, setSessions] = useState<AgentSessionSummary[]>([]);
@@ -213,6 +217,12 @@ export function Workspace({
   const loadGraph = useCallback(async () => {
     const g = await api.vaultGraph();
     setGraph(g);
+  }, []);
+
+  const loadIdeas = useCallback(async () => {
+    const result = await api.ideaList();
+    setIdeas(result.ideas);
+    return result.ideas;
   }, []);
 
   const isDirty = useCallback(
@@ -373,10 +383,71 @@ export function Workspace({
   }, [applySession, onAgentTitle, onError, refreshRunnerProviders, refreshSessions, settings.vaultPath]);
 
   useEffect(() => {
+    void loadIdeas().catch((e) => onError(e instanceof Error ? e.message : String(e)));
+  }, [loadIdeas, onError, settings.vaultPath]);
+
+  useEffect(() => {
+    savePref("ideasVisible", ideasVisible);
+  }, [ideasVisible]);
+
+  useEffect(() => {
     if (!notice) return;
     const timer = window.setTimeout(() => setNotice(null), 3200);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  const createPageIdea = useCallback(async (selector: IdeaSelector, content: string) => {
+    if (!activePageId) return false;
+    try {
+      const { idea } = await api.ideaCreate({
+        content,
+        target: { kind: "page", pageId: activePageId },
+        selector,
+      });
+      setIdeas((current) => [idea, ...current]);
+      setRightCollapsed(false);
+      setRightView("ideas");
+      return true;
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+      return false;
+    }
+  }, [activePageId, onError]);
+
+  const createAgentIdea = useCallback(async (messageId: string, selector: IdeaSelector, content: string) => {
+    if (!sessionId) return false;
+    try {
+      const { idea } = await api.ideaCreate({
+        content,
+        target: { kind: "assistant", sessionId, messageId },
+        selector,
+      });
+      setIdeas((current) => [idea, ...current]);
+      setRightView("ideas");
+      return true;
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+      return false;
+    }
+  }, [onError, sessionId]);
+
+  const updateIdea = useCallback(async (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => {
+    try {
+      const { idea } = await api.ideaUpdate(id, patch);
+      setIdeas((current) => current.map((item) => item.id === id ? idea : item));
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  }, [onError]);
+
+  const deleteIdea = useCallback(async (id: string) => {
+    try {
+      const { ok } = await api.ideaDelete(id);
+      if (ok) setIdeas((current) => current.filter((item) => item.id !== id));
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  }, [onError]);
 
   useEffect(() => {
     savePref("leftCollapsed", leftCollapsed);
@@ -670,6 +741,7 @@ export function Workspace({
       }
       await loadPages();
       await loadGraph();
+      await loadIdeas();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -904,6 +976,24 @@ export function Workspace({
       onError(e instanceof Error ? e.message : String(e));
     }
   }
+
+  const navigateIdea = (idea: Idea) => {
+    if (idea.target.kind === "page") {
+      openPage(idea.target.pageId);
+      window.setTimeout(() => {
+        document.querySelector(`[data-idea-mark="${CSS.escape(idea.id)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 80);
+      return;
+    }
+    const messageId = idea.target.messageId;
+    void selectSession(idea.target.sessionId).then(() => {
+      setRightCollapsed(false);
+      setRightView("agent");
+      window.setTimeout(() => {
+        document.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 80);
+    });
+  };
 
   async function deleteAgentSession(id: string) {
     if (agentStates[id]?.busy) return;
@@ -1180,6 +1270,9 @@ export function Workspace({
                 assetRoot={settings.vaultPath}
                 onUpdateTags={(tags) => updatePageTags(activePage.id, tags)}
                 tagError={tagError}
+                ideas={ideas.filter((idea) => idea.target.kind === "page" && idea.target.pageId === activePage.id)}
+                ideasVisible={ideasVisible}
+                onCreateIdea={createPageIdea}
               />
             )}
           </div>
@@ -1204,6 +1297,8 @@ export function Workspace({
           outline={outline}
           pageId={activePageId}
           graph={graph}
+          ideas={ideas}
+          ideasVisible={ideasVisible}
           theme={theme}
            onDraft={(value) => sessionId ? updateAgentState(sessionId, { draft: value }) : setDraftFallback(value)}
           onSend={() => void sendMessage()}
@@ -1231,7 +1326,12 @@ export function Workspace({
            onDetachAttachment={(id) => void detachAttachment(id)}
            onRelatedFiles={relatedFiles}
            onCloseSession={closeAgentSession}
-         />
+           onIdeasVisible={setIdeasVisible}
+           onNavigateIdea={navigateIdea}
+           onUpdateIdea={updateIdea}
+           onDeleteIdea={deleteIdea}
+           onCreateAgentIdea={createAgentIdea}
+          />
       </div>
       <StatusBar
         vaultPath={settings.vaultPath}

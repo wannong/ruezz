@@ -1,15 +1,30 @@
 # Changelog
 
-## 1.0.13
-
-- Rename the desktop product branding from WikiHome to Centaur.
-
 All notable changes to WikiHome are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [1.1.0] - 2026-09-17
+
+### Added
+
+- Human-centered Idea annotations for rendered knowledge pages and completed Agent responses.
+- A right-sidebar Idea workspace with current/all scopes, inline marker visibility, editing, resolution, deletion, and source navigation.
+- Vault-scoped atomic Idea storage under `.wikihome/ideas` with resilient text anchors.
+- Stable Agent message identifiers with automatic migration of legacy sessions.
+
+### Changed
+
+- Page and folder renames now remap attached Idea targets.
+
+## [1.0.13] - 2026-09-14
+
+### Changed
+
+- Rename the desktop product branding from WikiHome to Centaur.
 
 ## [1.0.12] - 2026-09-14
 

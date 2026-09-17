@@ -4448,7 +4448,7 @@ dependencies = [
 
 [[package]]
 name = "wikihome"
-version = "1.0.13"
+version = "1.1.0"
 dependencies = [
  "parking_lot",
  "serde",

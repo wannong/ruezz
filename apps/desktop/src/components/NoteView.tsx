@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
-import type { PageContent, PageSummary } from "../api";
+import type { Idea, IdeaSelector, PageContent, PageSummary } from "../api";
 import { markdownBody } from "../lib/noteId";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { MarkdownPreview } from "./MarkdownPreview";
@@ -22,6 +22,9 @@ type NoteViewProps = {
   assetRoot?: string;
   onUpdateTags: (tags: string[]) => Promise<void>;
   tagError?: string | null;
+  ideas: Idea[];
+  ideasVisible: boolean;
+  onCreateIdea: (selector: IdeaSelector, content: string) => Promise<boolean>;
 };
 
 export function NoteView({
@@ -39,6 +42,9 @@ export function NoteView({
   assetRoot,
   onUpdateTags,
   tagError,
+  ideas,
+  ideasVisible,
+  onCreateIdea,
 }: NoteViewProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; start: number; end: number } | null>(null);
@@ -187,7 +193,17 @@ export function NoteView({
         </div>
       ) : (
         <div className="note-read">
-          <MarkdownPreview markdown={page.body} pages={pages} onOpen={onOpen} assetRoot={assetRoot} basePath={page.path} />
+          <MarkdownPreview
+            markdown={page.body}
+            pages={pages}
+            onOpen={onOpen}
+            assetRoot={assetRoot}
+            basePath={page.path}
+            ideaTarget={{ kind: "page", pageId: page.id }}
+            ideas={ideas}
+            ideasVisible={ideasVisible}
+            onCreateIdea={onCreateIdea}
+          />
         </div>
       )}
       <ContextMenu

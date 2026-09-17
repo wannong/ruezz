@@ -370,6 +370,7 @@ export class AgentRunner {
     
     // Add user message
     turnMessages.push({
+      id: this.storage.generateMessageId(),
       role: "user",
       content: message,
       timestamp: Date.now(),
@@ -404,6 +405,7 @@ export class AgentRunner {
           : [];
         
         turnMessages.push({
+          id: this.storage.generateMessageId(),
           role: "assistant",
           content: textContent,
           timestamp: Date.now(),
@@ -427,6 +429,7 @@ export class AgentRunner {
             : "";
         
         turnMessages.push({
+          id: this.storage.generateMessageId(),
           role: "toolResult",
           toolCallId: msg.toolCallId,
           toolName: msg.toolName,
@@ -444,6 +447,7 @@ export class AgentRunner {
         lastTurnAssistant.content = answer;
       } else if (aborted) {
         turnMessages.push({
+          id: this.storage.generateMessageId(),
           role: "assistant",
           content: answer,
           timestamp: Date.now(),
