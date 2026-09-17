@@ -40,9 +40,9 @@ export function IdeasPane({
           <button type="button" className={scope === "current" ? "active" : ""} onClick={() => setScope("current")}>当前</button>
           <button type="button" className={scope === "all" ? "active" : ""} onClick={() => setScope("all")}>全部</button>
         </div>
-        <button type="button" className="ideas-visibility" title={visible ? "隐藏正文标记" : "显示正文标记"} onClick={() => onVisible(!visible)}>
+        <button type="button" className="ideas-visibility" title={visible ? "隐藏全部便签" : "显示全部便签"} onClick={() => onVisible(!visible)}>
           {visible ? <Eye size={14} /> : <EyeOff size={14} />}
-          {visible ? "标记开启" : "标记隐藏"}
+          {visible ? "隐藏便签" : "显示便签"}
         </button>
       </div>
       {shown.length === 0 ? (

@@ -188,7 +188,9 @@ export function RightSidebar({
             onCloseSession={onCloseSession}
             ideas={ideas}
             ideasVisible={ideasVisible}
+            onIdeasVisible={onIdeasVisible}
             onCreateIdea={onCreateAgentIdea}
+            onUpdateIdea={onUpdateIdea}
           onNewChat={onNewChat}
           onSelectSession={onSelectSession}
           onDeleteSession={onDeleteSession}

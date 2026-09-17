@@ -1,11 +1,35 @@
 import type { GraphDto, GraphNodeDto } from "../api";
 
-export { applyGraphForces, graphNodeRadius } from "./graph-layout";
-export type { GraphForceApi, GraphLayoutNode } from "./graph-layout";
+export { applyGraphForces, graphNodeRadius } from "./graph-layout.ts";
+export type { GraphForceApi, GraphLayoutNode } from "./graph-layout.ts";
 
 const MAX_GRAPH_NODES = 80;
 
 export type GraphViewScope = "global" | 1 | 2 | 3;
+
+/** Shortest undirected hop count from the focused page to each reachable node. */
+export function graphDepths(graph: GraphDto, focusId: string): Map<string, number> {
+  const adjacency = new Map<string, Set<string>>();
+  for (const edge of graph.edges) {
+    if (!adjacency.has(edge.source)) adjacency.set(edge.source, new Set());
+    if (!adjacency.has(edge.target)) adjacency.set(edge.target, new Set());
+    adjacency.get(edge.source)!.add(edge.target);
+    adjacency.get(edge.target)!.add(edge.source);
+  }
+
+  const depths = new Map<string, number>([[focusId, 0]]);
+  const queue = [focusId];
+  for (let index = 0; index < queue.length; index++) {
+    const id = queue[index];
+    const nextDepth = depths.get(id)! + 1;
+    for (const neighbor of adjacency.get(id) ?? []) {
+      if (depths.has(neighbor)) continue;
+      depths.set(neighbor, nextDepth);
+      queue.push(neighbor);
+    }
+  }
+  return depths;
+}
 
 export function clampGraphScope(value: unknown): GraphViewScope {
   if (value === "global") return "global";

@@ -4,6 +4,7 @@ import type { GraphDto } from "../api";
 import {
   applyGraphForces,
   dragLeashRadius,
+  graphDepths,
   graphFitTransform,
   graphNodeRadius,
   maxDistanceFromLeader,
@@ -59,8 +60,22 @@ const TYPE_COLOR: Record<"dark" | "light", Record<string, string>> = {
 };
 
 const THEME_PALETTE = {
-  dark: { bg: "#1e1e1e", ink: "#dcddde", line: "#3f3f3f", accent: "#e6e6e6" },
-  light: { bg: "#ffffff", ink: "#222222", line: "#d0d0d0", accent: "#222222" },
+  dark: {
+    bg: "#1e1e1e",
+    ink: "#dcddde",
+    line: "#3f3f3f",
+    accent: "#fff4d6",
+    neutral: "#686d75",
+    depth: ["#ef806b", "#dfa94f", "#58ae9d", "#6f91cf"],
+  },
+  light: {
+    bg: "#ffffff",
+    ink: "#222222",
+    line: "#d0d0d0",
+    accent: "#171717",
+    neutral: "#a7adb5",
+    depth: ["#cf503e", "#b97816", "#278977", "#4e70b2"],
+  },
 };
 
 const GRAPH_PHYSICS_REV = Date.now();
@@ -84,6 +99,7 @@ export function GraphView({
   compactRef.current = compact;
   const leashRef = useRef<number | null>(null);
   const colors = THEME_PALETTE[theme];
+  const depths = useMemo(() => (graph && focusId ? graphDepths(graph, focusId) : null), [graph, focusId]);
 
   const applyFit = useCallback((durationMs: number) => {
     const fg = fgRef.current;
@@ -182,16 +198,30 @@ export function GraphView({
             const n = node as GraphNode & { x?: number; y?: number };
             const x = n.x ?? 0;
             const y = n.y ?? 0;
-             const focused = Boolean(focusId && n.id === focusId);
-             const hovered = hoveredId === n.id;
-             const r = graphNodeRadius({ degree: n.degree, focused }, compact) * (hovered ? 1.18 : 1);
+            const focused = Boolean(focusId && n.id === focusId);
+            const hovered = hoveredId === n.id;
+            const r = graphNodeRadius({ degree: n.degree, focused }, compact) * (hovered ? 1.18 : 1);
+            if (focused) {
+              ctx.beginPath();
+              ctx.arc(x, y, r + (compact ? 4 : 5), 0, Math.PI * 2);
+              ctx.fillStyle = theme === "dark" ? "rgba(255, 244, 214, 0.18)" : "rgba(23, 23, 23, 0.12)";
+              ctx.fill();
+              ctx.strokeStyle = colors.accent;
+              ctx.lineWidth = compact ? 1.8 : 2.4;
+              ctx.stroke();
+            }
             ctx.beginPath();
             ctx.arc(x, y, r, 0, Math.PI * 2);
-            ctx.fillStyle = TYPE_COLOR[theme][n.type] ?? (theme === "dark" ? "#a0a0a0" : "#808080");
+            const depth = depths?.get(n.id);
+            ctx.fillStyle = depths
+              ? depth != null && depth <= 3
+                ? colors.depth[depth]
+                : colors.neutral
+              : TYPE_COLOR[theme][n.type] ?? (theme === "dark" ? "#a0a0a0" : "#808080");
             ctx.fill();
             if (focused) {
-              ctx.strokeStyle = colors.accent;
-              ctx.lineWidth = 2;
+              ctx.strokeStyle = colors.bg;
+              ctx.lineWidth = compact ? 1.2 : 1.6;
               ctx.stroke();
             }
             if (compact || globalScale > 1.1) {

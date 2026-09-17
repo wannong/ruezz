@@ -54,7 +54,9 @@ type AgentPaneProps = {
   onCloseSession: (id: string) => void;
   ideas: Idea[];
   ideasVisible: boolean;
+  onIdeasVisible: (visible: boolean) => void;
   onCreateIdea: (messageId: string, selector: IdeaSelector, content: string) => Promise<boolean>;
+  onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
 };
 
 function messageKey(message: AgentSessionMessage): string {
@@ -129,7 +131,9 @@ export function AgentPane({
   onCloseSession,
   ideas,
   ideasVisible,
+  onIdeasVisible,
   onCreateIdea,
+  onUpdateIdea,
 }: AgentPaneProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -311,8 +315,10 @@ export function AgentPane({
                 pages={pages}
                 ideas={ideas}
                 ideasVisible={ideasVisible}
+                onIdeasVisible={onIdeasVisible}
                 sessionId={sessionId}
                 onCreateIdea={onCreateIdea}
+                onUpdateIdea={onUpdateIdea}
                 onOpen={onOpen}
               />
             ))}
@@ -582,16 +588,20 @@ function SessionMessageView({
   onOpen,
   ideas,
   ideasVisible,
+  onIdeasVisible,
   sessionId,
   onCreateIdea,
+  onUpdateIdea,
 }: {
   message: AgentSessionMessage;
   pages: PageSummary[];
   onOpen: (id: string) => void;
   ideas: Idea[];
   ideasVisible: boolean;
+  onIdeasVisible: (visible: boolean) => void;
   sessionId: string | null;
   onCreateIdea: (messageId: string, selector: IdeaSelector, content: string) => Promise<boolean>;
+  onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
 }) {
   if (message.role === "user") {
     return (
@@ -628,7 +638,9 @@ function SessionMessageView({
             ideaTarget={{ kind: "assistant", sessionId: sessionId ?? "", messageId: message.id }}
             ideas={ideas.filter((idea) => idea.target.kind === "assistant" && idea.target.sessionId === sessionId && idea.target.messageId === message.id)}
             ideasVisible={ideasVisible}
+            onIdeasVisible={onIdeasVisible}
             onCreateIdea={(selector, content) => onCreateIdea(message.id, selector, content)}
+            onUpdateIdea={onUpdateIdea}
           />
         </div>
       )}

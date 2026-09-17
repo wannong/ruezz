@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-09-18
+
+### Added
+
+- Idea annotations now appear as editable sticky notes beside their source text, with per-note collapse and one-click global visibility.
+- Favorites for both literature and knowledge pages, including a dedicated left-sidebar view.
+- A literature library view that collects imported source documents while keeping generated Markdown available.
+- Graph coloring by distance from the active page, with a stronger active-node halo.
+
+### Changed
+
+- Imported source Markdown is collected under the literature library instead of cluttering the normal knowledge file tree.
+
 ## [1.1.0] - 2026-09-17
 
 ### Added

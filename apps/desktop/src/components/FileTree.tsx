@@ -32,6 +32,8 @@ type FileTreeProps = {
   onReveal: (kind: "root" | "page" | "folder", id?: string) => void;
   onLink?: (pageId: string) => void;
   onRelatedSessions?: (pageId: string, label: string) => void;
+  favorites?: Set<string>;
+  onFavorite?: (pageId: string) => void;
 };
 
 export function FileTree({
@@ -49,6 +51,8 @@ export function FileTree({
   onReveal,
   onLink,
   onRelatedSessions,
+  favorites,
+  onFavorite,
 }: FileTreeProps) {
   const taken = useMemo(() => {
     const set = new Set<string>();
@@ -135,6 +139,15 @@ export function FileTree({
           label: "查看相关会话",
           disabled,
           onClick: () => onRelatedSessions(target.node.page!.id, target.node.page!.title ?? target.node.name),
+        });
+      }
+      if (target.node.page && onFavorite) {
+        const favorite = favorites?.has(target.node.page.id) ?? false;
+        items.push({
+          type: "item",
+          label: favorite ? "★ 取消收藏" : "☆ 收藏",
+          disabled,
+          onClick: () => onFavorite(target.node.page!.id),
         });
       }
       items.push({ type: "sep" });

@@ -1,3 +1,4 @@
+import { Check, ChevronDown, ChevronUp, Eye, EyeOff, StickyNote } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -21,10 +22,13 @@ type MarkdownPreviewProps = {
   ideaTarget?: IdeaTarget;
   ideas?: Idea[];
   ideasVisible?: boolean;
+  onIdeasVisible?: (visible: boolean) => void;
   onCreateIdea?: (selector: IdeaSelector, content: string) => Promise<boolean>;
+  onUpdateIdea?: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
 };
 
 type MarkRect = { id: string; color: Idea["color"]; left: number; top: number; width: number; height: number };
+type StickyPlacement = { idea: Idea; left: number; top: number; anchorX: number; anchorY: number };
 
 function headingText(children: ReactNode): string {
   if (typeof children === "string" || typeof children === "number") return String(children);
@@ -103,14 +107,19 @@ export function MarkdownPreview({
   ideaTarget,
   ideas = [],
   ideasVisible = true,
+  onIdeasVisible,
   onCreateIdea,
+  onUpdateIdea,
 }: MarkdownPreviewProps) {
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [selection, setSelection] = useState<{ selector: IdeaSelector; x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ selector: IdeaSelector; x: number; y: number } | null>(null);
   const [composer, setComposer] = useState<{ selector: IdeaSelector; x: number; y: number } | null>(null);
   const [content, setContent] = useState("");
   const [marks, setMarks] = useState<MarkRect[]>([]);
+  const [stickies, setStickies] = useState<StickyPlacement[]>([]);
+  const [stickyExtent, setStickyExtent] = useState(0);
   const source = rewriteWikilinks(markdown);
   const imageSrc = (src: string): string => {
     if (!assetRoot || !isTauriRuntime() || /^(?:[a-z]+:|\/\/|data:|#)/i.test(src)) return src;
@@ -131,30 +140,60 @@ export function MarkdownPreview({
 
   useEffect(() => {
     const root = rootRef.current;
-    if (!root || !ideasVisible) {
+    const surface = surfaceRef.current;
+    if (!root || !surface) {
       setMarks([]);
+      setStickies([]);
+      setStickyExtent(0);
       return;
     }
     const update = () => {
-      const rootRect = root.getBoundingClientRect();
+      const surfaceRect = surface.getBoundingClientRect();
       const next: MarkRect[] = [];
+      const anchored: StickyPlacement[] = [];
+      let lastStickyBottom = -Infinity;
       for (const idea of ideas) {
         if (idea.status === "resolved") continue;
         const range = rangeFromSelector(root, idea.selector);
         if (!range) continue;
-        for (const rect of range.getClientRects()) {
+        const rects = [...range.getClientRects()].filter((rect) => rect.width > 0 && rect.height > 0);
+        for (const rect of rects) {
           if (rect.width <= 0 || rect.height <= 0) continue;
           next.push({
             id: idea.id,
             color: idea.color,
-            left: rect.left - rootRect.left,
-            top: rect.top - rootRect.top,
+            left: rect.left - surfaceRect.left,
+            top: rect.top - surfaceRect.top,
             width: rect.width,
             height: rect.height,
           });
         }
+        const anchor = rects.at(-1);
+        if (!anchor) continue;
+        const noteWidth = Math.min(236, Math.max(184, surfaceRect.width - 16));
+        const roomOnRight = surfaceRect.right - anchor.right;
+        const preferredLeft = roomOnRight >= noteWidth + 20
+          ? anchor.right - surfaceRect.left + 14
+          : Math.max(8, Math.min(anchor.left - surfaceRect.left, surfaceRect.width - noteWidth - 8));
+        const anchorTop = anchor.top - surfaceRect.top;
+        anchored.push({
+          idea,
+          left: preferredLeft,
+          top: anchorTop + (roomOnRight >= noteWidth + 20 ? -8 : anchor.height + 10),
+          anchorX: anchor.right - surfaceRect.left,
+          anchorY: anchor.top - surfaceRect.top + anchor.height / 2,
+        });
       }
+      const nextStickies = anchored
+        .sort((a, b) => a.anchorY - b.anchorY)
+        .map((sticky) => {
+          const top = Math.max(sticky.top, lastStickyBottom + 8);
+          lastStickyBottom = top + 132;
+          return { ...sticky, top };
+        });
       setMarks(next);
+      setStickies(nextStickies);
+      setStickyExtent(nextStickies.length ? Math.max(0, lastStickyBottom - root.offsetHeight) : 0);
     };
     update();
     const observer = new ResizeObserver(update);
@@ -164,7 +203,7 @@ export function MarkdownPreview({
       observer.disconnect();
       window.removeEventListener("resize", update);
     };
-  }, [ideas, ideasVisible, source]);
+  }, [ideas, source]);
 
   const captureSelection = (event: MouseEvent<HTMLDivElement>) => {
     if (!ideaTarget || !onCreateIdea) return;
@@ -230,10 +269,9 @@ export function MarkdownPreview({
 
   return (
     <div
-      ref={rootRef}
-      className={`md-body${ideaTarget ? " md-annotatable" : ""}`}
-      onMouseUp={captureSelection}
-      onContextMenu={captureSelection}
+      ref={surfaceRef}
+      className={`md-annotation-surface${ideaTarget ? " md-annotatable" : ""}`}
+      style={ideasVisible && stickyExtent > 0 ? { paddingBottom: stickyExtent } : undefined}
     >
       {marks.length > 0 && (
         <div className="idea-mark-layer" aria-hidden="true">
@@ -247,10 +285,11 @@ export function MarkdownPreview({
           ))}
         </div>
       )}
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
-        components={{
+      <div ref={rootRef} className="md-body" onMouseUp={captureSelection} onContextMenu={captureSelection}>
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[rehypeKatex]}
+          components={{
           a: ({ href, children }) => {
             if (href?.startsWith(WIKI_HREF_PREFIX)) {
               const id = internalTarget(`wiki/${href.slice(WIKI_HREF_PREFIX.length)}`, basePath, pages);
@@ -310,10 +349,35 @@ export function MarkdownPreview({
           h4: ({ children }) => <h4 id={slugHeading(headingText(children))}>{children}</h4>,
           h5: ({ children }) => <h5 id={slugHeading(headingText(children))}>{children}</h5>,
           h6: ({ children }) => <h6 id={slugHeading(headingText(children))}>{children}</h6>,
-        }}
-      >
-        {source}
-      </ReactMarkdown>
+          }}
+        >
+          {source}
+        </ReactMarkdown>
+      </div>
+      {ideas.some((idea) => idea.status === "open") && onIdeasVisible && (
+        <button
+          type="button"
+          className={`idea-surface-toggle${ideasVisible ? " active" : ""}`}
+          title={ideasVisible ? "隐藏全部便签" : "显示全部便签"}
+          onClick={() => onIdeasVisible(!ideasVisible)}
+        >
+          <StickyNote size={14} />
+          {ideasVisible ? <EyeOff size={13} /> : <Eye size={13} />}
+          <span>{ideasVisible ? "隐藏便签" : `显示便签 · ${ideas.filter((idea) => idea.status === "open").length}`}</span>
+        </button>
+      )}
+      {ideasVisible && stickies.length > 0 && (
+        <div className="idea-sticky-layer">
+          {stickies.map((sticky, index) => (
+            <IdeaStickyNote
+              key={sticky.idea.id}
+              placement={sticky}
+              index={index}
+              onUpdate={onUpdateIdea}
+            />
+          ))}
+        </div>
+      )}
       {selection && (
         <button
           type="button"
@@ -352,6 +416,61 @@ export function MarkdownPreview({
         items={menu ? [{ type: "item", label: "添加 Idea", onClick: () => openComposer(menu) }] : []}
         onClose={() => setMenu(null)}
       />
+    </div>
+  );
+}
+
+function IdeaStickyNote({
+  placement,
+  index,
+  onUpdate,
+}: {
+  placement: StickyPlacement;
+  index: number;
+  onUpdate?: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
+}) {
+  const { idea, left, top, anchorX, anchorY } = placement;
+  const [collapsed, setCollapsed] = useState(false);
+  const [draft, setDraft] = useState(idea.content);
+  const [saving, setSaving] = useState(false);
+  const dirty = draft.trim() !== idea.content;
+  useEffect(() => setDraft(idea.content), [idea.content]);
+  const save = async () => {
+    if (!onUpdate || !draft.trim() || !dirty || saving) return;
+    setSaving(true);
+    try { await onUpdate(idea.id, { content: draft.trim() }); } finally { setSaving(false); }
+  };
+  return (
+    <div
+      className={`idea-sticky idea-sticky-${idea.color}${collapsed ? " collapsed" : ""}`}
+      style={{ transform: `translate3d(${left}px, ${top}px, 0)`, animationDelay: `${Math.min(index, 6) * 45}ms` }}
+      data-idea-sticky={idea.id}
+    >
+      <span
+        className="idea-sticky-thread"
+        style={{ width: Math.max(16, Math.abs(left - anchorX)), transform: `translate3d(${Math.min(0, anchorX - left)}px, ${anchorY - top}px, 0)` }}
+        aria-hidden="true"
+      />
+      <div className="idea-sticky-head">
+        <span>IDEA</span>
+        <button type="button" title={collapsed ? "展开便签" : "收起便签"} onClick={() => setCollapsed((value) => !value)}>
+          {collapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
+        </button>
+      </div>
+      {!collapsed && (
+        <>
+          <div className="idea-sticky-quote">“{idea.selector.exact}”</div>
+          <textarea value={draft} aria-label="Idea 便签内容" onChange={(event) => setDraft(event.target.value)} />
+          <div className="idea-sticky-foot">
+            <span>{new Date(idea.updatedAt).toLocaleDateString()}</span>
+            {dirty && (
+              <button type="button" disabled={saving || !draft.trim()} onClick={() => void save()}>
+                <Check size={13} /> {saving ? "保存中" : "保存"}
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

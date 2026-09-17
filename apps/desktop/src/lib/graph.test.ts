@@ -9,6 +9,35 @@ import {
   graphNodeRadius,
   type GraphForceApi,
 } from "./graph-layout.ts";
+import { graphDepths } from "./graph.ts";
+
+test("graphDepths computes shortest undirected distances", () => {
+  const depths = graphDepths(
+    {
+      nodes: [],
+      edges: [
+        { source: "a", target: "b", relation: "link" },
+        { source: "c", target: "b", relation: "link" },
+        { source: "c", target: "d", relation: "link" },
+        { source: "a", target: "d", relation: "link" },
+        { source: "c", target: "e", relation: "link" },
+        { source: "e", target: "f", relation: "link" },
+        { source: "x", target: "y", relation: "link" },
+      ],
+      dataVersion: 1,
+    },
+    "a",
+  );
+
+  assert.deepEqual(Object.fromEntries(depths), { a: 0, b: 1, d: 1, c: 2, e: 3, f: 4 });
+  assert.equal(depths.has("x"), false);
+  assert.equal(depths.has("y"), false);
+});
+
+test("graphDepths includes an isolated focus", () => {
+  const depths = graphDepths({ nodes: [], edges: [], dataVersion: 1 }, "alone");
+  assert.deepEqual([...depths], [["alone", 0]]);
+});
 
 test("graphNodeRadius grows with degree and caps", () => {
   assert.equal(graphNodeRadius({ degree: 0 }), 4);

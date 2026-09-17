@@ -16,6 +16,7 @@ import {
 } from "../api";
 import { clampGraphScope } from "../lib/graph";
 import { loadPref, savePref } from "../lib/prefs";
+import { loadFavorites, remapFavoriteFolder, remapFavoritePage, saveFavorites } from "../lib/favorites";
 import { parseOutline } from "../lib/outline";
 import { markdownBody } from "../lib/noteId";
 import { joinWikiId, parentWikiId, pasteDest, type WikiClip } from "../lib/fileTree";
@@ -26,7 +27,7 @@ import type { Theme } from "../theme";
 import { PanelOpenGlyph } from "./iconGlyphs";
 import { CommandPalette, type PaletteCommand, type PaletteMode } from "./CommandPalette";
 import { IngestModal } from "./IngestModal";
-import { LeftSidebar, type LinkPicker } from "./LeftSidebar";
+import { LeftSidebar, type LeftView, type LinkPicker } from "./LeftSidebar";
 import { NewNoteModal } from "./NewNoteModal";
 import { NoteView } from "./NoteView";
 import { Modal } from "./Modal";
@@ -107,7 +108,8 @@ export function Workspace({
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [noteSaving, setNoteSaving] = useState(false);
   const [tagError, setTagError] = useState<string | null>(null);
-  const [leftView, setLeftView] = useState<"files" | "search">("files");
+  const [leftView, setLeftView] = useState<LeftView>("files");
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => loadFavorites(settings.vaultPath));
   const [rightView, setRightView] = useState<RightView>("agent");
   const [leftCollapsed, setLeftCollapsed] = useState(() => loadPref("leftCollapsed", false));
   const [rightCollapsed, setRightCollapsed] = useState(() => loadPref("rightCollapsed", false));
@@ -296,6 +298,10 @@ export function Workspace({
       /* graph may be empty on fresh vault */
     });
   }, [loadPages, loadGraph, onError]);
+
+  useEffect(() => {
+    setFavoriteIds(loadFavorites(settings.vaultPath));
+  }, [settings.vaultPath]);
 
   const applySession = useCallback(
     (session: AgentSession, activate = true) => {
@@ -634,7 +640,12 @@ export function Workspace({
       delete next[oldId];
       return next;
     });
-  }, []);
+    setFavoriteIds((ids) => {
+      const next = remapFavoritePage(ids, oldId, newId);
+      saveFavorites(settings.vaultPath, next);
+      return next;
+    });
+  }, [settings.vaultPath]);
 
   const remapFolderPrefix = useCallback((from: string, to: string) => {
     if (from === to) return;
@@ -667,7 +678,20 @@ export function Workspace({
       if (cur.kind === "folder" && cur.id === from) return { ...cur, id: to };
       return { ...cur, id: mapId(cur.id) };
     });
-  }, []);
+    setFavoriteIds((ids) => {
+      const next = remapFavoriteFolder(ids, from, to);
+      saveFavorites(settings.vaultPath, next);
+      return next;
+    });
+  }, [settings.vaultPath]);
+
+  const toggleFavorite = useCallback((id: string) => {
+    setFavoriteIds((ids) => {
+      const next = ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id];
+      saveFavorites(settings.vaultPath, next);
+      return next;
+    });
+  }, [settings.vaultPath]);
 
   const takenIds = useMemo(() => {
     const set = new Set<string>();
@@ -1081,18 +1105,11 @@ export function Workspace({
     }
   }
 
-  const toggleLeftFiles = () => {
-    if (!leftCollapsed && leftView === "files") setLeftCollapsed(true);
+  const toggleLeftView = (view: LeftView) => {
+    if (!leftCollapsed && leftView === view) setLeftCollapsed(true);
     else {
       setLeftCollapsed(false);
-      setLeftView("files");
-    }
-  };
-  const toggleLeftSearch = () => {
-    if (!leftCollapsed && leftView === "search") setLeftCollapsed(true);
-    else {
-      setLeftCollapsed(false);
-      setLeftView("search");
+      setLeftView(view);
     }
   };
 
@@ -1100,6 +1117,8 @@ export function Workspace({
     () => [
       { id: "files", label: "显示文件列表", hint: "Ctrl+[", run: () => { setLeftCollapsed(false); setLeftView("files"); } },
       { id: "search", label: "搜索", run: () => { setLeftCollapsed(false); setLeftView("search"); } },
+      { id: "favorites", label: "显示收藏", run: () => { setLeftCollapsed(false); setLeftView("favorites"); } },
+      { id: "library", label: "显示文献库", run: () => { setLeftCollapsed(false); setLeftView("library"); } },
       { id: "new-note", label: "新建笔记", hint: "Ctrl+N", run: () => setNewNoteOpen(true) },
       { id: "edit", label: "切换阅读/编辑", hint: "Ctrl+E", run: () => setNoteMode((m) => (m === "edit" ? "read" : "edit")) },
       { id: "agent", label: "显示 Agent", run: () => { setRightCollapsed(false); setRightView("agent"); } },
@@ -1173,8 +1192,10 @@ export function Workspace({
           agentOpen={agentOpen}
           graphOpen={graphOpen}
           busy={busy}
-          onFiles={toggleLeftFiles}
-          onSearch={toggleLeftSearch}
+          onFiles={() => toggleLeftView("files")}
+          onSearch={() => toggleLeftView("search")}
+          onFavorites={() => toggleLeftView("favorites")}
+          onLibrary={() => toggleLeftView("library")}
           onAgent={openAgent}
           onGraph={openGraph}
           onIngest={() => setIngestOpen(true)}
@@ -1199,7 +1220,9 @@ export function Workspace({
           onCreateFolder={(folderId, name) => void createFolderIn(folderId, name)}
           onReveal={(kind, id) => void revealEntry(kind, id)}
            onLink={(id) => startLinkPicker(id)}
-           onRelatedSessions={relatedSessions}
+          onRelatedSessions={relatedSessions}
+          favoriteIds={favoriteIds}
+          onFavorite={toggleFavorite}
           onPickLink={(toId) => {
             if (!linkPicker) return;
             void insertWikilink(linkPicker.fromId, toId, linkPicker.range);
@@ -1272,7 +1295,9 @@ export function Workspace({
                 tagError={tagError}
                 ideas={ideas.filter((idea) => idea.target.kind === "page" && idea.target.pageId === activePage.id)}
                 ideasVisible={ideasVisible}
+                onIdeasVisible={setIdeasVisible}
                 onCreateIdea={createPageIdea}
+                onUpdateIdea={updateIdea}
               />
             )}
           </div>

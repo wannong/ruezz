@@ -24,7 +24,9 @@ type NoteViewProps = {
   tagError?: string | null;
   ideas: Idea[];
   ideasVisible: boolean;
+  onIdeasVisible: (visible: boolean) => void;
   onCreateIdea: (selector: IdeaSelector, content: string) => Promise<boolean>;
+  onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
 };
 
 export function NoteView({
@@ -44,7 +46,9 @@ export function NoteView({
   tagError,
   ideas,
   ideasVisible,
+  onIdeasVisible,
   onCreateIdea,
+  onUpdateIdea,
 }: NoteViewProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; start: number; end: number } | null>(null);
@@ -202,7 +206,9 @@ export function NoteView({
             ideaTarget={{ kind: "page", pageId: page.id }}
             ideas={ideas}
             ideasVisible={ideasVisible}
+            onIdeasVisible={onIdeasVisible}
             onCreateIdea={onCreateIdea}
+            onUpdateIdea={onUpdateIdea}
           />
         </div>
       )}

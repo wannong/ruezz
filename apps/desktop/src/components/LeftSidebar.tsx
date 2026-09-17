@@ -6,6 +6,10 @@ import type { WikiClip } from "../lib/fileTree";
 import { FileTree } from "./FileTree";
 import { Presence } from "./Presence";
 import { SearchPane } from "./SearchPane";
+import { FavoritesPane } from "./FavoritesPane";
+import { LibraryPane } from "./LibraryPane";
+
+export type LeftView = "files" | "search" | "favorites" | "library";
 
 export type LinkPicker = {
   fromId: string;
@@ -13,7 +17,7 @@ export type LinkPicker = {
 };
 
 type LeftSidebarProps = {
-  view: "files" | "search";
+  view: LeftView;
   pages: PageSummary[];
   folders: string[];
   activeId: string | null;
@@ -32,6 +36,8 @@ type LeftSidebarProps = {
   onReveal: (kind: "root" | "page" | "folder", id?: string) => void;
   onLink: (pageId: string) => void;
   onRelatedSessions?: (pageId: string, label: string) => void;
+  favoriteIds: string[];
+  onFavorite: (pageId: string) => void;
   onPickLink: (toId: string) => void;
   onCloseLinkPicker: () => void;
   onError: (message: string) => void;
@@ -58,6 +64,8 @@ export function LeftSidebar({
   onReveal,
   onLink,
   onRelatedSessions,
+  favoriteIds,
+  onFavorite,
   onPickLink,
   onCloseLinkPicker,
   onError,
@@ -97,7 +105,7 @@ export function LeftSidebar({
             链接
           </button>
         ) : (
-          <span>{view === "files" ? "文件" : "搜索"}</span>
+          <span>{{ files: "文件", search: "搜索", favorites: "收藏", library: "文献库" }[view]}</span>
         )}
       </div>
       {linking ? (
@@ -113,7 +121,7 @@ export function LeftSidebar({
         />
       ) : view === "files" ? (
         <FileTree
-          pages={filteredPages}
+          pages={filteredPages.filter((page) => page.type !== "source")}
           folders={filteredFolders}
           activeId={activeId}
           clipboard={clipboard}
@@ -127,9 +135,15 @@ export function LeftSidebar({
           onReveal={onReveal}
            onLink={onLink}
            onRelatedSessions={onRelatedSessions}
+           favorites={new Set(favoriteIds)}
+           onFavorite={onFavorite}
         />
-      ) : (
+      ) : view === "search" ? (
         <SearchPane onOpen={onOpen} onError={onError} browsePages={pages} selectedTags={selectedTags} onTags={setSelectedTags} />
+      ) : view === "favorites" ? (
+        <FavoritesPane pages={pages} favoriteIds={favoriteIds} onOpen={onOpen} onFavorite={onFavorite} />
+      ) : (
+        <LibraryPane pages={pages.filter((page) => page.type === "source")} favorites={new Set(favoriteIds)} onOpen={onOpen} onFavorite={onFavorite} />
       )}
       <div
         className="resize-handle"
