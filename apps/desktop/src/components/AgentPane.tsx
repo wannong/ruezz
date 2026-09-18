@@ -1,4 +1,4 @@
-import { Paperclip, Plus, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, LoaderCircle, Paperclip, Plus, Wrench, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentAttachment, AgentSessionMessage, AgentSessionSummary, Idea, IdeaSelector, PageSummary } from "../api";
 import centaurIcon from "../assets/centaur-icon.svg";
@@ -23,7 +23,7 @@ type AgentPaneProps = {
   messages: AgentSessionMessage[];
   pendingUser: string | null;
   streamingText: string;
-  streamingTools: Array<{ id: string; name: string }>;
+  streamingTools: Array<{ id: string; name: string; status: "running" | "done" | "error" }>;
   streamingPhase: "thinking" | "tool" | "answer" | null;
   draft: string;
   busy: boolean;
@@ -136,6 +136,7 @@ export function AgentPane({
   onUpdateIdea,
 }: AgentPaneProps) {
   const listRef = useRef<HTMLDivElement>(null);
+  const followOutput = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
@@ -161,7 +162,7 @@ export function AgentPane({
   useEffect(() => {
     const el = listRef.current;
     if (!el || historyOpen) return;
-    el.scrollTop = el.scrollHeight;
+    if (followOutput.current) el.scrollTop = el.scrollHeight;
   }, [messages, pendingUser, busy, streamingText, streamingTools, historyOpen]);
 
   useEffect(() => {
@@ -295,7 +296,10 @@ export function AgentPane({
             </div>
           </div>
         </Presence>
-        <div className="agent-chat-view" ref={listRef}>
+        <div className="agent-chat-view" ref={listRef} onScroll={(event) => {
+          const el = event.currentTarget;
+          followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 72;
+        }}>
             {empty && (
               <div className="agent-welcome">
                 <div className="agent-welcome-icon">
@@ -336,6 +340,17 @@ export function AgentPane({
                   <div className="msg msg-assistant msg-streaming">
                     <div className="msg-role">Agent</div>
                     <div className="msg-body">
+                      {streamingTools.length > 0 && (
+                        <div className="agent-tool-trace" aria-label="工具执行过程">
+                          {streamingTools.map((tool) => (
+                            <div className={`agent-tool-step ${tool.status}`} key={tool.id}>
+                              {tool.status === "running" ? <LoaderCircle size={13} className="spin" /> : tool.status === "error" ? <AlertCircle size={13} /> : <CheckCircle2 size={13} />}
+                              <span>{tool.name}</span>
+                              <small>{tool.status === "running" ? "执行中" : tool.status === "error" ? "失败" : "完成"}</small>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {streamingText ? (
                         <>
                           <MarkdownPreview markdown={streamingText} pages={pages} onOpen={onOpen} />
@@ -343,7 +358,7 @@ export function AgentPane({
                         </>
                       ) : (
                         <span className="msg-thinking">
-                          {streamingPhase === "tool" || streamingTools.length > 0 ? "正在查阅知识库" : "准备回答"}
+                          {streamingPhase === "tool" || streamingTools.some((tool) => tool.status === "running") ? "正在调用工具" : streamingPhase === "answer" ? "正在组织回答" : "正在分析问题"}
                         </span>
                       )}
                     </div>
@@ -615,8 +630,12 @@ function SessionMessageView({
   }
 
   if (message.role === "toolResult") {
-    // Tool traffic is retained for the next model turn, but is not part of the conversation transcript.
-    return null;
+    return (
+      <details className={`agent-tool-result${message.isError ? " error" : ""}`}>
+        <summary>{message.isError ? <AlertCircle size={13} /> : <CheckCircle2 size={13} />}<span>{message.toolName}</span><small>{message.isError ? "失败" : "完成"}</small></summary>
+        <pre>{message.content}</pre>
+      </details>
+    );
   }
 
   const hasText = Boolean(message.content.trim());
@@ -642,6 +661,11 @@ function SessionMessageView({
             onCreateIdea={(selector, content) => onCreateIdea(message.id, selector, content)}
             onUpdateIdea={onUpdateIdea}
           />
+        </div>
+      )}
+      {toolCalls.length > 0 && (
+        <div className="msg-tools">
+          {toolCalls.map((tool) => <span className="tool-chip" key={tool.id}><Wrench size={12} />{tool.name}</span>)}
         </div>
       )}
       {sources.length > 0 && (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   api,
@@ -17,6 +17,7 @@ import {
 import { clampGraphScope } from "../lib/graph";
 import { loadPref, savePref } from "../lib/prefs";
 import { loadFavorites, remapFavoriteFolder, remapFavoritePage, saveFavorites } from "../lib/favorites";
+import { createLibraryFolder, loadLibraryOrganization, saveLibraryOrganization } from "../lib/libraryFolders";
 import { parseOutline } from "../lib/outline";
 import { markdownBody } from "../lib/noteId";
 import { joinWikiId, parentWikiId, pasteDest, type WikiClip } from "../lib/fileTree";
@@ -60,7 +61,7 @@ type AgentUiState = {
   attachments: AgentAttachment[];
   pendingUser: string | null;
   streamingText: string;
-  streamingTools: Array<{ id: string; name: string }>;
+  streamingTools: Array<{ id: string; name: string; status: "running" | "done" | "error" }>;
   streamingPhase: "thinking" | "tool" | "answer" | null;
   draft: string;
   busy: boolean;
@@ -94,6 +95,13 @@ export function Workspace({
   setBusy,
   onAgentTitle,
 }: WorkspaceProps) {
+  const ideaPalette = {
+    white: { paper: "255, 255, 255", ink: "38, 38, 38" },
+    yellow: { paper: "244, 217, 120", ink: "53, 45, 27" },
+    blue: { paper: "190, 220, 242", ink: "28, 48, 61" },
+    green: { paper: "198, 226, 197", ink: "30, 53, 35" },
+    pink: { paper: "239, 202, 214", ink: "65, 33, 44" },
+  }[settings.ideaColor] ?? { paper: "255, 255, 255", ink: "38, 38, 38" };
   const narrow = useMediaQuery("(max-width: 960px)");
   const [pages, setPages] = useState<PageSummary[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
@@ -108,7 +116,7 @@ export function Workspace({
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [noteSaving, setNoteSaving] = useState(false);
   const [tagError, setTagError] = useState<string | null>(null);
-  const [leftView, setLeftView] = useState<LeftView>("files");
+  const [leftView, setLeftView] = useState<LeftView>("library");
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() => loadFavorites(settings.vaultPath));
   const [rightView, setRightView] = useState<RightView>("agent");
   const [leftCollapsed, setLeftCollapsed] = useState(() => loadPref("leftCollapsed", false));
@@ -117,6 +125,8 @@ export function Workspace({
   const [rightWidth, setRightWidth] = useState(() => loadPref("rightWidth", 320));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ingestOpen, setIngestOpen] = useState(false);
+  const [ingestFolderId, setIngestFolderId] = useState<string | null>(null);
+  const [libraryOrganization, setLibraryOrganization] = useState(() => loadLibraryOrganization(settings.vaultPath));
   const [newNoteOpen, setNewNoteOpen] = useState(false);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [graph, setGraph] = useState<GraphDto | null>(null);
@@ -301,7 +311,24 @@ export function Workspace({
 
   useEffect(() => {
     setFavoriteIds(loadFavorites(settings.vaultPath));
+    setLibraryOrganization(loadLibraryOrganization(settings.vaultPath));
   }, [settings.vaultPath]);
+
+  const updateLibraryOrganization = useCallback((next: typeof libraryOrganization) => {
+    setLibraryOrganization(next);
+    saveLibraryOrganization(settings.vaultPath, next);
+  }, [settings.vaultPath]);
+
+  const addLibraryFolder = useCallback(() => {
+    const name = window.prompt("文献文件夹名称")?.trim();
+    if (!name || libraryOrganization.folders.some((folder) => folder.name === name)) return;
+    updateLibraryOrganization({ ...libraryOrganization, folders: [...libraryOrganization.folders, createLibraryFolder(name)] });
+  }, [libraryOrganization, updateLibraryOrganization]);
+
+  const openLibraryImport = useCallback((folderId: string | null) => {
+    setIngestFolderId(folderId);
+    setIngestOpen(true);
+  }, []);
 
   const applySession = useCallback(
     (session: AgentSession, activate = true) => {
@@ -309,7 +336,7 @@ export function Workspace({
         setSessionId(session.id);
         setOpenSessionIds((prev) => prev.includes(session.id) ? prev : [...prev, session.id].slice(-3));
       }
-      updateAgentState(session.id, (state) => ({ ...state, messages: session.messages, attachments: session.attachments ?? [], pendingUser: null, streamingText: "", streamingTools: [], busy: false }));
+      updateAgentState(session.id, (state) => ({ ...state, messages: session.messages, attachments: session.attachments ?? [], pendingUser: null, streamingText: "", streamingTools: [], streamingPhase: null, busy: false }));
       setSessions((prev) => {
            const summary: AgentSessionSummary = {
           id: session.id,
@@ -805,10 +832,18 @@ export function Workspace({
     try {
       const imported: Array<{ pageIds: string[]; sourcePath?: string }> = [];
       for (const p of paths) imported.push(await api.vaultIngestPath(p) as { pageIds: string[]; sourcePath?: string });
+      const importedIds = imported.flatMap((item) => item.pageIds ?? []);
+      if (ingestFolderId) {
+        updateLibraryOrganization({
+          ...libraryOrganization,
+          assignments: { ...libraryOrganization.assignments, ...Object.fromEntries(importedIds.map((id) => [id, ingestFolderId])) },
+        });
+      }
       await loadPages();
       await loadGraph();
       setNotice(`已整篇导入 ${paths.length} 个文件`);
       setIngestOpen(false);
+      setIngestFolderId(null);
       const created = await api.agentSessionCreate({ title: `内化：${paths.length} 个文件` });
       internalizationSessionId = created.session.id;
       applySession(created.session);
@@ -819,9 +854,8 @@ export function Workspace({
           applySession(attached.session);
         }
       }
-      const importedIds = imported.flatMap((item) => item.pageIds ?? []);
       const prompt = `请立即内化刚刚导入并附加的资料，不要向用户索要资料位置。资料页面 ID：${importedIds.join(", ")}。请先逐个调用 read_page 读取这些页面的正文，提炼重要概念、事实和关系；然后创建必要的新 Markdown 页面，并将新页面中的概念与已有知识库页面用 [[page-id]] 链接起来；已有相关页面请更新。请先完整分析资料，再执行写入。`;
-      updateAgentState(created.session.id, { busy: true, pendingUser: prompt, streamingText: "", streamingTools: [] });
+      updateAgentState(created.session.id, { busy: true, pendingUser: prompt, streamingText: "", streamingTools: [], streamingPhase: "thinking" });
       const internalized = await api.agentPromptStream({ sessionId: created.session.id, message: prompt, graphDepth: 0 }, (event) => {
         if (event.type === "text") updateAgentState(created.session.id, { streamingText: event.text });
         if (event.type === "tool_start") {
@@ -829,15 +863,17 @@ export function Workspace({
             ...state,
             streamingTools: state.streamingTools.some((tool) => tool.id === event.id)
               ? state.streamingTools
-              : [...state.streamingTools, { id: event.id, name: event.name }],
+              : [...state.streamingTools, { id: event.id, name: event.name, status: "running" }],
           }));
         }
+        if (event.type === "phase") updateAgentState(created.session.id, { streamingPhase: event.phase });
+        if (event.type === "tool_end") updateAgentState(created.session.id, (state) => ({ ...state, streamingTools: state.streamingTools.map((tool) => tool.id === event.id ? { ...tool, status: event.isError ? "error" : "done" } : tool) }));
       });
       applySession(internalized.session);
       await refreshSessions();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
-      if (internalizationSessionId) updateAgentState(internalizationSessionId, { pendingUser: null, streamingText: "", streamingTools: [], busy: false });
+      if (internalizationSessionId) updateAgentState(internalizationSessionId, { pendingUser: null, streamingText: "", streamingTools: [], streamingPhase: null, busy: false });
     } finally {
       setBusy(false);
     }
@@ -847,11 +883,18 @@ export function Workspace({
     setBusy(true);
     setError(null);
     try {
-      await api.vaultIngestText(title, body);
+      const imported = await api.vaultIngestText(title, body) as { pageIds?: string[] };
+      if (ingestFolderId && imported.pageIds?.length) {
+        updateLibraryOrganization({
+          ...libraryOrganization,
+          assignments: { ...libraryOrganization.assignments, ...Object.fromEntries(imported.pageIds.map((id) => [id, ingestFolderId])) },
+        });
+      }
       await loadPages();
       await loadGraph();
       setNotice(`已整篇入库文本「${title}」`);
       setIngestOpen(false);
+      setIngestFolderId(null);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -899,7 +942,7 @@ export function Workspace({
         id = created.session.id;
         applySession(created.session);
       }
-      updateAgentState(id, { draft: "", pendingUser: text, streamingText: "", streamingTools: [], busy: true });
+      updateAgentState(id, { draft: "", pendingUser: text, streamingText: "", streamingTools: [], streamingPhase: "thinking", busy: true });
       const result = await api.agentPromptStream(
         {
           sessionId: id,
@@ -910,8 +953,10 @@ export function Workspace({
         (event) => {
            if (event.type === "text") updateAgentState(id!, { streamingText: event.text });
           if (event.type === "tool_start") {
-            updateAgentState(id!, (state) => ({ ...state, streamingTools: state.streamingTools.some((tool) => tool.id === event.id) ? state.streamingTools : [...state.streamingTools, { id: event.id, name: event.name }] }));
-          }
+             updateAgentState(id!, (state) => ({ ...state, streamingTools: state.streamingTools.some((tool) => tool.id === event.id) ? state.streamingTools : [...state.streamingTools, { id: event.id, name: event.name, status: "running" }] }));
+           }
+           if (event.type === "phase") updateAgentState(id!, { streamingPhase: event.phase });
+           if (event.type === "tool_end") updateAgentState(id!, (state) => ({ ...state, streamingTools: state.streamingTools.map((tool) => tool.id === event.id ? { ...tool, status: event.isError ? "error" : "done" } : tool) }));
         },
       );
        applySession(result.session, false);
@@ -932,7 +977,7 @@ export function Workspace({
         onError(e instanceof Error ? e.message : String(e));
       }
     } finally {
-       if (id) updateAgentState(id, { pendingUser: null, streamingText: "", streamingTools: [], busy: false });
+       if (id) updateAgentState(id, { pendingUser: null, streamingText: "", streamingTools: [], streamingPhase: null, busy: false });
       sendingRef.current = false;
       abortingRef.current = false;
     }
@@ -1115,15 +1160,15 @@ export function Workspace({
 
   const commands: PaletteCommand[] = useMemo(
     () => [
+      { id: "library", label: "显示文献库", run: () => { setLeftCollapsed(false); setLeftView("library"); } },
       { id: "files", label: "显示文件列表", hint: "Ctrl+[", run: () => { setLeftCollapsed(false); setLeftView("files"); } },
       { id: "search", label: "搜索", run: () => { setLeftCollapsed(false); setLeftView("search"); } },
       { id: "favorites", label: "显示收藏", run: () => { setLeftCollapsed(false); setLeftView("favorites"); } },
-      { id: "library", label: "显示文献库", run: () => { setLeftCollapsed(false); setLeftView("library"); } },
       { id: "new-note", label: "新建笔记", hint: "Ctrl+N", run: () => setNewNoteOpen(true) },
       { id: "edit", label: "切换阅读/编辑", hint: "Ctrl+E", run: () => setNoteMode((m) => (m === "edit" ? "read" : "edit")) },
       { id: "agent", label: "显示 Agent", run: () => { setRightCollapsed(false); setRightView("agent"); } },
       { id: "graph", label: "打开图谱", hint: "Ctrl+G", run: () => { setRightCollapsed(false); setRightView("graph"); } },
-      { id: "ingest", label: "入库…", run: () => setIngestOpen(true) },
+      { id: "ingest", label: "入库…", run: () => { setIngestFolderId(null); setIngestOpen(true); } },
       { id: "settings", label: "打开设置", run: () => setSettingsOpen(true) },
       { id: "theme", label: "切换深浅色", run: onToggleTheme },
       { id: "left", label: "折叠/展开左栏", hint: "Ctrl+[", run: () => setLeftCollapsed((v) => !v) },
@@ -1139,6 +1184,7 @@ export function Workspace({
         setPalette(null);
         setSettingsOpen(false);
         setIngestOpen(false);
+        setIngestFolderId(null);
         setNewNoteOpen(false);
         return;
       }
@@ -1184,7 +1230,14 @@ export function Workspace({
   };
 
   return (
-    <div className={`workspace${narrow ? " narrow" : ""}`}>
+    <div
+      className={`workspace${narrow ? " narrow" : ""}`}
+      style={{
+        "--idea-paper-rgb": ideaPalette.paper,
+        "--idea-ink-rgb": ideaPalette.ink,
+        "--idea-opacity": settings.ideaOpacity,
+      } as CSSProperties}
+    >
       <div className="workspace-body">
         <Ribbon
           leftView={leftView}
@@ -1198,7 +1251,7 @@ export function Workspace({
           onLibrary={() => toggleLeftView("library")}
           onAgent={openAgent}
           onGraph={openGraph}
-          onIngest={() => setIngestOpen(true)}
+          onIngest={() => { setIngestFolderId(null); setIngestOpen(true); }}
           onSettings={() => setSettingsOpen(true)}
         />
         <LeftSidebar
@@ -1222,7 +1275,11 @@ export function Workspace({
            onLink={(id) => startLinkPicker(id)}
           onRelatedSessions={relatedSessions}
           favoriteIds={favoriteIds}
+          libraryFolders={libraryOrganization.folders}
+          libraryAssignments={libraryOrganization.assignments}
           onFavorite={toggleFavorite}
+          onCreateLibraryFolder={addLibraryFolder}
+          onAddToLibraryFolder={openLibraryImport}
           onPickLink={(toId) => {
             if (!linkPicker) return;
             void insertWikilink(linkPicker.fromId, toId, linkPicker.range);
@@ -1283,6 +1340,8 @@ export function Workspace({
                 draft={noteDrafts[activePage.id] ?? activePage.raw}
                 dirty={isDirty(activePage.id)}
                 saving={noteSaving}
+                favorite={favoriteIds.includes(activePage.id)}
+                onFavorite={() => toggleFavorite(activePage.id)}
                 onMode={setNoteMode}
                 onDraft={(value) =>
                   setNoteDrafts((d) => ({ ...d, [activePage.id]: value }))
@@ -1412,7 +1471,8 @@ export function Workspace({
         <IngestModal
           busy={busy}
           canPickFiles={isTauriRuntime()}
-          onClose={() => setIngestOpen(false)}
+          destinationLabel={ingestFolderId ? libraryOrganization.folders.find((folder) => folder.id === ingestFolderId)?.name : undefined}
+          onClose={() => { setIngestOpen(false); setIngestFolderId(null); }}
           onImportFiles={async () => {
             const files = await api.pickFiles();
             await ingestFiles(files);

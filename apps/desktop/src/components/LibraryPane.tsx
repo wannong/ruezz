@@ -1,31 +1,55 @@
-import { FileText, Star } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, FolderPlus, Plus, Star } from "lucide-react";
+import { useState } from "react";
 import type { PageSummary } from "../api";
+import type { LibraryFolder } from "../lib/libraryFolders";
 
 type LibraryPaneProps = {
   pages: PageSummary[];
   favorites: Set<string>;
+  folders: LibraryFolder[];
+  assignments: Record<string, string>;
   onOpen: (id: string) => void;
   onFavorite: (id: string) => void;
+  onCreateFolder: () => void;
+  onAddToFolder: (folderId: string | null) => void;
 };
 
-export function LibraryPane({ pages, favorites, onOpen, onFavorite }: LibraryPaneProps) {
-  if (pages.length === 0) return <div className="empty">暂无文献。导入 PDF 或文档后会显示在这里。</div>;
+export function LibraryPane({ pages, favorites, folders, assignments, onOpen, onFavorite, onCreateFolder, onAddToFolder }: LibraryPaneProps) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const sections = [
+    ...folders.map((folder) => ({ ...folder, pages: pages.filter((page) => assignments[page.id] === folder.id) })),
+    { id: "", name: "未分类", pages: pages.filter((page) => !folders.some((folder) => folder.id === assignments[page.id])) },
+  ];
+  const toggle = (id: string) => setCollapsed((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
 
   return (
     <div className="library-pane">
-      <div className="library-head" aria-hidden="true">
-        <span>标题</span><span>类型 / 来源</span><span />
+      <div className="library-actions">
+        <span>{pages.length} 篇文献</span>
+        <button type="button" title="新建文献文件夹" onClick={onCreateFolder}><FolderPlus size={15} /> 新建文件夹</button>
       </div>
       <div className="library-list">
-        {pages.map((page) => (
-          <LibraryRow
-            key={page.id}
-            page={page}
-            favorite={favorites.has(page.id)}
-            onOpen={onOpen}
-            onFavorite={onFavorite}
-          />
-        ))}
+        {sections.map((section) => {
+          const isCollapsed = collapsed.has(section.id);
+          return (
+            <section className="library-folder" key={section.id || "uncategorized"}>
+              <div className="library-folder-row">
+                <button type="button" className="library-folder-toggle" onClick={() => toggle(section.id)}>
+                  {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                  <strong>{section.name}</strong><span>{section.pages.length}</span>
+                </button>
+                <button type="button" className="library-folder-add" title={`添加文献到${section.name}`} onClick={() => onAddToFolder(section.id || null)}><Plus size={15} /></button>
+              </div>
+              {!isCollapsed && (section.pages.length ? section.pages.map((page) => (
+                <LibraryRow key={page.id} page={page} favorite={favorites.has(page.id)} onOpen={onOpen} onFavorite={onFavorite} />
+              )) : <div className="library-folder-empty">暂无文献</div>)}
+            </section>
+          );
+        })}
       </div>
     </div>
   );

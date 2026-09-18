@@ -36,6 +36,14 @@ export function Ribbon({
     <nav className="ribbon" aria-label="侧栏图标">
       <button
         type="button"
+        className={`icon-btn${ !leftCollapsed && leftView === "library" ? " active" : ""}`}
+        title="文献库"
+        onClick={onLibrary}
+      >
+        <BookOpen size={18} />
+      </button>
+      <button
+        type="button"
         className={`icon-btn${ !leftCollapsed && leftView === "files" ? " active" : ""}`}
         data-icon="files"
         title="文件列表"
@@ -59,14 +67,6 @@ export function Ribbon({
         onClick={onFavorites}
       >
         <Star size={18} />
-      </button>
-      <button
-        type="button"
-        className={`icon-btn${ !leftCollapsed && leftView === "library" ? " active" : ""}`}
-        title="文献库"
-        onClick={onLibrary}
-      >
-        <BookOpen size={18} />
       </button>
       <button
         type="button"

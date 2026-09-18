@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-18
+
+### Added
+
+- Vault-scoped virtual literature folders with direct import actions and an uncategorized fallback.
+- Global Idea note color and opacity controls, with white as the default appearance.
+- Visible Agent tool lifecycle and expandable historical tool results.
+
+### Changed
+
+- Reordered the primary navigation around the literature library and made it the default left view.
+- Replaced persistent inline Idea cards with editable hover notes for Markdown and PDF annotations.
+- Refined Agent messages, streaming phases, and scroll-follow behavior.
+- Moved knowledge-page favorites beside the read/edit controls.
+
+### Fixed
+
+- PDF literature nodes in the graph now open their source page when clicked.
+
 ## [1.1.2] - 2026-09-18
 
 ### Added

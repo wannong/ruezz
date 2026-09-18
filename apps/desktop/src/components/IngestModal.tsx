@@ -7,6 +7,7 @@ type IngestModalProps = {
   onClose: () => void;
   onImportFiles: () => Promise<void>;
   onPaste: (title: string, body: string) => Promise<void>;
+  destinationLabel?: string;
 };
 
 export function IngestModal({
@@ -15,12 +16,14 @@ export function IngestModal({
   onClose,
   onImportFiles,
   onPaste,
+  destinationLabel,
 }: IngestModalProps) {
   const [title, setTitle] = useState("剪贴笔记");
   const [body, setBody] = useState("");
 
   return (
     <Modal title="导入资料" onClose={onClose} wide>
+      {destinationLabel && <div className="ingest-destination">导入到：<strong>{destinationLabel}</strong></div>}
       <section className="ingest-section">
         <h3>导入文件</h3>
         <p className="hint">

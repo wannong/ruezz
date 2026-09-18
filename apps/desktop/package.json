@@ -1,13 +1,13 @@
 {
   "name": "@wikihome/desktop",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types --test src/lib/graph.test.ts",
+    "test": "node --experimental-strip-types --test src/lib/*.test.ts",
     "tauri": "tauri"
   },
   "dependencies": {

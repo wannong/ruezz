@@ -21,7 +21,7 @@ type RightSidebarProps = {
   messages: AgentSessionMessage[];
   pendingUser: string | null;
   streamingText: string;
-  streamingTools: Array<{ id: string; name: string }>;
+  streamingTools: Array<{ id: string; name: string; status: "running" | "done" | "error" }>;
   streamingPhase: "thinking" | "tool" | "answer" | null;
   draft: string;
   busy: boolean;

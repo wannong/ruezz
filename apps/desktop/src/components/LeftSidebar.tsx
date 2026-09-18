@@ -8,6 +8,7 @@ import { Presence } from "./Presence";
 import { SearchPane } from "./SearchPane";
 import { FavoritesPane } from "./FavoritesPane";
 import { LibraryPane } from "./LibraryPane";
+import type { LibraryFolder } from "../lib/libraryFolders";
 
 export type LeftView = "files" | "search" | "favorites" | "library";
 
@@ -37,7 +38,11 @@ type LeftSidebarProps = {
   onLink: (pageId: string) => void;
   onRelatedSessions?: (pageId: string, label: string) => void;
   favoriteIds: string[];
+  libraryFolders: LibraryFolder[];
+  libraryAssignments: Record<string, string>;
   onFavorite: (pageId: string) => void;
+  onCreateLibraryFolder: () => void;
+  onAddToLibraryFolder: (folderId: string | null) => void;
   onPickLink: (toId: string) => void;
   onCloseLinkPicker: () => void;
   onError: (message: string) => void;
@@ -65,7 +70,11 @@ export function LeftSidebar({
   onLink,
   onRelatedSessions,
   favoriteIds,
+  libraryFolders,
+  libraryAssignments,
   onFavorite,
+  onCreateLibraryFolder,
+  onAddToLibraryFolder,
   onPickLink,
   onCloseLinkPicker,
   onError,
@@ -143,7 +152,16 @@ export function LeftSidebar({
       ) : view === "favorites" ? (
         <FavoritesPane pages={pages} favoriteIds={favoriteIds} onOpen={onOpen} onFavorite={onFavorite} />
       ) : (
-        <LibraryPane pages={pages.filter((page) => page.type === "source")} favorites={new Set(favoriteIds)} onOpen={onOpen} onFavorite={onFavorite} />
+        <LibraryPane
+          pages={pages.filter((page) => page.type === "source")}
+          favorites={new Set(favoriteIds)}
+          folders={libraryFolders}
+          assignments={libraryAssignments}
+          onOpen={onOpen}
+          onFavorite={onFavorite}
+          onCreateFolder={onCreateLibraryFolder}
+          onAddToFolder={onAddToLibraryFolder}
+        />
       )}
       <div
         className="resize-handle"

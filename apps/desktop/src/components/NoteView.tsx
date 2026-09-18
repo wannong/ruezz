@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { Star } from "lucide-react";
 import type { Idea, IdeaSelector, PageContent, PageSummary } from "../api";
 import { markdownBody } from "../lib/noteId";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -17,6 +18,8 @@ type NoteViewProps = {
   onMode: (mode: NoteMode) => void;
   onDraft: (value: string) => void;
   onSave: () => void;
+  favorite: boolean;
+  onFavorite: () => void;
   onOpen: (id: string) => void;
   onLink: (range: { start: number; end: number }) => void;
   assetRoot?: string;
@@ -39,6 +42,8 @@ export function NoteView({
   onMode,
   onDraft,
   onSave,
+  favorite,
+  onFavorite,
   onOpen,
   onLink,
   assetRoot,
@@ -153,16 +158,30 @@ export function NoteView({
           </div>
           {tagError && <div className="error note-tag-error">{tagError}</div>}
         </div>
-        <div className="note-toolbar">
-          <div className="note-mode">
+          <div className="note-toolbar">
+            <div className="note-mode">
             <button type="button" className={mode === "read" ? "active" : ""} onClick={() => onMode("read")}>
               阅读
             </button>
             <button type="button" className={mode === "edit" ? "active" : ""} onClick={() => onMode("edit")}>
               编辑
             </button>
-            {hasSource && <button type="button" className={mode === "source" ? "active" : ""} onClick={() => onMode("source")}>原件</button>}
           </div>
+          {page.type !== "source" && <button
+            type="button"
+            className={`favorite-star note-favorite${favorite ? " active" : ""}`}
+            title={favorite ? "取消收藏" : "收藏"}
+            aria-label={favorite ? `取消收藏 ${page.title ?? page.id}` : `收藏 ${page.title ?? page.id}`}
+            aria-pressed={favorite}
+            onClick={onFavorite}
+          >
+            <Star size={15} fill={favorite ? "currentColor" : "none"} />
+          </button>}
+          {hasSource && (
+            <div className="note-mode">
+              <button type="button" className={mode === "source" ? "active" : ""} onClick={() => onMode("source")}>原件</button>
+            </div>
+          )}
           <button
             type="button"
             className="primary note-save"

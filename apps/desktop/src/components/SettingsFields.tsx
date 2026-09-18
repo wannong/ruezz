@@ -163,6 +163,25 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
         </div>
       </label>
 
+      <div className="settings-section-head"><span>便签外观</span></div>
+      <div className="idea-appearance-settings">
+        <label className="label">
+          颜色
+          <select value={settings.ideaColor} onChange={(event) => onChange({ ...settings, ideaColor: event.target.value as VaultSettings["ideaColor"] })}>
+            <option value="white">白色</option>
+            <option value="yellow">黄色</option>
+            <option value="blue">蓝色</option>
+            <option value="green">绿色</option>
+            <option value="pink">粉色</option>
+          </select>
+        </label>
+        <label className="label">
+          透明度 {Math.round(settings.ideaOpacity * 100)}%
+          <input type="range" min="40" max="100" step="5" value={Math.round(settings.ideaOpacity * 100)} onChange={(event) => onChange({ ...settings, ideaOpacity: Number(event.target.value) / 100 })} />
+        </label>
+        <span className="idea-appearance-preview" data-color={settings.ideaColor} style={{ opacity: settings.ideaOpacity }}>便签预览</span>
+      </div>
+
       <div className="settings-section-head">
         <span>模型服务商</span>
         <button type="button" aria-expanded={pickerOpen} onClick={() => setPickerOpen((open) => !open)}>

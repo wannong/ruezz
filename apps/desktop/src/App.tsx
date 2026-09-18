@@ -15,6 +15,8 @@ const defaultSettings: VaultSettings = {
   mock: false,
   providers: [],
   activeProviderId: "",
+  ideaColor: "white",
+  ideaOpacity: 0.92,
 };
 
 export default function App() {

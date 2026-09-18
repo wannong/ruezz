@@ -17,6 +17,8 @@ export type VaultSettings = {
   mock: boolean;
   providers: LlmProvider[];
   activeProviderId: string;
+  ideaColor: "white" | "yellow" | "blue" | "green" | "pink";
+  ideaOpacity: number;
 };
 
 export type PageSummary = {
@@ -312,7 +314,7 @@ async function tauriPromptStream(
   const unlisten = await listen<AgentStreamEvent>("agent-event", (event) => {
     const payload = event.payload;
     if (!payload || typeof payload !== "object" || !("type" in payload)) return;
-    if (payload.type === "text" || payload.type === "tool_start" || payload.type === "tool_end" || payload.type === "usage") {
+    if (payload.type === "text" || payload.type === "phase" || payload.type === "tool_start" || payload.type === "tool_end" || payload.type === "usage") {
       onEvent(payload);
     }
   });

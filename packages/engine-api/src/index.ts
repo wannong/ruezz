@@ -18,6 +18,8 @@ export const VaultSettingsSchema = z.object({
   mock: z.boolean().default(false),
   providers: z.array(LlmProviderSchema).default([]),
   activeProviderId: z.string().default(""),
+  ideaColor: z.enum(["white", "yellow", "blue", "green", "pink"]).default("white"),
+  ideaOpacity: z.number().min(0.4).max(1).default(0.92),
 });
 
 export type VaultSettings = z.infer<typeof VaultSettingsSchema>;

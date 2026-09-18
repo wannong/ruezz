@@ -268,7 +268,6 @@ export function GraphView({
           }}
           onNodeClick={(node) => {
             const id = String((node as GraphNode).id);
-            if ((node as GraphNode).type === "source") return;
             onOpen(id);
           }}
         />

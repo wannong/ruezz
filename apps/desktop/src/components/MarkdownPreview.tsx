@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp, Eye, EyeOff, StickyNote } from "lucide-react";
+import { Check, Eye, EyeOff, StickyNote } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -119,7 +119,8 @@ export function MarkdownPreview({
   const [content, setContent] = useState("");
   const [marks, setMarks] = useState<MarkRect[]>([]);
   const [stickies, setStickies] = useState<StickyPlacement[]>([]);
-  const [stickyExtent, setStickyExtent] = useState(0);
+  const [hoveredIdeaId, setHoveredIdeaId] = useState<string | null>(null);
+  const hideTimer = useRef<number | null>(null);
   const source = rewriteWikilinks(markdown);
   const imageSrc = (src: string): string => {
     if (!assetRoot || !isTauriRuntime() || /^(?:[a-z]+:|\/\/|data:|#)/i.test(src)) return src;
@@ -144,14 +145,12 @@ export function MarkdownPreview({
     if (!root || !surface) {
       setMarks([]);
       setStickies([]);
-      setStickyExtent(0);
       return;
     }
     const update = () => {
       const surfaceRect = surface.getBoundingClientRect();
       const next: MarkRect[] = [];
       const anchored: StickyPlacement[] = [];
-      let lastStickyBottom = -Infinity;
       for (const idea of ideas) {
         if (idea.status === "resolved") continue;
         if (idea.selector.kind === "pdf-region") continue;
@@ -185,16 +184,8 @@ export function MarkdownPreview({
           anchorY: anchor.top - surfaceRect.top + anchor.height / 2,
         });
       }
-      const nextStickies = anchored
-        .sort((a, b) => a.anchorY - b.anchorY)
-        .map((sticky) => {
-          const top = Math.max(sticky.top, lastStickyBottom + 8);
-          lastStickyBottom = top + 132;
-          return { ...sticky, top };
-        });
       setMarks(next);
-      setStickies(nextStickies);
-      setStickyExtent(nextStickies.length ? Math.max(0, lastStickyBottom - root.offsetHeight) : 0);
+      setStickies(anchored);
     };
     update();
     const observer = new ResizeObserver(update);
@@ -205,6 +196,15 @@ export function MarkdownPreview({
       window.removeEventListener("resize", update);
     };
   }, [ideas, source]);
+
+  const showIdea = (id: string) => {
+    if (hideTimer.current != null) window.clearTimeout(hideTimer.current);
+    setHoveredIdeaId(id);
+  };
+  const hideIdea = () => {
+    if (hideTimer.current != null) window.clearTimeout(hideTimer.current);
+    hideTimer.current = window.setTimeout(() => setHoveredIdeaId(null), 100);
+  };
 
   const captureSelection = (event: MouseEvent<HTMLDivElement>) => {
     if (!ideaTarget || !onCreateIdea) return;
@@ -272,16 +272,22 @@ export function MarkdownPreview({
     <div
       ref={surfaceRef}
       className={`md-annotation-surface${ideaTarget ? " md-annotatable" : ""}`}
-      style={ideasVisible && stickyExtent > 0 ? { paddingBottom: stickyExtent } : undefined}
     >
-      {marks.length > 0 && (
-        <div className="idea-mark-layer" aria-hidden="true">
+      {ideasVisible && marks.length > 0 && (
+        <div className="idea-mark-layer">
           {marks.map((mark, index) => (
             <span
               key={`${mark.id}:${index}`}
               data-idea-mark={mark.id}
-              className={`idea-mark idea-mark-${mark.color}`}
+              className={`idea-mark${hoveredIdeaId === mark.id ? " active" : ""}`}
               style={{ left: mark.left, top: mark.top, width: mark.width, height: mark.height }}
+              tabIndex={0}
+              role="button"
+              aria-label="查看 Idea"
+              onMouseEnter={() => showIdea(mark.id)}
+              onMouseLeave={hideIdea}
+              onFocus={() => showIdea(mark.id)}
+              onBlur={hideIdea}
             />
           ))}
         </div>
@@ -367,14 +373,15 @@ export function MarkdownPreview({
           <span>{ideasVisible ? "隐藏便签" : `显示便签 · ${ideas.filter((idea) => idea.status === "open").length}`}</span>
         </button>
       )}
-      {ideasVisible && stickies.length > 0 && (
+      {ideasVisible && hoveredIdeaId && (
         <div className="idea-sticky-layer">
-          {stickies.map((sticky, index) => (
+          {stickies.filter((sticky) => sticky.idea.id === hoveredIdeaId).map((sticky) => (
             <IdeaStickyNote
               key={sticky.idea.id}
               placement={sticky}
-              index={index}
               onUpdate={onUpdateIdea}
+              onEnter={() => showIdea(sticky.idea.id)}
+              onLeave={hideIdea}
             />
           ))}
         </div>
@@ -423,15 +430,16 @@ export function MarkdownPreview({
 
 function IdeaStickyNote({
   placement,
-  index,
   onUpdate,
+  onEnter,
+  onLeave,
 }: {
   placement: StickyPlacement;
-  index: number;
   onUpdate?: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
+  onEnter: () => void;
+  onLeave: () => void;
 }) {
   const { idea, left, top, anchorX, anchorY } = placement;
-  const [collapsed, setCollapsed] = useState(false);
   const [draft, setDraft] = useState(idea.content);
   const [saving, setSaving] = useState(false);
   const dirty = draft.trim() !== idea.content;
@@ -443,9 +451,11 @@ function IdeaStickyNote({
   };
   return (
     <div
-      className={`idea-sticky idea-sticky-${idea.color}${collapsed ? " collapsed" : ""}`}
-      style={{ transform: `translate3d(${left}px, ${top}px, 0)`, animationDelay: `${Math.min(index, 6) * 45}ms` }}
+      className="idea-sticky idea-sticky-hover"
+      style={{ transform: `translate3d(${left}px, ${top}px, 0)` }}
       data-idea-sticky={idea.id}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
     >
       <span
         className="idea-sticky-thread"
@@ -454,24 +464,18 @@ function IdeaStickyNote({
       />
       <div className="idea-sticky-head">
         <span>IDEA</span>
-        <button type="button" title={collapsed ? "展开便签" : "收起便签"} onClick={() => setCollapsed((value) => !value)}>
-          {collapsed ? <ChevronDown size={13} /> : <ChevronUp size={13} />}
-        </button>
+        <small>{new Date(idea.updatedAt).toLocaleDateString()}</small>
       </div>
-      {!collapsed && (
-        <>
-          <div className="idea-sticky-quote">“{idea.selector.exact}”</div>
-          <textarea value={draft} aria-label="Idea 便签内容" onChange={(event) => setDraft(event.target.value)} />
-          <div className="idea-sticky-foot">
-            <span>{new Date(idea.updatedAt).toLocaleDateString()}</span>
-            {dirty && (
-              <button type="button" disabled={saving || !draft.trim()} onClick={() => void save()}>
-                <Check size={13} /> {saving ? "保存中" : "保存"}
-              </button>
-            )}
-          </div>
-        </>
-      )}
+      <div className="idea-sticky-quote">“{idea.selector.exact}”</div>
+      <textarea value={draft} aria-label="Idea 便签内容" onChange={(event) => setDraft(event.target.value)} />
+      <div className="idea-sticky-foot">
+        <span>悬浮便签</span>
+        {dirty && (
+          <button type="button" disabled={saving || !draft.trim()} onClick={() => void save()}>
+            <Check size={13} /> {saving ? "保存中" : "保存"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

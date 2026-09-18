@@ -279,11 +279,32 @@ export function DocumentPreview({ pageId, type, name, ideas, ideasVisible, onIde
 function PdfIdeaNote({ idea, selector, visible, onUpdate }: { idea: Idea; selector: PdfRegionIdeaSelector; visible: boolean; onUpdate: DocumentPreviewProps["onUpdateIdea"] }) {
   const [draft, setDraft] = useState(idea.content);
   const [saving, setSaving] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const hideTimer = useRef<number | null>(null);
   useEffect(() => setDraft(idea.content), [idea.content]);
   const dirty = draft.trim() !== idea.content;
+  const show = () => {
+    if (hideTimer.current != null) window.clearTimeout(hideTimer.current);
+    setHovered(true);
+  };
+  const hide = () => {
+    if (hideTimer.current != null) window.clearTimeout(hideTimer.current);
+    hideTimer.current = window.setTimeout(() => setHovered(false), 100);
+  };
   return <>
-    <span className={`pdf-idea-region pdf-idea-region-${idea.color}`} style={{ left: `${selector.x * 100}%`, top: `${selector.y * 100}%`, width: `${selector.width * 100}%`, height: `${selector.height * 100}%` }} />
-    {visible && <aside className={`pdf-idea-sticky idea-sticky-${idea.color}`} style={{ left: `${Math.min(0.72, selector.x + selector.width + 0.018) * 100}%`, top: `${selector.y * 100}%` }}>
+    <span
+      className="pdf-idea-region"
+      data-idea-mark={idea.id}
+      tabIndex={visible ? 0 : -1}
+      role="button"
+      aria-label="查看 PDF Idea"
+      style={{ left: `${selector.x * 100}%`, top: `${selector.y * 100}%`, width: `${selector.width * 100}%`, height: `${selector.height * 100}%` }}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+    />
+    {visible && hovered && <aside className="pdf-idea-sticky" data-idea-sticky={idea.id} style={{ left: `${Math.min(0.72, selector.x + selector.width + 0.018) * 100}%`, top: `${selector.y * 100}%` }} onMouseEnter={show} onMouseLeave={hide}>
       <div><span>IDEA</span><small>第 {selector.page} 页</small></div>
       {selector.exact && <q>{selector.exact}</q>}
       <textarea value={draft} onChange={(event) => setDraft(event.target.value)} />
