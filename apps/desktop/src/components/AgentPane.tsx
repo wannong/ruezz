@@ -1,23 +1,11 @@
-import { AlertCircle, CheckCircle2, LoaderCircle, Paperclip, Plus, Wrench, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
 import type { AgentAttachment, AgentSessionMessage, AgentSessionSummary, Idea, IdeaSelector, PageSummary } from "../api";
-import centaurIcon from "../assets/centaur-icon.svg";
-import { parseModelSwitchKey } from "../lib/llmProviders";
-import { loadPref, savePref } from "../lib/prefs";
-import { attachResizeY } from "../lib/pointerResize";
-import { MarkdownPreview } from "./MarkdownPreview";
+import { AgentChatFeed, AgentComposer } from "./agentChatCore";
+import { CentaurChromeSlot } from "./CentaurChromeSlot";
 import { Presence } from "./Presence";
-import { PRESENCE_MS } from "../lib/usePresence";
-import { WikilinkText } from "./WikilinkText";
 import { ContextMenu } from "./ContextMenu";
-import { GaugeGlyph, HistoryGlyph, SendGlyph, StopGlyph } from "./iconGlyphs";
-
-const COMPOSER_MIN = 88;
-const COMPOSER_MAX = 360;
-
-function clampComposer(n: number): number {
-  return Math.min(COMPOSER_MAX, Math.max(COMPOSER_MIN, Math.round(n)));
-}
+import { HistoryGlyph } from "./iconGlyphs";
 
 type AgentPaneProps = {
   messages: AgentSessionMessage[];
@@ -57,18 +45,8 @@ type AgentPaneProps = {
   onIdeasVisible: (visible: boolean) => void;
   onCreateIdea: (messageId: string, selector: IdeaSelector, content: string) => Promise<boolean>;
   onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
+  headerCentaurShown?: boolean;
 };
-
-function messageKey(message: AgentSessionMessage): string {
-  return message.id;
-}
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 10_000) return `${Math.round(n / 1000)}k`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
 
 function formatSessionTime(iso: string): string {
   const date = new Date(iso);
@@ -77,23 +55,6 @@ function formatSessionTime(iso: string): string {
   const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   if (date.toDateString() === now.toDateString()) return time;
   return `${date.getMonth() + 1}/${date.getDate()} ${time}`;
-}
-
-function sessionUsage(messages: AgentSessionMessage[]): {
-  input: number;
-  output: number;
-  totalTokens: number;
-} {
-  let input = 0;
-  let output = 0;
-  let totalTokens = 0;
-  for (const message of messages) {
-    if (message.role !== "assistant" || !message.usage) continue;
-    input += message.usage.input;
-    output += message.usage.output;
-    totalTokens = message.usage.totalTokens || totalTokens;
-  }
-  return { input, output, totalTokens: totalTokens || input + output };
 }
 
 export function AgentPane({
@@ -134,54 +95,21 @@ export function AgentPane({
   onIdeasVisible,
   onCreateIdea,
   onUpdateIdea,
+  headerCentaurShown = true,
 }: AgentPaneProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const followOutput = useRef(true);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [modelOpen, setModelOpen] = useState(false);
-  const [usageOpen, setUsageOpen] = useState(false);
-  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [sessionMenu, setSessionMenu] = useState<{
     x: number;
     y: number;
     id: string;
     archived: boolean;
   } | null>(null);
-  const [composerHeight, setComposerHeight] = useState(() =>
-    clampComposer(loadPref("agentComposerHeight", COMPOSER_MIN)),
-  );
 
   const empty = messages.length === 0 && !pendingUser && !busy;
-  const usage = useMemo(() => sessionUsage(messages), [messages]);
-  const modelName = modelValue.includes("::") ? modelValue.slice(modelValue.indexOf("::") + 2) : modelValue;
-  const canSend = Boolean(draft.trim()) && !busy && !modelMissing;
   const liveSessions = useMemo(() => sessions.filter((s) => !s.archived), [sessions]);
   const archivedSessions = useMemo(() => sessions.filter((s) => s.archived), [sessions]);
-
-  useEffect(() => {
-    const el = listRef.current;
-    if (!el || historyOpen) return;
-    if (followOutput.current) el.scrollTop = el.scrollHeight;
-  }, [messages, pendingUser, busy, streamingText, streamingTools, historyOpen]);
-
-  useEffect(() => {
-    savePref("agentComposerHeight", composerHeight);
-  }, [composerHeight]);
-
-  useEffect(() => {
-    if (!modelOpen && !usageOpen) return;
-    const onDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (!target) return;
-      if (!target.closest(".agent-model-wrap") && !target.closest(".agent-usage-wrap")) {
-        setModelOpen(false);
-        setUsageOpen(false);
-      }
-    };
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, [modelOpen, usageOpen]);
 
   return (
     <div className="agent-pane agent-chat">
@@ -190,20 +118,31 @@ export function AgentPane({
           {openSessionIds.map((id) => {
             const session = sessions.find((item) => item.id === id);
             if (!session) return null;
-            return <div key={id} className={`agent-session-tab${id === sessionId ? " active" : ""}`}><button type="button" role="tab" aria-selected={id === sessionId} onClick={() => onSelectSession(id)}>{session.title || "新对话"}</button><button type="button" className="agent-session-tab-close" aria-label={`关闭 ${session.title || "新对话"}`} onClick={() => onCloseSession(id)}>×</button></div>;
+            return (
+              <div key={id} className={`agent-session-tab${id === sessionId ? " active" : ""}`}>
+                <button type="button" role="tab" aria-selected={id === sessionId} onClick={() => onSelectSession(id)}>
+                  {session.title || "新对话"}
+                </button>
+                <button
+                  type="button"
+                  className="agent-session-tab-close"
+                  aria-label={`关闭 ${session.title || "新对话"}`}
+                  onClick={() => onCloseSession(id)}
+                >
+                  ×
+                </button>
+              </div>
+            );
           })}
         </div>
+        <CentaurChromeSlot variant="header" open={!empty && headerCentaurShown} />
         <button
           type="button"
           className={`agent-round-btn${historyOpen ? " active" : ""}`}
           data-icon="history"
           title="会话记录"
           aria-label="会话记录"
-          onClick={() => {
-            setHistoryOpen((open) => !open);
-            setModelOpen(false);
-            setUsageOpen(false);
-          }}
+          onClick={() => setHistoryOpen((open) => !open)}
         >
           <HistoryGlyph />
         </button>
@@ -217,8 +156,6 @@ export function AgentPane({
           onClick={() => {
             onNewChat();
             setHistoryOpen(false);
-            setModelOpen(false);
-            setUsageOpen(false);
           }}
         >
           <Plus size={16} />
@@ -248,7 +185,7 @@ export function AgentPane({
                     onSelectSession(session.id);
                     setHistoryOpen(false);
                   }}
-                   onContextMenu={(event) => {
+                  onContextMenu={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
                     setSessionMenu({
@@ -257,7 +194,7 @@ export function AgentPane({
                       id: session.id,
                       archived: false,
                     });
-                   }}
+                  }}
                 >
                   <span className="agent-session-title">{session.title || "新对话"}</span>
                   <span className="agent-session-meta">{formatSessionTime(session.updatedAt)}</span>
@@ -296,270 +233,50 @@ export function AgentPane({
             </div>
           </div>
         </Presence>
-        <div className="agent-chat-view" ref={listRef} onScroll={(event) => {
-          const el = event.currentTarget;
-          followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 72;
-        }}>
-            {empty && (
-              <div className="agent-welcome">
-                <div className="agent-welcome-icon">
-                  <img src={centaurIcon} alt="" width={64} height={64} />
-                </div>
-                {modelMissing ? (
-                  <p>当前没有可用模型。请在设置中填写 API，并拉取或输入模型名。</p>
-                ) : (
-                  <p className="agent-welcome-hi">Hi there!</p>
-                )}
-              </div>
-            )}
-            {messages.map((m) => (
-              <SessionMessageView
-                key={messageKey(m)}
-                message={m}
-                pages={pages}
-                ideas={ideas}
-                ideasVisible={ideasVisible}
-                onIdeasVisible={onIdeasVisible}
-                sessionId={sessionId}
-                onCreateIdea={onCreateIdea}
-                onUpdateIdea={onUpdateIdea}
-                onOpen={onOpen}
-              />
-            ))}
-            {(pendingUser || busy) && (
-              <div className="agent-turn agent-turn-pending">
-                {pendingUser && (
-                  <div className="msg msg-user msg-pending">
-                    <div className="msg-role">你</div>
-                    <div className="msg-body">
-                      <WikilinkText text={pendingUser} pages={pages} onOpen={onOpen} />
-                    </div>
-                  </div>
-                )}
-                {busy && (
-                  <div className="msg msg-assistant msg-streaming">
-                    <div className="msg-role">Agent</div>
-                    <div className="msg-body">
-                      {streamingTools.length > 0 && (
-                        <div className="agent-tool-trace" aria-label="工具执行过程">
-                          {streamingTools.map((tool) => (
-                            <div className={`agent-tool-step ${tool.status}`} key={tool.id}>
-                              {tool.status === "running" ? <LoaderCircle size={13} className="spin" /> : tool.status === "error" ? <AlertCircle size={13} /> : <CheckCircle2 size={13} />}
-                              <span>{tool.name}</span>
-                              <small>{tool.status === "running" ? "执行中" : tool.status === "error" ? "失败" : "完成"}</small>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {streamingText ? (
-                        <>
-                          <MarkdownPreview markdown={streamingText} pages={pages} onOpen={onOpen} />
-                          <span className="stream-cursor" aria-hidden="true" />
-                        </>
-                      ) : (
-                        <span className="msg-thinking">
-                          {streamingPhase === "tool" || streamingTools.some((tool) => tool.status === "running") ? "正在调用工具" : streamingPhase === "answer" ? "正在组织回答" : "正在分析问题"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-        </div>
 
-        <div className="agent-input-panel">
-            <div
-              className="composer-resize"
-              role="separator"
-              aria-orientation="horizontal"
-              aria-label="调整输入框高度"
-              title="拖拽调整输入框高度"
-              onPointerDown={(e) =>
-                attachResizeY(e, (dy) => setComposerHeight((h) => clampComposer(h - dy)))
-              }
-            />
-            <div className="agent-input-toolbar">
-            <div className="agent-model-wrap">
-              <button
-                type="button"
-                className={`agent-model-name${modelMissing ? " warn" : ""}`}
-                disabled={mock || modelGroups.length === 0}
-                title={modelLabel}
-                onClick={() => {
-                  setModelOpen((open) => !open);
-                  setUsageOpen(false);
-                }}
-              >
-                {mock || modelGroups.length === 0 ? modelLabel : modelName || "选择模型"}
-              </button>
-              <Presence open={modelOpen && modelGroups.length > 0} duration={PRESENCE_MS.fast}>
-                <div className="agent-model-menu" role="listbox">
-                  {modelGroups.map((group) => (
-                    <div key={group.providerId} className="agent-model-group">
-                      <div className="agent-model-group-label">{group.providerName}</div>
-                      {group.models.map((id) => {
-                        const value = `${group.providerId}::${id}`;
-                        return (
-                          <button
-                            key={value}
-                            type="button"
-                            className={value === modelValue ? "active" : ""}
-                            onClick={() => {
-                              const parsed = parseModelSwitchKey(value);
-                              if (!parsed) return;
-                              onSwitchModel(parsed.providerId, parsed.modelId);
-                              setModelOpen(false);
-                            }}
-                          >
-                            {id}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </Presence>
-            </div>
+        <AgentChatFeed
+          listRef={listRef}
+          followOutputRef={followOutput}
+          scrollPaused={historyOpen}
+          messages={messages}
+          pendingUser={pendingUser}
+          streamingText={streamingText}
+          streamingTools={streamingTools}
+          streamingPhase={streamingPhase}
+          busy={busy}
+          modelMissing={modelMissing}
+          pages={pages}
+          ideas={ideas}
+          ideasVisible={ideasVisible}
+          onIdeasVisible={onIdeasVisible}
+          sessionId={sessionId}
+          onCreateIdea={onCreateIdea}
+          onUpdateIdea={onUpdateIdea}
+          onOpen={onOpen}
+        />
 
-            <button
-              type="button"
-              className="agent-attach-current"
-              disabled={!canAttachCurrent || busy}
-              title={canAttachCurrent ? `附加当前文件：${currentPageLabel}` : "当前文件已附加或没有打开文件"}
-              onClick={onAttachCurrent}
-            >
-              <Paperclip size={13} />
-              <span>{canAttachCurrent ? currentPageLabel : "当前文件已附加"}</span>
-            </button>
-
-            </div>
-
-            <div className="agent-input-row">
-              <textarea
-                ref={inputRef}
-                value={draft}
-                onChange={(e) => onDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    if (!busy) onSend();
-                  }
-                }}
-                placeholder="发送消息"
-                rows={3}
-                style={{ height: composerHeight }}
-              />
-              <div className="agent-input-actions">
-                <div className="agent-attachments-wrap">
-                  <button
-                    type="button"
-                    className={`agent-round-btn agent-attachments-btn${attachmentsOpen ? " active" : ""}`}
-                    title={attachments.length ? `已附加 ${attachments.length} 个文件` : "附件"}
-                    aria-label={attachments.length ? `已附加 ${attachments.length} 个文件` : "附件"}
-                    aria-expanded={attachmentsOpen}
-                    onClick={() => {
-                      setAttachmentsOpen((open) => !open);
-                      setUsageOpen(false);
-                      setModelOpen(false);
-                    }}
-                  >
-                    <Paperclip size={15} />
-                    {attachments.length > 0 && <span className="agent-attachments-count">{attachments.length}</span>}
-                  </button>
-                  <Presence open={attachmentsOpen} duration={PRESENCE_MS.fast}>
-                    <div className="agent-attachments-pop" role="dialog" aria-label="已附加文献">
-                      <div className="agent-attachments-pop-head">
-                        <strong>已附加文献</strong>
-                        <span>{attachments.length} 个</span>
-                      </div>
-                      {attachments.length > 0 ? (
-                        <div className="agent-attachment-list">
-                          {attachments.map((attachment) => (
-                            <div key={attachment.id} className="agent-attachment-row" title={attachment.id}>
-                              <Paperclip size={13} />
-                              <span>{attachment.label}</span>
-                              <button type="button" aria-label={`移除 ${attachment.label}`} onClick={() => onDetach(attachment.id)}>
-                                <X size={13} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="agent-attachments-empty">当前会话还没有附加文献</p>
-                      )}
-                      <button
-                        type="button"
-                        className="agent-attach-pop-action"
-                        disabled={!canAttachCurrent || busy}
-                        title={canAttachCurrent ? `附加当前文件：${currentPageLabel}` : "当前文件已附加或没有打开文件"}
-                        onClick={onAttachCurrent}
-                      >
-                        <Paperclip size={13} />
-                        <span>{canAttachCurrent ? `附加当前文件：${currentPageLabel}` : "没有可附加的当前文件"}</span>
-                      </button>
-                    </div>
-                  </Presence>
-                </div>
-                <div className="agent-usage-wrap">
-                  <button
-                    type="button"
-                    className="agent-round-btn"
-                    data-icon="gauge"
-                    title="上下文用量"
-                    aria-label="上下文用量"
-                    onClick={() => {
-                      setUsageOpen((open) => !open);
-                      setModelOpen(false);
-                    }}
-                  >
-                    <GaugeGlyph />
-                    {usage.totalTokens > 0 && (
-                      <span className="agent-usage-badge">{formatTokens(usage.totalTokens)}</span>
-                    )}
-                  </button>
-                  <Presence open={usageOpen} duration={PRESENCE_MS.fast}>
-                    <div className="agent-usage-pop">
-                      {usage.totalTokens > 0 ? (
-                        <>
-                          <div>
-                            <span>上下文</span>
-                            <b>{usage.totalTokens.toLocaleString()}</b>
-                          </div>
-                          <div>
-                            <span>输入</span>
-                            <b>{usage.input.toLocaleString()}</b>
-                          </div>
-                          <div>
-                            <span>输出</span>
-                            <b>{usage.output.toLocaleString()}</b>
-                          </div>
-                        </>
-                      ) : (
-                        <p>暂无用量（发送后统计）</p>
-                      )}
-                    </div>
-                  </Presence>
-                </div>
-                <button
-                  type="button"
-                  className={`agent-round-btn agent-send-btn${busy ? " stop" : ""}`}
-                  data-icon={busy ? "stop" : "send"}
-                  title={busy ? "停止" : "发送"}
-                  aria-label={busy ? "停止生成" : "发送"}
-                  disabled={!busy && !canSend}
-                  onClick={busy ? onStop : onSend}
-                >
-                  {busy ? (
-                    <StopGlyph key="stop" className="send-icon" />
-                  ) : (
-                    <SendGlyph key="send" className="send-icon" />
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
+        <AgentComposer
+          variant="panel"
+          draft={draft}
+          busy={busy}
+          modelMissing={modelMissing}
+          modelLabel={modelLabel}
+          modelValue={modelValue}
+          modelGroups={modelGroups}
+          mock={mock}
+          messages={messages}
+          attachments={attachments}
+          canAttachCurrent={canAttachCurrent}
+          currentPageLabel={currentPageLabel}
+          onDraft={onDraft}
+          onSend={onSend}
+          onStop={onStop}
+          onSwitchModel={onSwitchModel}
+          onAttachCurrent={onAttachCurrent}
+          onDetach={onDetach}
+        />
       </div>
+
       <ContextMenu
         open={sessionMenu !== null}
         x={sessionMenu?.x ?? 0}
@@ -593,90 +310,6 @@ export function AgentPane({
         }
         onClose={() => setSessionMenu(null)}
       />
-    </div>
-  );
-}
-
-function SessionMessageView({
-  message,
-  pages,
-  onOpen,
-  ideas,
-  ideasVisible,
-  onIdeasVisible,
-  sessionId,
-  onCreateIdea,
-  onUpdateIdea,
-}: {
-  message: AgentSessionMessage;
-  pages: PageSummary[];
-  onOpen: (id: string) => void;
-  ideas: Idea[];
-  ideasVisible: boolean;
-  onIdeasVisible: (visible: boolean) => void;
-  sessionId: string | null;
-  onCreateIdea: (messageId: string, selector: IdeaSelector, content: string) => Promise<boolean>;
-  onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
-}) {
-  if (message.role === "user") {
-    return (
-      <div className="msg msg-user">
-        <div className="msg-role">你</div>
-        <div className="msg-body">
-          <WikilinkText text={message.content} pages={pages} onOpen={onOpen} />
-        </div>
-      </div>
-    );
-  }
-
-  if (message.role === "toolResult") {
-    return (
-      <details className={`agent-tool-result${message.isError ? " error" : ""}`}>
-        <summary>{message.isError ? <AlertCircle size={13} /> : <CheckCircle2 size={13} />}<span>{message.toolName}</span><small>{message.isError ? "失败" : "完成"}</small></summary>
-        <pre>{message.content}</pre>
-      </details>
-    );
-  }
-
-  const hasText = Boolean(message.content.trim());
-  const toolCalls = message.toolCalls ?? [];
-  const sources = message.sources ?? [];
-  if (!hasText && toolCalls.length === 0 && sources.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="msg msg-assistant" data-message-id={message.id}>
-      <div className="msg-role">Agent</div>
-      {hasText && (
-        <div className="msg-body">
-          <MarkdownPreview
-            markdown={message.content}
-            pages={pages}
-            onOpen={onOpen}
-            ideaTarget={{ kind: "assistant", sessionId: sessionId ?? "", messageId: message.id }}
-            ideas={ideas.filter((idea) => idea.target.kind === "assistant" && idea.target.sessionId === sessionId && idea.target.messageId === message.id)}
-            ideasVisible={ideasVisible}
-            onIdeasVisible={onIdeasVisible}
-            onCreateIdea={(selector, content) => onCreateIdea(message.id, selector, content)}
-            onUpdateIdea={onUpdateIdea}
-          />
-        </div>
-      )}
-      {toolCalls.length > 0 && (
-        <div className="msg-tools">
-          {toolCalls.map((tool) => <span className="tool-chip" key={tool.id}><Wrench size={12} />{tool.name}</span>)}
-        </div>
-      )}
-      {sources.length > 0 && (
-        <div className="msg-sources">
-          {sources.map((src) => (
-            <button key={src} type="button" className="source-chip" title={src} onClick={() => onOpen(src)}>
-              {pages.find((page) => page.id === src)?.title ?? src.split("/").pop() ?? src}
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

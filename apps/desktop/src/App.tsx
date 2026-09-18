@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type VaultSettings } from "./api";
 import { Onboarding } from "./components/Onboarding";
-import { TitleBar } from "./components/TitleBar";
+import { TitleBar, type TitleBarCentaurProps } from "./components/TitleBar";
 import { Workspace } from "./components/Workspace";
 import { vaultName } from "./lib/fileTree";
 import { hydrateProviders } from "./lib/llmProviders";
@@ -26,6 +26,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [agentTitle, setAgentTitle] = useState<string | null>(null);
+  const [titleBarCentaur, setTitleBarCentaur] = useState<TitleBarCentaurProps | null>(null);
 
   useEffect(() => {
     applyTheme(theme);
@@ -103,6 +104,7 @@ export default function App() {
         label={settings.vaultPath ? vaultName(settings.vaultPath) : "Centaur"}
         sessionTitle={screen === "main" ? agentTitle : null}
         hasVault={Boolean(settings.vaultPath)}
+        centaur={screen === "main" ? titleBarCentaur : null}
         onNewVault={() => void chooseVault("new")}
         onOpenVault={() => void chooseVault("open")}
         onRevealVault={() => void revealVault()}
@@ -128,6 +130,7 @@ export default function App() {
             busy={busy}
             setBusy={setBusy}
             onAgentTitle={setAgentTitle}
+            onTitleBarCentaur={setTitleBarCentaur}
           />
         )}
       </div>

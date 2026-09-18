@@ -1,6 +1,6 @@
 {
   "name": "@wikihome/sidecar",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "JSON-RPC sidecar for Centaur Tauri shell",
   "type": "module",
   "bin": {

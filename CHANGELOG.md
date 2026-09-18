@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-09-18
+
+### Added
+
+- Animated Centaur character on the Agent welcome screen with mouse follow and mood cycling.
+- Compact Centaur in the Agent header during conversations; title-bar Centaur with a frosted-glass floating island when the right sidebar is collapsed.
+
+### Changed
+
+- Agent chat UI refactored for reuse between the sidebar and the floating island (SMS-style composer in the island).
+
 ## [1.2.1] - 2026-09-18
 
 ### Added

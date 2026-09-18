@@ -48,8 +48,11 @@ import { Presence } from "./Presence";
 import { Ribbon } from "./Ribbon";
 import { RightSidebar, type RightView } from "./RightSidebar";
 import { SettingsModal } from "./SettingsModal";
+import { AgentFloatingIsland } from "./AgentFloatingIsland";
+import { centaurTransferMs } from "./CentaurChromeSlot";
 import { StatusBar } from "./StatusBar";
 import { TabBar } from "./TabBar";
+import type { TitleBarCentaurProps } from "./TitleBar";
 
 type WorkspaceProps = {
   settings: VaultSettings;
@@ -61,6 +64,7 @@ type WorkspaceProps = {
   busy: boolean;
   setBusy: (busy: boolean) => void;
   onAgentTitle?: (title: string | null) => void;
+  onTitleBarCentaur?: (centaur: TitleBarCentaurProps | null) => void;
 };
 
 const LEFT_MIN = 180;
@@ -106,6 +110,7 @@ export function Workspace({
   busy,
   setBusy,
   onAgentTitle,
+  onTitleBarCentaur,
 }: WorkspaceProps) {
   const ideaPalette = {
     white: { paper: "255, 255, 255", ink: "38, 38, 38" },
@@ -133,6 +138,10 @@ export function Workspace({
   const [rightView, setRightView] = useState<RightView>("agent");
   const [leftCollapsed, setLeftCollapsed] = useState(() => loadPref("leftCollapsed", false));
   const [rightCollapsed, setRightCollapsed] = useState(() => loadPref("rightCollapsed", false));
+  const [headerCentaurShown, setHeaderCentaurShown] = useState(true);
+  const [titlebarCentaurShown, setTitlebarCentaurShown] = useState(() => loadPref("rightCollapsed", false));
+  const [agentIslandOpen, setAgentIslandOpen] = useState(false);
+  const centaurTransferTimer = useRef<number | undefined>(undefined);
   const [leftWidth, setLeftWidth] = useState(() => loadPref("leftWidth", 240));
   const [rightWidth, setRightWidth] = useState(() => loadPref("rightWidth", 320));
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -213,6 +222,64 @@ export function Workspace({
       : `模型：${settings.model}`;
   const agentOpen = !rightCollapsed && rightView === "agent";
   const graphOpen = !rightCollapsed && rightView === "graph";
+  const shouldHandoffCentaur =
+    rightView === "agent" && (messages.length > 0 || Boolean(pendingUser) || agentBusy);
+
+  const setRightCollapsedAnimated = useCallback(
+    (next: boolean) => {
+      window.clearTimeout(centaurTransferTimer.current);
+      if (next === rightCollapsed) return;
+
+      if (next) {
+        if (!rightCollapsed && shouldHandoffCentaur) {
+          setHeaderCentaurShown(false);
+          centaurTransferTimer.current = window.setTimeout(() => {
+            setRightCollapsed(true);
+            setTitlebarCentaurShown(true);
+          }, centaurTransferMs);
+          return;
+        }
+        setRightCollapsed(true);
+        setTitlebarCentaurShown(true);
+        return;
+      }
+
+      if (rightCollapsed && shouldHandoffCentaur) {
+        setTitlebarCentaurShown(false);
+        centaurTransferTimer.current = window.setTimeout(() => {
+          setRightCollapsed(false);
+          setHeaderCentaurShown(true);
+        }, centaurTransferMs);
+        return;
+      }
+
+      setRightCollapsed(false);
+      setTitlebarCentaurShown(false);
+      setHeaderCentaurShown(true);
+    },
+    [rightCollapsed, shouldHandoffCentaur],
+  );
+
+  useEffect(() => {
+    if (!onTitleBarCentaur) return;
+    if (!rightCollapsed) {
+      onTitleBarCentaur(null);
+      return;
+    }
+    onTitleBarCentaur({
+      open: agentIslandOpen,
+      visible: titlebarCentaurShown,
+      onToggle: () => setAgentIslandOpen((open) => !open),
+    });
+  }, [rightCollapsed, titlebarCentaurShown, agentIslandOpen, onTitleBarCentaur]);
+
+  useEffect(() => () => window.clearTimeout(centaurTransferTimer.current), []);
+
+  useEffect(() => () => onTitleBarCentaur?.(null), [onTitleBarCentaur]);
+
+  useEffect(() => {
+    if (!rightCollapsed) setAgentIslandOpen(false);
+  }, [rightCollapsed]);
 
   const relatedSessions = useCallback((pageId: string, label: string) => {
     const matches = sessions.filter((session) =>
@@ -704,12 +771,12 @@ export function Workspace({
   );
 
   const openAgent = useCallback(() => {
-    if (!rightCollapsed && rightView === "agent") setRightCollapsed(true);
+    if (!rightCollapsed && rightView === "agent") setRightCollapsedAnimated(true);
     else {
-      setRightCollapsed(false);
+      setRightCollapsedAnimated(false);
       setRightView("agent");
     }
-  }, [rightCollapsed, rightView]);
+  }, [rightCollapsed, rightView, setRightCollapsedAnimated]);
 
   const openGraph = useCallback(() => {
     if (!rightCollapsed && rightView === "graph") setRightCollapsed(true);
@@ -1151,7 +1218,7 @@ export function Workspace({
     }
     const messageId = idea.target.messageId;
     void selectSession(idea.target.sessionId).then(() => {
-      setRightCollapsed(false);
+      setRightCollapsedAnimated(false);
       setRightView("agent");
       window.setTimeout(() => {
         document.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1261,15 +1328,15 @@ export function Workspace({
       { id: "favorites", label: "显示收藏", run: () => { setLeftCollapsed(false); setLeftView("favorites"); } },
       { id: "new-note", label: "新建笔记", hint: "Ctrl+N", run: () => setNewNoteOpen(true) },
       { id: "edit", label: "切换阅读/编辑", hint: "Ctrl+E", run: () => setNoteMode((m) => (m === "edit" ? "read" : "edit")) },
-      { id: "agent", label: "显示 Agent", run: () => { setRightCollapsed(false); setRightView("agent"); } },
+      { id: "agent", label: "显示 Agent", run: () => { setRightCollapsedAnimated(false); setRightView("agent"); } },
       { id: "graph", label: "打开图谱", hint: "Ctrl+G", run: () => { setRightCollapsed(false); setRightView("graph"); } },
       { id: "ingest", label: "入库…", run: () => { setIngestFolderId(null); setIngestOpen(true); } },
       { id: "settings", label: "打开设置", run: () => setSettingsOpen(true) },
       { id: "theme", label: "切换深浅色", run: onToggleTheme },
       { id: "left", label: "折叠/展开左栏", hint: "Ctrl+[", run: () => setLeftCollapsed((v) => !v) },
-      { id: "right", label: "折叠/展开右栏", hint: "Ctrl+]", run: () => setRightCollapsed((v) => !v) },
+      { id: "right", label: "折叠/展开右栏", hint: "Ctrl+]", run: () => setRightCollapsedAnimated(!rightCollapsed) },
     ],
-    [onToggleTheme, activePageId, saveNote],
+    [onToggleTheme, activePageId, saveNote, rightCollapsed, setRightCollapsedAnimated],
   );
 
   useEffect(() => {
@@ -1306,12 +1373,12 @@ export function Workspace({
         setLeftCollapsed((v) => !v);
       } else if (e.key === "]") {
         e.preventDefault();
-        setRightCollapsed((v) => !v);
+        setRightCollapsedAnimated(!rightCollapsed);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activePageId, saveNote]);
+  }, [activePageId, saveNote, rightCollapsed, setRightCollapsedAnimated]);
 
   const outlineSource =
     activePageId && noteDrafts[activePageId] != null
@@ -1412,7 +1479,7 @@ export function Workspace({
                 data-icon="expand"
                 title="展开右侧栏"
                 aria-label="展开右侧栏"
-                onClick={() => setRightCollapsed(false)}
+                onClick={() => setRightCollapsedAnimated(false)}
               >
                 <PanelOpenGlyph />
               </button>
@@ -1488,7 +1555,8 @@ export function Workspace({
           onOpen={openPage}
           onJump={jumpHeading}
           onResize={(dx) => setRightWidth((w) => clamp(w + dx, RIGHT_MIN, RIGHT_MAX))}
-          onCollapse={() => setRightCollapsed(true)}
+          onCollapse={() => setRightCollapsedAnimated(true)}
+          headerCentaurShown={headerCentaurShown}
           modelLabel={modelLabel}
           modelMissing={modelMissing}
           modelValue={modelValue}
@@ -1515,6 +1583,41 @@ export function Workspace({
            onCreateAgentIdea={createAgentIdea}
           />
       </div>
+      <AgentFloatingIsland
+        open={rightCollapsed && agentIslandOpen}
+        onClose={() => setAgentIslandOpen(false)}
+        messages={messages}
+        pendingUser={pendingUser}
+        streamingText={streamingText}
+        streamingTools={streamingTools}
+        streamingPhase={streamingPhase}
+        draft={draft}
+        busy={agentBusy}
+        modelMissing={modelMissing}
+        modelLabel={modelLabel}
+        modelValue={modelValue}
+        modelGroups={modelGroups}
+        mock={settings.mock}
+        pages={pages}
+        ideas={ideas}
+        ideasVisible={ideasVisible}
+        onIdeasVisible={setIdeasVisible}
+        sessionId={sessionId}
+        onCreateIdea={createAgentIdea}
+        onUpdateIdea={updateIdea}
+        onDraft={(value) =>
+          sessionId ? updateAgentState(sessionId, { draft: value }) : setDraftFallback(value)
+        }
+        onSend={() => void sendMessage()}
+        onStop={() => void stopGeneration()}
+        onOpen={openPage}
+        onSwitchModel={(providerId, modelId) => void switchModel(providerId, modelId)}
+        attachments={attachments}
+        canAttachCurrent={Boolean(activePageId && !attachments.some((item) => item.id === activePageId))}
+        currentPageLabel={activePageId ? titleFor(activePageId) : "未打开文件"}
+        onAttachCurrent={() => void attachCurrentPage()}
+        onDetach={(id) => void detachAttachment(id)}
+      />
       <StatusBar
         vaultPath={settings.vaultPath}
         pageCount={pages.length}

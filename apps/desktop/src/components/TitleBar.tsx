@@ -2,12 +2,20 @@ import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Menu } from "lucide-react";
 import { isTauriRuntime } from "../api";
+import { CentaurChromeSlot } from "./CentaurChromeSlot";
 import { ContextMenu } from "./ContextMenu";
+
+export type TitleBarCentaurProps = {
+  open: boolean;
+  visible: boolean;
+  onToggle: () => void;
+};
 
 type TitleBarProps = {
   label: string;
   sessionTitle?: string | null;
   hasVault: boolean;
+  centaur?: TitleBarCentaurProps | null;
   onNewVault: () => void;
   onOpenVault: () => void;
   onRevealVault: () => void;
@@ -17,6 +25,7 @@ export function TitleBar({
   label,
   sessionTitle,
   hasVault,
+  centaur,
   onNewVault,
   onOpenVault,
   onRevealVault,
@@ -84,6 +93,9 @@ export function TitleBar({
         )}
       </div>
       <div className="titlebar-drag" data-tauri-drag-region />
+      {centaur && (
+        <CentaurChromeSlot variant="titlebar" open={centaur.visible} active={centaur.open} onClick={centaur.onToggle} />
+      )}
       {tauri && (
         <div className="titlebar-controls">
           <button
