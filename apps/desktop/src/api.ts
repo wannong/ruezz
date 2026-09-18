@@ -110,7 +110,8 @@ export type IdeaTarget =
   | { kind: "page"; pageId: string }
   | { kind: "assistant"; sessionId: string; messageId: string };
 
-export type IdeaSelector = {
+export type TextIdeaSelector = {
+  kind?: "text";
   exact: string;
   prefix: string;
   suffix: string;
@@ -118,6 +119,18 @@ export type IdeaSelector = {
   end: number;
   revision: string;
 };
+
+export type PdfRegionIdeaSelector = {
+  kind: "pdf-region";
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  exact?: string;
+};
+
+export type IdeaSelector = TextIdeaSelector | PdfRegionIdeaSelector;
 
 export type Idea = {
   id: string;

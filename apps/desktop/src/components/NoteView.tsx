@@ -174,7 +174,16 @@ export function NoteView({
         </div>
       </div>
       {mode === "source" && hasSource ? (
-        <DocumentPreview pageId={page.id} type={sourceType!} name={page.sourcePath?.split(/[\\/]/).pop()} />
+        <DocumentPreview
+          pageId={page.id}
+          type={sourceType!}
+          name={page.sourcePath?.split(/[\\/]/).pop()}
+          ideas={ideas}
+          ideasVisible={ideasVisible}
+          onIdeasVisible={onIdeasVisible}
+          onCreateIdea={onCreateIdea}
+          onUpdateIdea={onUpdateIdea}
+        />
       ) : mode === "edit" ? (
         <div className="note-edit-split">
           <textarea

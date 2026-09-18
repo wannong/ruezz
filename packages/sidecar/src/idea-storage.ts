@@ -5,7 +5,8 @@ export type IdeaTarget =
   | { kind: "page"; pageId: string }
   | { kind: "assistant"; sessionId: string; messageId: string };
 
-export type IdeaSelector = {
+export type TextIdeaSelector = {
+  kind?: "text";
   exact: string;
   prefix: string;
   suffix: string;
@@ -13,6 +14,18 @@ export type IdeaSelector = {
   end: number;
   revision: string;
 };
+
+export type PdfRegionIdeaSelector = {
+  kind: "pdf-region";
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  exact?: string;
+};
+
+export type IdeaSelector = TextIdeaSelector | PdfRegionIdeaSelector;
 
 export type Idea = {
   id: string;
@@ -171,6 +184,34 @@ export class IdeaStorage {
     }
 
     const selectorRaw = raw.selector as Record<string, unknown> | undefined;
+    if (selectorRaw?.kind === "pdf-region") {
+      const page = Number(selectorRaw.page);
+      const x = Number(selectorRaw.x);
+      const y = Number(selectorRaw.y);
+      const width = Number(selectorRaw.width);
+      const height = Number(selectorRaw.height);
+      if (!Number.isInteger(page) || page < 1 || ![x, y, width, height].every(Number.isFinite) || x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > 1.001 || y + height > 1.001) {
+        throw new Error("Invalid PDF Idea selector");
+      }
+      return {
+        id,
+        content,
+        color,
+        status,
+        createdAt: String(raw.createdAt ?? ""),
+        updatedAt: String(raw.updatedAt ?? ""),
+        target,
+        selector: {
+          kind: "pdf-region",
+          page,
+          x,
+          y,
+          width,
+          height,
+          exact: String(selectorRaw.exact ?? "").trim().slice(0, 20_000) || undefined,
+        },
+      };
+    }
     const exact = String(selectorRaw?.exact ?? "").trim();
     const start = Number(selectorRaw?.start);
     const end = Number(selectorRaw?.end);
@@ -186,6 +227,7 @@ export class IdeaStorage {
       updatedAt: String(raw.updatedAt ?? ""),
       target,
       selector: {
+        kind: "text",
         exact,
         prefix: String(selectorRaw?.prefix ?? "").slice(-128),
         suffix: String(selectorRaw?.suffix ?? "").slice(0, 128),

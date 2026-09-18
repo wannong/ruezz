@@ -33,6 +33,7 @@ export function selectorFromRange(root: HTMLElement, range: Range): IdeaSelector
 }
 
 export function rangeFromSelector(root: HTMLElement, selector: IdeaSelector): Range | null {
+  if (selector.kind === "pdf-region") return null;
   const text = root.textContent ?? "";
   let start = selector.start;
   const originalPositionStillValid =

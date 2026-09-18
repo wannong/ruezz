@@ -799,8 +799,55 @@ textarea:focus {
 .document-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 0.4rem; min-height: 36px; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--line); background: var(--panel); }
 .document-controls button { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; }
 .document-name { margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
-.pdf-page { flex: 1; overflow: auto; padding: 1rem; text-align: center; }
-.pdf-page canvas { max-width: 100%; height: auto; box-shadow: var(--shadow); background: white; }
+.pdf-page { flex: 1; overflow: auto; padding: 1rem; text-align: center; position: relative; }
+.pdf-page-surface { position: relative; margin: 0 auto; text-align: left; box-shadow: var(--shadow); background: white; touch-action: pan-x pan-y; }
+.pdf-page-surface canvas { position: absolute; inset: 0; width: 100%; height: 100%; background: white; }
+.pdf-page-surface.annotating { cursor: crosshair; touch-action: none; }
+.pdf-page-surface.annotating .pdf-text-layer { pointer-events: none; user-select: none; }
+.pdf-text-layer { z-index: 2; }
+.pdf-text-layer span { cursor: text; }
+
+.pdf-idea-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.pdf-idea-region { position: absolute; border: 2px solid rgba(190, 139, 16, 0.82); background: rgba(245, 197, 66, 0.2); border-radius: 2px; }
+.pdf-idea-region-blue { border-color: #438dc6; background: rgba(84, 162, 255, 0.18); }
+.pdf-idea-region-green { border-color: #33965f; background: rgba(75, 191, 126, 0.18); }
+.pdf-idea-region-pink { border-color: #c95686; background: rgba(239, 113, 164, 0.18); }
+.pdf-idea-region-violet { border-color: #7e5fc7; background: rgba(158, 122, 255, 0.18); }
+.pdf-region-draft { position: absolute; border: 2px dashed #c38b00; background: rgba(245, 197, 66, 0.18); }
+
+.pdf-idea-sticky {
+  position: absolute;
+  width: min(220px, 28%);
+  min-width: 150px;
+  padding: 0.58rem 0.62rem;
+  border: 1px solid rgba(119, 91, 21, 0.28);
+  border-radius: 2px 7px 7px 7px;
+  background: #f4d978;
+  color: #352d1b;
+  box-shadow: 0 10px 26px rgba(52, 42, 13, 0.2), inset 0 1px rgba(255, 255, 255, 0.4);
+  pointer-events: auto;
+}
+.pdf-idea-sticky > div { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; font-size: 0.63rem; opacity: 0.68; }
+.pdf-idea-sticky q { display: block; margin: 0.35rem 0; font-size: 0.66rem; line-height: 1.35; opacity: 0.65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pdf-idea-sticky textarea { width: 100%; min-height: 48px; padding: 0; border: 0; outline: 0; resize: none; background: transparent; color: inherit; font: inherit; line-height: 1.4; }
+.pdf-idea-sticky button { float: right; display: flex; align-items: center; gap: 0.15rem; border: 0; background: transparent; color: inherit; font-size: 0.67rem; font-weight: 700; }
+
+.pdf-idea-composer {
+  position: absolute;
+  z-index: 7;
+  width: min(240px, calc(100% - 16px));
+  padding: 0.65rem;
+  border: 1px solid rgba(119, 91, 21, 0.3);
+  border-radius: 3px 8px 8px 8px;
+  background: #f4d978;
+  color: #352d1b;
+  box-shadow: 0 14px 34px rgba(30, 26, 15, 0.24);
+}
+.pdf-idea-composer > div { display: flex; align-items: center; justify-content: flex-end; gap: 0.35rem; }
+.pdf-idea-composer > div:first-child { justify-content: flex-start; }
+.pdf-idea-composer small { display: block; margin: 0.4rem 0; opacity: 0.65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pdf-idea-composer textarea { width: 100%; min-height: 76px; resize: vertical; background: rgba(255, 255, 255, 0.22); color: inherit; border-color: rgba(89, 66, 14, 0.24); }
+.pdf-annotation-hint { position: sticky; left: 50%; bottom: 0.75rem; width: max-content; max-width: calc(100% - 2rem); margin: 0.75rem auto 0; padding: 0.35rem 0.65rem; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); box-shadow: var(--shadow); font-size: 0.72rem; }
 .docx-preview { overflow: auto; padding: 1.25rem; }
 .docx-page { width: min(100%, 900px); margin: 0 auto; background: white; color: #111; padding: 1rem; min-height: 100%; }
 

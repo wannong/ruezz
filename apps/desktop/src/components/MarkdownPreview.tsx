@@ -154,6 +154,7 @@ export function MarkdownPreview({
       let lastStickyBottom = -Infinity;
       for (const idea of ideas) {
         if (idea.status === "resolved") continue;
+        if (idea.selector.kind === "pdf-region") continue;
         const range = rangeFromSelector(root, idea.selector);
         if (!range) continue;
         const rects = [...range.getClientRects()].filter((rect) => rect.width > 0 && rect.height > 0);
@@ -391,7 +392,7 @@ export function MarkdownPreview({
       )}
       {composer && (
         <div className="idea-composer" style={{ left: composer.x, top: composer.y }}>
-          <div className="idea-composer-quote">“{composer.selector.exact.slice(0, 120)}”</div>
+          <div className="idea-composer-quote">“{(composer.selector.exact ?? "选中区域").slice(0, 120)}”</div>
           <textarea
             autoFocus
             value={content}

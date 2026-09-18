@@ -75,7 +75,7 @@ function IdeaCard({ idea, onNavigate, onUpdate, onDelete }: {
   return (
             <article className={`idea-card idea-card-${idea.color}${idea.status === "resolved" ? " resolved" : ""}`}>
               <button type="button" className="idea-quote" onClick={() => onNavigate(idea)} title="跳回原文">
-                “{idea.selector.exact}”
+                “{idea.selector.exact || (idea.selector.kind === "pdf-region" ? `PDF 第 ${idea.selector.page} 页区域` : "Idea")}”
               </button>
               <textarea
                 value={draft}

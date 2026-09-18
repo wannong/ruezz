@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-09-18
+
+### Added
+
+- PDF Idea annotations with selectable text layers and page-relative region selection for figures, formulas, tables, and scanned content.
+- PDF sticky notes remain attached to normalized page coordinates across zoom levels and can be hidden without removing their region markers.
+
 ## [1.1.1] - 2026-09-18
 
 ### Added
