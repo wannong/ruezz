@@ -94,7 +94,10 @@ function Ensure-PythonRuntime {
   $env:PYTHONNOUSERSITE = "1"
   $runtimeOk = $false
   if ((Test-Path $pythonExe) -and -not $Force) {
-    & $pythonExe -c "import markitdown, pymupdf4llm; assert 'Roaming' not in markitdown.__file__" 2>$null
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & $pythonExe -c "import markitdown, pymupdf4llm; assert 'Roaming' not in markitdown.__file__" 2>$null | Out-Null
+    $ErrorActionPreference = $prevEap
     if ($LASTEXITCODE -eq 0) { $runtimeOk = $true }
   }
   if ($runtimeOk) {
