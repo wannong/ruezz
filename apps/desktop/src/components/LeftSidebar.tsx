@@ -41,7 +41,10 @@ type LeftSidebarProps = {
   libraryFolders: LibraryFolder[];
   libraryAssignments: Record<string, string>;
   onFavorite: (pageId: string) => void;
-  onCreateLibraryFolder: () => void;
+  onCreateLibraryFolder: (parentId: string | null, name: string) => void;
+  onRenameLibraryFolder: (folderId: string, name: string) => void;
+  onDeleteLibraryFolder: (folderId: string) => void;
+  onMoveLibraryPages: (pageIds: string[], folderId: string | null) => void;
   onAddToLibraryFolder: (folderId: string | null) => void;
   onPickLink: (toId: string) => void;
   onCloseLinkPicker: () => void;
@@ -74,6 +77,9 @@ export function LeftSidebar({
   libraryAssignments,
   onFavorite,
   onCreateLibraryFolder,
+  onRenameLibraryFolder,
+  onDeleteLibraryFolder,
+  onMoveLibraryPages,
   onAddToLibraryFolder,
   onPickLink,
   onCloseLinkPicker,
@@ -160,6 +166,9 @@ export function LeftSidebar({
           onOpen={onOpen}
           onFavorite={onFavorite}
           onCreateFolder={onCreateLibraryFolder}
+          onRenameFolder={onRenameLibraryFolder}
+          onDeleteFolder={onDeleteLibraryFolder}
+          onMovePages={onMoveLibraryPages}
           onAddToFolder={onAddToLibraryFolder}
         />
       )}

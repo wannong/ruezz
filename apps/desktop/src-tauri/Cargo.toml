@@ -1,6 +1,6 @@
 [package]
 name = "wikihome"
-version = "1.2.0"
+version = "1.2.1"
 description = "Centaur desktop shell"
 authors = ["Centaur Contributors"]
 edition = "2021"

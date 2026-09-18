@@ -10,8 +10,10 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { revealInExplorer } from "./reveal.js";
 import { anthropicMessagesBaseUrl, listOpenAiModels, looksLikeClaudeModel, testOpenAiConnection } from "./openai-compat.js";
-import { loadPersistedSettings, savePersistedSettings, settingsFromEnv } from "./settings-store.js";
+import { configDir, loadPersistedSettings, savePersistedSettings, settingsFromEnv } from "./settings-store.js";
 import { IdeaStorage } from "./idea-storage.js";
+import { loadLibrary, saveLibrary } from "./library-storage.js";
+import { loadVaultRegistry, markRegistryPathStates, registerVault } from "./vault-registry.js";
 
 export type RpcRequest = {
   id: string | number;
@@ -299,11 +301,22 @@ export class SidecarSession {
       case "vault_init": {
         const root = String(params.root ?? this.settings.vaultPath);
         if (!root) throw new Error("root 必填");
-        this.setSettings({ vaultPath: root });
+        const create = params.create === true;
+        await this.engine.initVault(root, { create });
+        const metadataFile = path.join(path.resolve(root), ".wikihome", "meta.json");
+        const metadata = JSON.parse(await fs.readFile(metadataFile, "utf8")) as { vaultId?: string; createdAt?: string };
+        if (!metadata.vaultId || !metadata.createdAt) throw new Error("知识库元数据缺少稳定身份：.wikihome/meta.json");
+        const entry = await registerVault(configDir(), { vaultId: metadata.vaultId, createdAt: metadata.createdAt }, path.resolve(root));
+        this.setSettings({ vaultPath: path.resolve(root) });
         this.ideaStorage = null;
-        await this.engine.initVault(root);
-        return { root };
+        return { root: path.resolve(root), vaultId: entry.vaultId, registry: entry };
       }
+      case "vault_registry":
+        return markRegistryPathStates(configDir());
+      case "library_get":
+        return loadLibrary(this.requireVault());
+      case "library_save":
+        return saveLibrary(this.requireVault(), params.value, params.expectedRevision == null ? undefined : Number(params.expectedRevision));
       case "vault_ingest": {
         const root = this.requireVault();
         if (params.text != null) {

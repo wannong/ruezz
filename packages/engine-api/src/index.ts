@@ -234,7 +234,7 @@ export type GraphDto = z.infer<typeof GraphDtoSchema>;
 
 /** Stable engine surface. Implement this to swap backends. */
 export interface WikiEngine {
-  initVault(root: string): Promise<void>;
+  initVault(root: string, options?: { create?: boolean }): Promise<void>;
   ingestFile(
     root: string,
     filePath: string,

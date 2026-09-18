@@ -21,6 +21,20 @@ export type VaultSettings = {
   ideaOpacity: number;
 };
 
+export type LibraryFolder = { id: string; name: string; parentId: string | null };
+export type LibraryOrganization = { schemaVersion: 1; revision: number; folders: LibraryFolder[]; assignments: Record<string, string> };
+export type VaultRegistryEntry = {
+  vaultId: string;
+  displayName: string;
+  currentPath: string;
+  pathHistory: Array<{ path: string; firstSeenAt: string; lastSeenAt: string; status: "available" | "missing" }>;
+  createdAt: string;
+  lastOpenedAt: string;
+  lastVerifiedAt: string;
+  status: "available" | "missing";
+};
+export type VaultRegistry = { schemaVersion: 1; revision: number; activeVaultId: string; vaults: Record<string, VaultRegistryEntry> };
+
 export type PageSummary = {
   id: string;
   title?: string;
@@ -328,7 +342,11 @@ async function tauriPromptStream(
 export const api = {
   settingsGet: () => rpc<VaultSettings>("settings_get"),
   settingsSet: (patch: Partial<VaultSettings>) => rpc<VaultSettings>("settings_set", patch),
-  vaultInit: (root: string) => rpc<{ root: string }>("vault_init", { root }),
+  vaultInit: (root: string, create = false) => rpc<{ root: string; vaultId: string }>("vault_init", { root, create }),
+  vaultRegistry: () => rpc<VaultRegistry>("vault_registry"),
+  libraryGet: () => rpc<LibraryOrganization>("library_get"),
+  librarySave: (value: LibraryOrganization, expectedRevision?: number) =>
+    rpc<LibraryOrganization>("library_save", { value, expectedRevision }),
   vaultIngestPath: (path: string) => rpc("vault_ingest", { path, approvedExternal: true }),
   vaultIngestText: (title: string, text: string) => rpc("vault_ingest", { title, text }),
   vaultAsk: (question: string) => rpc<AskResult>("vault_ask", { question }),

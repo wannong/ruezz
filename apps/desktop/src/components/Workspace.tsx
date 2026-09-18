@@ -17,7 +17,19 @@ import {
 import { clampGraphScope } from "../lib/graph";
 import { loadPref, savePref } from "../lib/prefs";
 import { loadFavorites, remapFavoriteFolder, remapFavoritePage, saveFavorites } from "../lib/favorites";
-import { createLibraryFolder, loadLibraryOrganization, saveLibraryOrganization } from "../lib/libraryFolders";
+import {
+  addLibraryFolder,
+  assignPagesToFolder,
+  clearLegacyLibraryStorage,
+  deleteLibraryFolder,
+  folderDescendantIds,
+  loadLibraryOrganization,
+  pickLegacyLibraryToMigrate,
+  renameLibraryFolder,
+  staleLegacyVaultPaths,
+  emptyLibraryOrganization,
+  type LibraryOrganization,
+} from "../lib/libraryFolders";
 import { parseOutline } from "../lib/outline";
 import { markdownBody } from "../lib/noteId";
 import { joinWikiId, parentWikiId, pasteDest, type WikiClip } from "../lib/fileTree";
@@ -127,6 +139,8 @@ export function Workspace({
   const [ingestOpen, setIngestOpen] = useState(false);
   const [ingestFolderId, setIngestFolderId] = useState<string | null>(null);
   const [libraryOrganization, setLibraryOrganization] = useState(() => loadLibraryOrganization(settings.vaultPath));
+  const libraryRef = useRef(libraryOrganization);
+  libraryRef.current = libraryOrganization;
   const [newNoteOpen, setNewNoteOpen] = useState(false);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [graph, setGraph] = useState<GraphDto | null>(null);
@@ -311,19 +325,106 @@ export function Workspace({
 
   useEffect(() => {
     setFavoriteIds(loadFavorites(settings.vaultPath));
-    setLibraryOrganization(loadLibraryOrganization(settings.vaultPath));
   }, [settings.vaultPath]);
 
-  const updateLibraryOrganization = useCallback((next: typeof libraryOrganization) => {
-    setLibraryOrganization(next);
-    saveLibraryOrganization(settings.vaultPath, next);
-  }, [settings.vaultPath]);
+  const librarySaving = useRef(false);
+  const persistLibrary = useCallback(async (mutate: (current: LibraryOrganization) => LibraryOrganization) => {
+    const current = libraryRef.current;
+    const drafted = mutate(current);
+    if (drafted === current) return;
+    librarySaving.current = true;
+    libraryRef.current = drafted;
+    setLibraryOrganization(drafted);
+    try {
+      const saved = await api.librarySave(drafted, current.revision);
+      libraryRef.current = saved;
+      setLibraryOrganization(saved);
+      clearLegacyLibraryStorage([settings.vaultPath, ...staleLegacyVaultPaths(saved)]);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+      try {
+        const remote = await api.libraryGet();
+        libraryRef.current = remote;
+        setLibraryOrganization(remote);
+      } catch {
+        libraryRef.current = current;
+        setLibraryOrganization(current);
+      }
+    } finally {
+      librarySaving.current = false;
+    }
+  }, [onError, settings.vaultPath]);
 
-  const addLibraryFolder = useCallback(() => {
-    const name = window.prompt("文献文件夹名称")?.trim();
-    if (!name || libraryOrganization.folders.some((folder) => folder.name === name)) return;
-    updateLibraryOrganization({ ...libraryOrganization, folders: [...libraryOrganization.folders, createLibraryFolder(name)] });
-  }, [libraryOrganization, updateLibraryOrganization]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!librarySaving.current && libraryRef.current.revision === 0) {
+      const localFallback = loadLibraryOrganization(settings.vaultPath);
+      setLibraryOrganization(localFallback);
+      libraryRef.current = localFallback;
+    }
+    void (async () => {
+      try {
+        const remote = await api.libraryGet();
+        const registry = await api.vaultRegistry().catch(() => null);
+        const extraPaths: string[] = [];
+        if (registry) {
+          const entry = Object.values(registry.vaults).find((item) => item.currentPath === settings.vaultPath)
+            ?? registry.vaults[registry.activeVaultId];
+          if (entry) extraPaths.push(entry.currentPath, ...entry.pathHistory.map((item) => item.path));
+        }
+        const paths = [...new Set([settings.vaultPath, ...extraPaths])];
+        if (cancelled) return;
+        if (librarySaving.current || libraryRef.current.revision > remote.revision) {
+          clearLegacyLibraryStorage([...paths, ...staleLegacyVaultPaths(libraryRef.current)]);
+          return;
+        }
+        const candidates = paths.map((vaultPath) => loadLibraryOrganization(vaultPath));
+        const legacy = pickLegacyLibraryToMigrate(remote, [libraryRef.current, ...candidates]);
+        let next = remote;
+        if (legacy) {
+          next = await api.librarySave(legacy, remote.revision);
+          if (!cancelled) setNotice("已将旧的文献分类迁移到知识库");
+        }
+        if (cancelled) return;
+        libraryRef.current = next;
+        setLibraryOrganization(next);
+        clearLegacyLibraryStorage([...paths, ...staleLegacyVaultPaths(next)]);
+      } catch (e) {
+        if (cancelled) return;
+        if (libraryRef.current.folders.length === 0 && Object.keys(libraryRef.current.assignments).length === 0) {
+          libraryRef.current = emptyLibraryOrganization();
+        }
+        onError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [onError, settings.vaultPath]);
+
+  const createLibraryFolderIn = useCallback((parentId: string | null, name: string) => {
+    void persistLibrary((org) => addLibraryFolder(org, name, parentId));
+  }, [persistLibrary]);
+
+  const renameLibraryFolderIn = useCallback((folderId: string, name: string) => {
+    void persistLibrary((org) => renameLibraryFolder(org, folderId, name));
+  }, [persistLibrary]);
+
+  const deleteLibraryFolderIn = useCallback((folderId: string) => {
+    const org = libraryRef.current;
+    const folder = org.folders.find((item) => item.id === folderId);
+    if (!folder) return;
+    const removing = folderDescendantIds(org.folders, folderId);
+    const childCount = removing.size - 1;
+    const pageCount = Object.values(org.assignments).filter((id) => removing.has(id)).length;
+    const extra = [childCount > 0 ? `${childCount} 个子分类` : "", pageCount > 0 ? `${pageCount} 篇文献会移到上级或未分类` : ""].filter(Boolean).join("，");
+    if (!window.confirm(extra ? `确定删除分类「${folder.name}」吗？将同时处理${extra}。` : `确定删除分类「${folder.name}」吗？`)) return;
+    void persistLibrary((current) => deleteLibraryFolder(current, folderId));
+  }, [persistLibrary]);
+
+  const moveLibraryPages = useCallback((pageIds: string[], folderId: string | null) => {
+    void persistLibrary((org) => assignPagesToFolder(org, pageIds, folderId));
+  }, [persistLibrary]);
 
   const openLibraryImport = useCallback((folderId: string | null) => {
     setIngestFolderId(folderId);
@@ -834,10 +935,7 @@ export function Workspace({
       for (const p of paths) imported.push(await api.vaultIngestPath(p) as { pageIds: string[]; sourcePath?: string });
       const importedIds = imported.flatMap((item) => item.pageIds ?? []);
       if (ingestFolderId) {
-        updateLibraryOrganization({
-          ...libraryOrganization,
-          assignments: { ...libraryOrganization.assignments, ...Object.fromEntries(importedIds.map((id) => [id, ingestFolderId])) },
-        });
+        await persistLibrary((org) => assignPagesToFolder(org, importedIds, ingestFolderId));
       }
       await loadPages();
       await loadGraph();
@@ -885,10 +983,7 @@ export function Workspace({
     try {
       const imported = await api.vaultIngestText(title, body) as { pageIds?: string[] };
       if (ingestFolderId && imported.pageIds?.length) {
-        updateLibraryOrganization({
-          ...libraryOrganization,
-          assignments: { ...libraryOrganization.assignments, ...Object.fromEntries(imported.pageIds.map((id) => [id, ingestFolderId])) },
-        });
+        await persistLibrary((org) => assignPagesToFolder(org, imported.pageIds ?? [], ingestFolderId));
       }
       await loadPages();
       await loadGraph();
@@ -1278,7 +1373,10 @@ export function Workspace({
           libraryFolders={libraryOrganization.folders}
           libraryAssignments={libraryOrganization.assignments}
           onFavorite={toggleFavorite}
-          onCreateLibraryFolder={addLibraryFolder}
+          onCreateLibraryFolder={createLibraryFolderIn}
+          onRenameLibraryFolder={renameLibraryFolderIn}
+          onDeleteLibraryFolder={deleteLibraryFolderIn}
+          onMoveLibraryPages={moveLibraryPages}
           onAddToLibraryFolder={openLibraryImport}
           onPickLink={(toId) => {
             if (!linkPicker) return;

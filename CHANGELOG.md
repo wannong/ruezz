@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-09-18
+
+### Added
+
+- Nested literature folders with right-click create, rename, delete, and move actions.
+- Vault-scoped library organization persisted in `.wikihome/library.json`, with automatic migration from legacy localStorage keys.
+- Vault registry tracking so literature categories survive knowledge-base path moves.
+
+### Changed
+
+- Literature library folders now use inline editing and a recursive tree with an uncategorized fallback section.
+
 ## [1.2.0] - 2026-09-18
 
 ### Added

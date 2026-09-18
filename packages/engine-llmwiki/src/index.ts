@@ -170,9 +170,15 @@ async function rejectNestedLinks(directory: string): Promise<void> {
   }
 }
 
-async function prepareVault(root: string): Promise<string> {
+async function prepareVault(root: string, create = false): Promise<string> {
   const absRoot = path.resolve(root);
-  await fs.mkdir(absRoot, { recursive: true });
+  const rootInfo = await fs.lstat(absRoot).catch(() => null);
+  if (!rootInfo) {
+    if (!create) throw new Error(`知识库路径不存在：${absRoot}`);
+    await fs.mkdir(absRoot, { recursive: true });
+  } else if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) {
+    throw new Error(`知识库路径不是有效目录：${absRoot}`);
+  }
   const realRoot = await fs.realpath(absRoot);
   await ensureDirectoryInsideRoot(realRoot, "wiki");
   await ensureDirectoryInsideRoot(realRoot, path.join("raw", "sources"));
@@ -263,27 +269,39 @@ export class LlmWikiEngine implements WikiEngine {
     return wiki;
   }
 
-  async initVault(root: string): Promise<void> {
-    const abs = await prepareVault(root);
+  async initVault(root: string, options: { create?: boolean } = {}): Promise<void> {
+    const abs = await prepareVault(root, options.create === true);
     const wiki = this.getWiki(abs);
     await wiki.init();
     await prepareVault(abs);
     const metaDir = path.join(abs, ".wikihome");
     await fs.mkdir(metaDir, { recursive: true });
-    await fs.writeFile(
-      path.join(metaDir, "meta.json"),
-      JSON.stringify(
-        {
-          format: 1,
-          engine: "llmwiki-core",
-          engineVersion: "0.1.0",
-          createdAt: new Date().toISOString(),
-        },
-        null,
-        2,
-      ),
-      "utf8",
-    );
+    const metaFile = path.join(metaDir, "meta.json");
+    const existing = await fs.readFile(metaFile, "utf8").catch(() => null);
+    let meta: Record<string, unknown> = {};
+    if (existing) {
+      try {
+        const parsed = JSON.parse(existing) as unknown;
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          meta = parsed as Record<string, unknown>;
+        }
+      } catch {
+        throw new Error("知识库元数据损坏：.wikihome/meta.json");
+      }
+    }
+    if (typeof meta.vaultId !== "string" || !meta.vaultId) {
+      meta.vaultId = globalThis.crypto?.randomUUID?.() ?? `vault-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    if (typeof meta.createdAt !== "string" || !meta.createdAt) meta.createdAt = new Date().toISOString();
+    meta.format = 2;
+    meta.engine = "llmwiki-core";
+    meta.engineVersion = "0.1.0";
+    const tmp = `${metaFile}.${process.pid}.${Date.now()}.tmp`;
+    await fs.writeFile(tmp, `${JSON.stringify(meta, null, 2)}\n`, "utf8");
+    await fs.rename(tmp, metaFile).catch(async () => {
+      await fs.copyFile(tmp, metaFile);
+      await fs.unlink(tmp).catch(() => undefined);
+    });
   }
 
   async ingestFile(
