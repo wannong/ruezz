@@ -1,8 +1,8 @@
 {
-  "name": "centaur",
+  "name": "ruezz",
   "private": true,
-  "version": "1.2.2",
-  "description": "Beginner-friendly local knowledge base agent (Tauri + LLM Wiki engine)",
+  "version": "1.2.3",
+  "description": "Ruezz — local research literature knowledge base agent (LLM Wiki + Idea notes; bring your own API)",
   "type": "module",
   "packageManager": "pnpm@9.15.0",
   "scripts": {

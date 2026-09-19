@@ -38,6 +38,7 @@ import { activeProviderIdOf, modelSwitchKey, providersOf, syncSettings, uniqueMo
 import { useMediaQuery } from "../lib/useMediaQuery";
 import type { Theme } from "../theme";
 import { PanelOpenGlyph } from "./iconGlyphs";
+import { appendSelectionToDraft } from "./agentChatCore";
 import { CommandPalette, type PaletteCommand, type PaletteMode } from "./CommandPalette";
 import { IngestModal } from "./IngestModal";
 import { LeftSidebar, type LeftView, type LinkPicker } from "./LeftSidebar";
@@ -49,6 +50,7 @@ import { Ribbon } from "./Ribbon";
 import { RightSidebar, type RightView } from "./RightSidebar";
 import { SettingsModal } from "./SettingsModal";
 import { AgentFloatingIsland } from "./AgentFloatingIsland";
+import { RUEZZ_CELEBRATE_MS } from "../lib/centaur-character/activity";
 import { centaurTransferMs } from "./CentaurChromeSlot";
 import { StatusBar } from "./StatusBar";
 import { TabBar } from "./TabBar";
@@ -141,6 +143,8 @@ export function Workspace({
   const [headerCentaurShown, setHeaderCentaurShown] = useState(true);
   const [titlebarCentaurShown, setTitlebarCentaurShown] = useState(() => loadPref("rightCollapsed", false));
   const [agentIslandOpen, setAgentIslandOpen] = useState(false);
+  const [ruezzCelebrate, setRuezzCelebrate] = useState(false);
+  const ruezzCelebrateTimer = useRef<number | undefined>(undefined);
   const centaurTransferTimer = useRef<number | undefined>(undefined);
   const [leftWidth, setLeftWidth] = useState(() => loadPref("leftWidth", 240));
   const [rightWidth, setRightWidth] = useState(() => loadPref("rightWidth", 320));
@@ -186,6 +190,11 @@ export function Workspace({
       const next = typeof update === "function" ? update(current) : { ...current, ...update };
       return { ...prev, [id]: next };
     });
+  }, []);
+  const triggerRuezzCelebrate = useCallback(() => {
+    setRuezzCelebrate(true);
+    window.clearTimeout(ruezzCelebrateTimer.current);
+    ruezzCelebrateTimer.current = window.setTimeout(() => setRuezzCelebrate(false), RUEZZ_CELEBRATE_MS);
   }, []);
   const modelMissing = !settings.mock && !settings.model.trim();
   const modelProviders = providersOf(settings);
@@ -270,10 +279,30 @@ export function Workspace({
       open: agentIslandOpen,
       visible: titlebarCentaurShown,
       onToggle: () => setAgentIslandOpen((open) => !open),
+      activity: {
+        busy: agentBusy,
+        pendingUser,
+        streamingPhase,
+        streamingText,
+        streamingTools,
+        celebrate: ruezzCelebrate,
+      },
     });
-  }, [rightCollapsed, titlebarCentaurShown, agentIslandOpen, onTitleBarCentaur]);
+  }, [
+    rightCollapsed,
+    titlebarCentaurShown,
+    agentIslandOpen,
+    onTitleBarCentaur,
+    agentBusy,
+    pendingUser,
+    streamingPhase,
+    streamingText,
+    streamingTools,
+    ruezzCelebrate,
+  ]);
 
   useEffect(() => () => window.clearTimeout(centaurTransferTimer.current), []);
+  useEffect(() => () => window.clearTimeout(ruezzCelebrateTimer.current), []);
 
   useEffect(() => () => onTitleBarCentaur?.(null), [onTitleBarCentaur]);
 
@@ -1036,6 +1065,7 @@ export function Workspace({
       });
       applySession(internalized.session);
       await refreshSessions();
+      triggerRuezzCelebrate();
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
       if (internalizationSessionId) updateAgentState(internalizationSessionId, { pendingUser: null, streamingText: "", streamingTools: [], streamingPhase: null, busy: false });
@@ -1095,6 +1125,7 @@ export function Workspace({
     abortingRef.current = false;
     setError(null);
     let id = sessionId;
+    let succeeded = false;
     try {
       if (!id) {
         sessionLoadGen.current += 1;
@@ -1125,6 +1156,7 @@ export function Workspace({
       await refreshSessions();
       await loadPages();
       await loadGraph();
+      succeeded = true;
     } catch (e) {
       if (abortingRef.current || isAbortError(e)) {
         if (id) {
@@ -1140,6 +1172,7 @@ export function Workspace({
       }
     } finally {
        if (id) updateAgentState(id, { pendingUser: null, streamingText: "", streamingTools: [], streamingPhase: null, busy: false });
+      if (succeeded && !abortingRef.current) triggerRuezzCelebrate();
       sendingRef.current = false;
       abortingRef.current = false;
     }
@@ -1522,6 +1555,10 @@ export function Workspace({
                 onIdeasVisible={setIdeasVisible}
                 onCreateIdea={createPageIdea}
                 onUpdateIdea={updateIdea}
+                onAddToChat={(text) => {
+                  if (sessionId) updateAgentState(sessionId, { draft: appendSelectionToDraft(draft, text) });
+                  else setDraftFallback(appendSelectionToDraft(draft, text));
+                }}
               />
             )}
           </div>
@@ -1557,6 +1594,7 @@ export function Workspace({
           onResize={(dx) => setRightWidth((w) => clamp(w + dx, RIGHT_MIN, RIGHT_MAX))}
           onCollapse={() => setRightCollapsedAnimated(true)}
           headerCentaurShown={headerCentaurShown}
+          ruezzCelebrate={ruezzCelebrate}
           modelLabel={modelLabel}
           modelMissing={modelMissing}
           modelValue={modelValue}
@@ -1617,6 +1655,7 @@ export function Workspace({
         currentPageLabel={activePageId ? titleFor(activePageId) : "未打开文件"}
         onAttachCurrent={() => void attachCurrentPage()}
         onDetach={(id) => void detachAttachment(id)}
+        ruezzCelebrate={ruezzCelebrate}
       />
       <StatusBar
         vaultPath={settings.vaultPath}

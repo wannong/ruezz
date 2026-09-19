@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Centaur",
-  "version": "1.2.2",
-  "identifier": "app.centaur.desktop",
+  "productName": "Ruezz",
+  "version": "1.2.3",
+  "identifier": "app.ruezz.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Centaur",
+        "title": "Ruezz",
         "width": 1280,
         "height": 860,
         "minWidth": 960,
@@ -29,14 +29,21 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "**"
+        ]
       },
-      "capabilities": ["default"]
+      "capabilities": [
+        "default"
+      ]
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
+    "createUpdaterArtifacts": true,
     "resources": [
       "resources/runtime/**/*",
       "resources/sidecar/**/*",
@@ -54,7 +61,10 @@
         "type": "skip"
       },
       "nsis": {
-        "languages": ["SimpChinese", "English"],
+        "languages": [
+          "SimpChinese",
+          "English"
+        ],
         "displayLanguageSelector": false,
         "installMode": "currentUser",
         "installerIcon": "icons/icon.ico",
@@ -62,5 +72,15 @@
       }
     }
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQyNDJDNDc5NEE4ODI3QjkKUldTNUo0aEtlY1JDMG84UHFTMWFDVE43TS9pcVhKVis4bXZrZ1RjVm52aHJOWU9CZTVUUzZ4YmUK",
+      "endpoints": [
+        "https://github.com/wannong/ruezz/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
 }

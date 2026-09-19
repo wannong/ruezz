@@ -236,7 +236,7 @@ function rpcError(err: unknown): Error {
     err instanceof Error ? err.message : typeof err === "string" ? err : String(err);
   if (/write sidecar|flush sidecar|无法把请求发给引擎/i.test(message)) {
     return new Error(
-      "引擎连接已断开。请关掉 Centaur 再打开。若仍失败，查看 %APPDATA%\\Centaur\\sidecar-stderr.log",
+      "引擎连接已断开。请关掉 Ruezz 再打开。若仍失败，查看 %APPDATA%\\Ruezz\\sidecar-stderr.log",
     );
   }
   return err instanceof Error ? err : new Error(message);

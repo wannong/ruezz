@@ -4,11 +4,13 @@ import { Menu } from "lucide-react";
 import { isTauriRuntime } from "../api";
 import { CentaurChromeSlot } from "./CentaurChromeSlot";
 import { ContextMenu } from "./ContextMenu";
+import type { RuezzActivity } from "./CentaurCharacterView";
 
 export type TitleBarCentaurProps = {
   open: boolean;
   visible: boolean;
   onToggle: () => void;
+  activity?: RuezzActivity | null;
 };
 
 type TitleBarProps = {
@@ -79,9 +81,9 @@ export function TitleBar({
           <Menu size={16} />
         </button>
         <span className="titlebar-brand" data-tauri-drag-region>
-           Centaur
+          Ruezz
         </span>
-        {label && label !== "Centaur" && (
+        {label && label !== "Ruezz" && (
           <span className="titlebar-label" data-tauri-drag-region>
             {label}
           </span>
@@ -94,7 +96,13 @@ export function TitleBar({
       </div>
       <div className="titlebar-drag" data-tauri-drag-region />
       {centaur && (
-        <CentaurChromeSlot variant="titlebar" open={centaur.visible} active={centaur.open} onClick={centaur.onToggle} />
+        <CentaurChromeSlot
+          variant="titlebar"
+          open={centaur.visible}
+          active={centaur.open}
+          activity={centaur.activity}
+          onClick={centaur.onToggle}
+        />
       )}
       {tauri && (
         <div className="titlebar-controls">

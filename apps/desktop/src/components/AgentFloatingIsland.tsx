@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { AgentAttachment, AgentSessionMessage, Idea, IdeaSelector, PageSummary } from "../api";
-import { AgentChatFeed, AgentComposer } from "./agentChatCore";
+import { AgentChatFeed, AgentComposer, appendSelectionToDraft } from "./agentChatCore";
 import { Presence } from "./Presence";
 
 export type AgentFloatingIslandProps = {
@@ -36,6 +36,7 @@ export type AgentFloatingIslandProps = {
   currentPageLabel: string;
   onAttachCurrent: () => void;
   onDetach: (id: string) => void;
+  ruezzCelebrate?: boolean;
 };
 
 export function AgentFloatingIsland({
@@ -70,6 +71,7 @@ export function AgentFloatingIsland({
   currentPageLabel,
   onAttachCurrent,
   onDetach,
+  ruezzCelebrate = false,
 }: AgentFloatingIslandProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const followOutput = useRef(true);
@@ -139,8 +141,10 @@ export function AgentFloatingIsland({
             sessionId={sessionId}
             onCreateIdea={onCreateIdea}
             onUpdateIdea={onUpdateIdea}
+            onAddToChat={(text) => onDraft(appendSelectionToDraft(draft, text))}
             onOpen={onOpen}
             welcomeSizePx={48}
+            ruezzCelebrate={ruezzCelebrate}
             className="agent-chat-view agent-island-chat"
           />
           <AgentComposer

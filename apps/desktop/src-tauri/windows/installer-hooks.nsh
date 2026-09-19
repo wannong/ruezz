@@ -8,6 +8,10 @@
     CopyFiles /SILENT "$INSTDIR\resources\WebView2Loader.dll" "$INSTDIR"
   skip_wv2_dll:
   ; Drop Mark-of-the-Web so Windows will run the bundled node/python.
+  System::Call 'kernel32::DeleteFile(t "$INSTDIR\ruezz.exe:Zone.Identifier")i.n'
+  System::Call 'kernel32::DeleteFile(t "$INSTDIR\Ruezz.exe:Zone.Identifier")i.n'
+  System::Call 'kernel32::DeleteFile(t "$INSTDIR\centaur.exe:Zone.Identifier")i.n'
+  System::Call 'kernel32::DeleteFile(t "$INSTDIR\Centaur.exe:Zone.Identifier")i.n'
   System::Call 'kernel32::DeleteFile(t "$INSTDIR\wikihome.exe:Zone.Identifier")i.n'
   System::Call 'kernel32::DeleteFile(t "$INSTDIR\WikiHome.exe:Zone.Identifier")i.n'
   System::Call 'kernel32::DeleteFile(t "$INSTDIR\resources\runtime\node.exe:Zone.Identifier")i.n'

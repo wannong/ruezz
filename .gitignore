@@ -26,6 +26,9 @@ release/
 *.exe
 .tmp-ui-vault/
 .cache/
+*.key
+*.key.pub
+*.sig
 apps/desktop/src-tauri/resources/runtime/
 apps/desktop/src-tauri/resources/sidecar/
 apps/desktop/src-tauri/resources/WebView2Loader.dll

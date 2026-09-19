@@ -1,6 +1,17 @@
 # Tauri beforeBuildCommand (cwd is apps/desktop). Keep this a single -File so cmd.exe
 # does not swallow the frontend build after a semicolon.
 $ErrorActionPreference = "Stop"
+
+$keyPath = Join-Path $PSScriptRoot "..\.cache\signing\ruezz.key"
+if (-not $env:TAURI_SIGNING_PRIVATE_KEY -and -not $env:TAURI_SIGNING_PRIVATE_KEY_PATH) {
+  if (Test-Path $keyPath) {
+    $env:TAURI_SIGNING_PRIVATE_KEY_PATH = (Resolve-Path $keyPath).Path
+    Write-Host "updater signing key: $env:TAURI_SIGNING_PRIVATE_KEY_PATH"
+  } else {
+    Write-Host "WARN: no updater signing key at $keyPath (createUpdaterArtifacts builds need it)"
+  }
+}
+
 $res = Join-Path $PSScriptRoot "..\apps\desktop\src-tauri\resources"
 $ready = (Test-Path (Join-Path $res "sidecar\dist\cli.js")) -and
   (Test-Path (Join-Path $res "runtime\python\python.exe")) -and

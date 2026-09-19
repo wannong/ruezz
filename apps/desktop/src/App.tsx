@@ -101,7 +101,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <TitleBar
-        label={settings.vaultPath ? vaultName(settings.vaultPath) : "Centaur"}
+        label={settings.vaultPath ? vaultName(settings.vaultPath) : "Ruezz"}
         sessionTitle={screen === "main" ? agentTitle : null}
         hasVault={Boolean(settings.vaultPath)}
         centaur={screen === "main" ? titleBarCentaur : null}

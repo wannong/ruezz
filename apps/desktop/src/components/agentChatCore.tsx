@@ -1,9 +1,10 @@
 import { AlertCircle, CheckCircle2, LoaderCircle, Paperclip, Wrench, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from "react";
 import type { AgentAttachment, AgentSessionMessage, Idea, IdeaSelector, PageSummary } from "../api";
 import { parseModelSwitchKey } from "../lib/llmProviders";
 import { loadPref, savePref } from "../lib/prefs";
 import { attachResizeY } from "../lib/pointerResize";
+import { ruezzActivityFromAgent } from "../lib/centaur-character/activity";
 import { CentaurCharacterView } from "./CentaurCharacterView";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { Presence } from "./Presence";
@@ -13,6 +14,8 @@ import { GaugeGlyph, SendGlyph, StopGlyph } from "./iconGlyphs";
 
 const COMPOSER_MIN = 88;
 const COMPOSER_MAX = 360;
+/** Collapsed user bubble line clamp before “展开”. */
+const USER_MSG_CLAMP_LINES = 6;
 
 function clampComposer(n: number): number {
   return Math.min(COMPOSER_MAX, Math.max(COMPOSER_MIN, Math.round(n)));
@@ -23,6 +26,15 @@ export function formatTokens(n: number): string {
   if (n >= 10_000) return `${Math.round(n / 1000)}k`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
+}
+
+/** Append a quoted selection into the Agent composer draft. */
+export function appendSelectionToDraft(draft: string, text: string): string {
+  const quote = text.trim();
+  if (!quote) return draft;
+  const block = `> ${quote.replace(/\n/g, "\n> ")}`;
+  const base = draft.trimEnd();
+  return base ? `${base}\n\n${block}\n\n` : `${block}\n\n`;
 }
 
 function sessionUsage(messages: AgentSessionMessage[]): {
@@ -57,12 +69,14 @@ export type AgentChatFeedProps = {
   sessionId: string | null;
   onCreateIdea: (messageId: string, selector: IdeaSelector, content: string) => Promise<boolean>;
   onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
+  onAddToChat?: (text: string) => void;
   onOpen: (id: string) => void;
   listRef?: RefObject<HTMLDivElement | null>;
   followOutputRef?: RefObject<boolean>;
   scrollPaused?: boolean;
   welcomeSizePx?: number;
   showWelcomeCharacter?: boolean;
+  ruezzCelebrate?: boolean;
   className?: string;
 };
 
@@ -81,15 +95,25 @@ export function AgentChatFeed({
   sessionId,
   onCreateIdea,
   onUpdateIdea,
+  onAddToChat,
   onOpen,
   listRef,
   followOutputRef,
   scrollPaused = false,
   welcomeSizePx = 64,
   showWelcomeCharacter = true,
+  ruezzCelebrate = false,
   className,
 }: AgentChatFeedProps) {
   const empty = messages.length === 0 && !pendingUser && !busy;
+  const ruezzActivity = ruezzActivityFromAgent({
+    busy,
+    pendingUser,
+    streamingPhase,
+    streamingText,
+    streamingTools,
+    celebrate: ruezzCelebrate,
+  });
 
   useEffect(() => {
     const el = listRef?.current;
@@ -111,7 +135,7 @@ export function AgentChatFeed({
         <div className="agent-welcome">
           {showWelcomeCharacter && (
             <div className="agent-welcome-icon">
-              <CentaurCharacterView sizePx={welcomeSizePx} />
+              <CentaurCharacterView sizePx={welcomeSizePx} activity={ruezzActivity} />
             </div>
           )}
           {modelMissing ? (
@@ -132,18 +156,14 @@ export function AgentChatFeed({
           sessionId={sessionId}
           onCreateIdea={onCreateIdea}
           onUpdateIdea={onUpdateIdea}
+          onAddToChat={onAddToChat}
           onOpen={onOpen}
         />
       ))}
       {(pendingUser || busy) && (
         <div className="agent-turn agent-turn-pending">
           {pendingUser && (
-            <div className="msg msg-user msg-pending">
-              <div className="msg-role">你</div>
-              <div className="msg-body">
-                <WikilinkText text={pendingUser} pages={pages} onOpen={onOpen} />
-              </div>
-            </div>
+            <UserMessageBubble text={pendingUser} pages={pages} onOpen={onOpen} pending />
           )}
           {busy && (
             <div className="msg msg-assistant msg-streaming">
@@ -403,7 +423,7 @@ export function AgentComposer({
         </button>
       </div>
 
-      <div className="agent-input-row">
+      <div className="agent-input-row" style={{ height: composerHeight }}>
         <textarea
           ref={inputRef}
           value={draft}
@@ -416,7 +436,6 @@ export function AgentComposer({
           }}
           placeholder="发送消息"
           rows={3}
-          style={{ height: composerHeight }}
         />
         <div className="agent-input-actions">
           <div className="agent-attachments-wrap">
@@ -524,6 +543,51 @@ export function AgentComposer({
   );
 }
 
+function UserMessageBubble({
+  text,
+  pages,
+  onOpen,
+  pending = false,
+}: {
+  text: string;
+  pages: PageSummary[];
+  onOpen: (id: string) => void;
+  pending?: boolean;
+}) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [collapsible, setCollapsible] = useState(false);
+
+  useLayoutEffect(() => {
+    setExpanded(false);
+    setCollapsible(false);
+  }, [text]);
+
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (!el || expanded) return;
+    setCollapsible(el.scrollHeight > el.clientHeight + 1);
+  }, [text, expanded]);
+
+  return (
+    <div className={`msg msg-user${pending ? " msg-pending" : ""}`}>
+      <div className="msg-role">你</div>
+      <div
+        ref={bodyRef}
+        className={`msg-body${expanded ? "" : " msg-user-clamp"}`}
+        style={expanded ? undefined : { WebkitLineClamp: USER_MSG_CLAMP_LINES }}
+      >
+        <WikilinkText text={text} pages={pages} onOpen={onOpen} />
+      </div>
+      {collapsible && (
+        <button type="button" className="msg-user-toggle" onClick={() => setExpanded((open) => !open)}>
+          {expanded ? "收起" : "展开"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function SessionMessageView({
   message,
   pages,
@@ -534,6 +598,7 @@ function SessionMessageView({
   sessionId,
   onCreateIdea,
   onUpdateIdea,
+  onAddToChat,
 }: {
   message: AgentSessionMessage;
   pages: PageSummary[];
@@ -544,16 +609,10 @@ function SessionMessageView({
   sessionId: string | null;
   onCreateIdea: (messageId: string, selector: IdeaSelector, content: string) => Promise<boolean>;
   onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
+  onAddToChat?: (text: string) => void;
 }) {
   if (message.role === "user") {
-    return (
-      <div className="msg msg-user">
-        <div className="msg-role">你</div>
-        <div className="msg-body">
-          <WikilinkText text={message.content} pages={pages} onOpen={onOpen} />
-        </div>
-      </div>
-    );
+    return <UserMessageBubble text={message.content} pages={pages} onOpen={onOpen} />;
   }
 
   if (message.role === "toolResult") {
@@ -596,6 +655,7 @@ function SessionMessageView({
             onIdeasVisible={onIdeasVisible}
             onCreateIdea={(selector, content) => onCreateIdea(message.id, selector, content)}
             onUpdateIdea={onUpdateIdea}
+            onAddToChat={onAddToChat}
           />
         </div>
       )}

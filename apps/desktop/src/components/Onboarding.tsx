@@ -15,7 +15,8 @@ export function Onboarding({ settings, onChange, busy, error, onStart }: Onboard
   return (
     <div className="onboarding">
       <div className="onboarding-card">
-        <h1 className="brand">Centaur</h1>
+        <h1 className="brand">Ruezz</h1>
+        <p className="brand-sub">瑞知</p>
         <p className="lead">选择知识库文件夹并配置模型后进入工作台。路径会记住，下次自动打开。</p>
         <SettingsFields settings={settings} onChange={onChange} />
         <button className="primary start-btn" type="button" disabled={!canStart || busy} onClick={onStart}>

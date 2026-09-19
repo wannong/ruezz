@@ -29,7 +29,7 @@ const EMPTY_USAGE = {
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
-const SYSTEM_PROMPT = `你是 Centaur 本地知识库助手。对话里不会预先放入页面正文；需要知识库内容时，请主动调用工具：
+const SYSTEM_PROMPT = `你是 Ruezz（瑞知）本地知识库助手。对话里不会预先放入页面正文；需要知识库内容时，请主动调用工具：
 
 - search_pages：搜索页面
 - read_page：读取页面内容

@@ -1,13 +1,15 @@
 {
   "name": "@wikihome/sidecar",
-  "version": "1.2.2",
-  "description": "JSON-RPC sidecar for Centaur Tauri shell",
+  "version": "1.2.3",
+  "description": "JSON-RPC sidecar for Ruezz Tauri shell",
   "type": "module",
   "bin": {
     "wikihome-sidecar": "./dist/cli.js"
   },
   "main": "./dist/server.js",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "node --test dist/*.test.js",

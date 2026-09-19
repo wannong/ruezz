@@ -1,4 +1,4 @@
-import { CentaurCharacterView } from "./CentaurCharacterView";
+import { CentaurCharacterView, type RuezzActivity } from "./CentaurCharacterView";
 import { Presence } from "./Presence";
 
 const CENTAUR_TRANSFER_MS = 250;
@@ -7,11 +7,18 @@ type CentaurChromeSlotProps = {
   variant: "titlebar" | "header";
   open: boolean;
   active?: boolean;
+  activity?: RuezzActivity | null;
   onClick?: () => void;
 };
 
-export function CentaurChromeSlot({ variant, open, active = false, onClick }: CentaurChromeSlotProps) {
-  const character = <CentaurCharacterView sizePx={28} punctuationFx={false} />;
+export function CentaurChromeSlot({
+  variant,
+  open,
+  active = false,
+  activity = null,
+  onClick,
+}: CentaurChromeSlotProps) {
+  const character = <CentaurCharacterView sizePx={28} punctuationFx={false} activity={activity} />;
 
   return (
     <Presence open={open} duration={CENTAUR_TRANSFER_MS}>

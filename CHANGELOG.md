@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.3] - 2026-09-19
+
+### Added
+
+- In-app update checks via Tauri Updater against GitHub Releases (`wannong/ruezz`).
+- Settings “发电” entry that optionally reveals an Afdian support QR code.
+- Selection actions **加入对话** beside **+ Idea** (also in the context menu); quotes text into the Agent composer.
+- Collapsible long user messages in Agent chat (expand / collapse after ~6 lines).
+
+### Changed
+
+- Product brand renamed from Centaur to **Ruezz（瑞知）** (window title, installer name, config dir `%APPDATA%\Ruezz`). Settings and vault data still migrate from previous Centaur/WikiHome config folders.
+- README rewritten as a product-facing intro for research literature + Idea-first workflow.
+- Agent Idea sticky notes open upper-left from the selection (viewport-fixed); Idea composer and selection chips use the same anchor.
+- Agent composer height drag resizes the whole input row, not only the textarea.
+- Toolbar “当前文件已附加” chip width capped so it no longer overlaps the composer action buttons.
+
+### Fixed
+
+- Agent Idea stickies and composers no longer clip off-screen to the lower-right of the chat panel.
+
 ## [1.2.2] - 2026-09-18
 
 ### Added

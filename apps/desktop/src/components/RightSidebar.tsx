@@ -67,6 +67,7 @@ type RightSidebarProps = {
   onDeleteIdea: (id: string) => Promise<void>;
   onCreateAgentIdea: (messageId: string, selector: IdeaSelector, content: string) => Promise<boolean>;
   headerCentaurShown?: boolean;
+  ruezzCelebrate?: boolean;
 };
 
 export function RightSidebar({
@@ -124,6 +125,7 @@ export function RightSidebar({
   onDeleteIdea,
   onCreateAgentIdea,
   headerCentaurShown = true,
+  ruezzCelebrate = false,
 }: RightSidebarProps) {
   const aside = (
     <aside className={`sidebar sidebar-right${overlay ? " overlay" : ""}`} style={{ width }}>
@@ -199,6 +201,7 @@ export function RightSidebar({
           onArchiveSession={onArchiveSession}
           onSwitchModel={onSwitchModel}
           headerCentaurShown={headerCentaurShown}
+          ruezzCelebrate={ruezzCelebrate}
         />
       )}
       {view === "outline" && <OutlinePane items={outline} onJump={onJump} />}

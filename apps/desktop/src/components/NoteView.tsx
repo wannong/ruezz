@@ -30,6 +30,7 @@ type NoteViewProps = {
   onIdeasVisible: (visible: boolean) => void;
   onCreateIdea: (selector: IdeaSelector, content: string) => Promise<boolean>;
   onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
+  onAddToChat?: (text: string) => void;
 };
 
 export function NoteView({
@@ -54,6 +55,7 @@ export function NoteView({
   onIdeasVisible,
   onCreateIdea,
   onUpdateIdea,
+  onAddToChat,
 }: NoteViewProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; start: number; end: number } | null>(null);
@@ -237,6 +239,7 @@ export function NoteView({
             onIdeasVisible={onIdeasVisible}
             onCreateIdea={onCreateIdea}
             onUpdateIdea={onUpdateIdea}
+            onAddToChat={onAddToChat}
           />
         </div>
       )}

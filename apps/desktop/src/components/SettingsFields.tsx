@@ -1,5 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { Update } from "@tauri-apps/plugin-updater";
+import afdianQr from "../assets/afdian-qr.jpg";
 import { api, type LlmProvider, type VaultSettings } from "../api";
+import {
+  checkForAppUpdate,
+  currentAppVersion,
+  downloadAndInstallUpdate,
+  formatBytes,
+  relaunchApp,
+  type UpdateProgress,
+} from "../lib/appUpdate";
 import {
   activeProviderIdOf,
   newProviderId,
@@ -32,6 +42,60 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
   const [draftModel, setDraftModel] = useState<Record<string, string>>({});
   const [openId, setOpenId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [appVersion, setAppVersion] = useState("…");
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
+  const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<{ kind: "ok" | "err" | "info"; text: string } | null>(
+    null,
+  );
+  const [showSupportQr, setShowSupportQr] = useState(false);
+
+  useEffect(() => {
+    void currentAppVersion().then(setAppVersion);
+  }, []);
+
+  async function onCheckUpdate() {
+    setUpdateBusy(true);
+    setUpdateStatus(null);
+    setPendingUpdate(null);
+    setUpdateProgress(null);
+    try {
+      const result = await checkForAppUpdate();
+      setAppVersion(result.currentVersion);
+      if (result.status === "up-to-date") {
+        setUpdateStatus({ kind: "ok", text: `已是最新版本（${result.currentVersion}）。` });
+      } else if (result.status === "available") {
+        setPendingUpdate(result.update);
+        setUpdateStatus({
+          kind: "info",
+          text: `发现新版本 ${result.update.version}（当前 ${result.currentVersion}）。下载约 150MB，安装后会重启。`,
+        });
+      } else {
+        setUpdateStatus({
+          kind: "err",
+          text: `暂时无法检查更新：${result.message}`,
+        });
+      }
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
+
+  async function onInstallUpdate() {
+    if (!pendingUpdate) return;
+    setUpdateBusy(true);
+    setUpdateStatus({ kind: "info", text: "正在下载并安装更新…" });
+    try {
+      await downloadAndInstallUpdate(pendingUpdate, setUpdateProgress);
+      setUpdateStatus({ kind: "ok", text: "更新已安装，即将重启…" });
+      await relaunchApp();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setUpdateStatus({ kind: "err", text: `更新失败：${message}` });
+      setUpdateBusy(false);
+    }
+  }
 
   function commit(nextProviders: LlmProvider[], nextActiveId = activeId, model = settings.model) {
     onChange(syncSettings(settings, nextProviders, nextActiveId, model));
@@ -347,6 +411,61 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
           {status.text}
         </div>
       )}
+
+      <div className="settings-section-head"><span>关于与更新</span></div>
+      <div className="settings-about">
+        <p className="hint">
+          Ruezz（瑞知） {appVersion}
+          <span className="settings-about-sep">·</span>
+          更新源 GitHub Releases
+        </p>
+        <div className="settings-provider-actions">
+          <button type="button" disabled={updateBusy} onClick={() => void onCheckUpdate()}>
+            {updateBusy && !pendingUpdate ? "检查中…" : "检查更新"}
+          </button>
+          {pendingUpdate && (
+            <button type="button" className="primary" disabled={updateBusy} onClick={() => void onInstallUpdate()}>
+              {updateBusy ? "安装中…" : `下载并安装 ${pendingUpdate.version}`}
+            </button>
+          )}
+        </div>
+        {updateProgress && (
+          <p className="hint">
+            已下载 {formatBytes(updateProgress.downloaded)}
+            {updateProgress.contentLength != null ? ` / ${formatBytes(updateProgress.contentLength)}` : ""}
+          </p>
+        )}
+        {updateStatus && (
+          <div
+            className={
+              updateStatus.kind === "err"
+                ? "settings-status settings-status-err"
+                : "settings-status"
+            }
+          >
+            {updateStatus.text}
+          </div>
+        )}
+        <div className="settings-support">
+          <p className="hint">
+            软件开源免费；API 费用由你的服务商收取。
+            <button
+              type="button"
+              className="settings-support-toggle"
+              aria-expanded={showSupportQr}
+              onClick={() => setShowSupportQr((open) => !open)}
+            >
+              {showSupportQr ? "收起" : "发电"}
+            </button>
+          </p>
+          {showSupportQr && (
+            <figure className="settings-support-qr">
+              <img src={afdianQr} alt="爱发电赞助二维码：扫码为我发电" />
+              <figcaption className="hint">自愿支持独立开发，扫码打开爱发电主页。</figcaption>
+            </figure>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

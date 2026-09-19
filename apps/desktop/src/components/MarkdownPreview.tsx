@@ -1,5 +1,6 @@
 import { Check, Eye, EyeOff, StickyNote } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -13,6 +14,8 @@ import { isTauriRuntime } from "../api";
 import { rangeFromSelector, selectorFromRange } from "../lib/ideaAnchors";
 import { ContextMenu } from "./ContextMenu";
 
+const AGENT_STICKY_WIDTH = 200;
+
 type MarkdownPreviewProps = {
   markdown: string;
   pages: PageSummary[];
@@ -25,10 +28,23 @@ type MarkdownPreviewProps = {
   onIdeasVisible?: (visible: boolean) => void;
   onCreateIdea?: (selector: IdeaSelector, content: string) => Promise<boolean>;
   onUpdateIdea?: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
+  /** Quote the selected text into the Agent composer. */
+  onAddToChat?: (text: string) => void;
 };
 
 type MarkRect = { id: string; color: Idea["color"]; left: number; top: number; width: number; height: number };
-type StickyPlacement = { idea: Idea; left: number; top: number; anchorX: number; anchorY: number };
+type StickyPlacement = {
+  idea: Idea;
+  left: number;
+  top: number;
+  width: number;
+  anchorX: number;
+  anchorY: number;
+  /** Agent chat: pin with viewport right/bottom so the card opens upper-left. */
+  fixed?: boolean;
+  right?: number;
+  bottom?: number;
+};
 
 function headingText(children: ReactNode): string {
   if (typeof children === "string" || typeof children === "number") return String(children);
@@ -110,6 +126,7 @@ export function MarkdownPreview({
   onIdeasVisible,
   onCreateIdea,
   onUpdateIdea,
+  onAddToChat,
 }: MarkdownPreviewProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -121,6 +138,7 @@ export function MarkdownPreview({
   const [stickies, setStickies] = useState<StickyPlacement[]>([]);
   const [hoveredIdeaId, setHoveredIdeaId] = useState<string | null>(null);
   const hideTimer = useRef<number | null>(null);
+  const canAnnotate = Boolean(ideaTarget && (onCreateIdea || onAddToChat));
   const source = rewriteWikilinks(markdown);
   const imageSrc = (src: string): string => {
     if (!assetRoot || !isTauriRuntime() || /^(?:[a-z]+:|\/\/|data:|#)/i.test(src)) return src;
@@ -168,18 +186,40 @@ export function MarkdownPreview({
             height: rect.height,
           });
         }
-        const anchor = rects.at(-1);
+        const anchor = rects[0] ?? rects.at(-1);
         if (!anchor) continue;
+        // Prefer each idea's own target so Agent notes always use left-upper layout.
+        const agentSticky = idea.target.kind === "assistant" || ideaTarget?.kind === "assistant";
+        if (agentSticky) {
+          // Pin the sticky's right + bottom edges to the selection start.
+          // The card then naturally extends upper-left (no transform needed).
+          const width = AGENT_STICKY_WIDTH;
+          anchored.push({
+            idea,
+            left: 0,
+            top: 0,
+            width,
+            right: Math.max(0, window.innerWidth - anchor.left),
+            bottom: Math.max(0, window.innerHeight - anchor.top),
+            anchorX: anchor.left,
+            anchorY: anchor.top + anchor.height / 2,
+            fixed: true,
+          });
+          continue;
+        }
         const noteWidth = Math.min(236, Math.max(184, surfaceRect.width - 16));
         const roomOnRight = surfaceRect.right - anchor.right;
-        const preferredLeft = roomOnRight >= noteWidth + 20
+        const placeBeside = roomOnRight >= noteWidth + 20;
+        const left = placeBeside
           ? anchor.right - surfaceRect.left + 14
           : Math.max(8, Math.min(anchor.left - surfaceRect.left, surfaceRect.width - noteWidth - 8));
         const anchorTop = anchor.top - surfaceRect.top;
+        const top = placeBeside ? anchorTop - 8 : anchorTop + anchor.height + 10;
         anchored.push({
           idea,
-          left: preferredLeft,
-          top: anchorTop + (roomOnRight >= noteWidth + 20 ? -8 : anchor.height + 10),
+          left,
+          top,
+          width: noteWidth,
           anchorX: anchor.right - surfaceRect.left,
           anchorY: anchor.top - surfaceRect.top + anchor.height / 2,
         });
@@ -191,11 +231,13 @@ export function MarkdownPreview({
     const observer = new ResizeObserver(update);
     observer.observe(root);
     window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
     };
-  }, [ideas, source]);
+  }, [ideas, source, ideaTarget?.kind]);
 
   const showIdea = (id: string) => {
     if (hideTimer.current != null) window.clearTimeout(hideTimer.current);
@@ -207,7 +249,7 @@ export function MarkdownPreview({
   };
 
   const captureSelection = (event: MouseEvent<HTMLDivElement>) => {
-    if (!ideaTarget || !onCreateIdea) return;
+    if (!canAnnotate) return;
     const root = rootRef.current;
     const browserSelection = window.getSelection();
     if (!root || !browserSelection) {
@@ -243,19 +285,30 @@ export function MarkdownPreview({
     const selector = selectorFromRange(root, range);
     if (!selector) return;
     const rangeRect = range.getBoundingClientRect();
-    setSelection({ selector, x: rangeRect.right, y: rangeRect.bottom + 6 });
+    // Pin point = selection start; floating UI opens upper-left from here.
+    setSelection({ selector, x: rangeRect.left, y: rangeRect.top });
     if (event.type === "contextmenu") {
       event.preventDefault();
-      setMenu({ selector, x: event.clientX, y: event.clientY });
+      setMenu({ selector, x: rangeRect.left, y: rangeRect.top });
       setSelection(null);
     }
   };
 
   const openComposer = (picked: { selector: IdeaSelector; x: number; y: number }) => {
+    if (!onCreateIdea) return;
     setContent("");
     setComposer(picked);
     setSelection(null);
     setMenu(null);
+  };
+
+  const addSelectionToChat = (picked: { selector: IdeaSelector }) => {
+    const text = (picked.selector.exact ?? "").trim();
+    if (!text || !onAddToChat) return;
+    onAddToChat(text);
+    setSelection(null);
+    setMenu(null);
+    window.getSelection()?.removeAllRanges();
   };
 
   const submitIdea = async () => {
@@ -268,10 +321,21 @@ export function MarkdownPreview({
     window.getSelection()?.removeAllRanges();
   };
 
+  const menuItems = menu
+    ? [
+        ...(onCreateIdea
+          ? [{ type: "item" as const, label: "添加 Idea", onClick: () => openComposer(menu) }]
+          : []),
+        ...(onAddToChat
+          ? [{ type: "item" as const, label: "加入对话", onClick: () => addSelectionToChat(menu) }]
+          : []),
+      ]
+    : [];
+
   return (
     <div
       ref={surfaceRef}
-      className={`md-annotation-surface${ideaTarget ? " md-annotatable" : ""}`}
+      className={`md-annotation-surface${canAnnotate ? " md-annotatable" : ""}`}
     >
       {ideasVisible && marks.length > 0 && (
         <div className="idea-mark-layer">
@@ -373,55 +437,84 @@ export function MarkdownPreview({
           <span>{ideasVisible ? "隐藏便签" : `显示便签 · ${ideas.filter((idea) => idea.status === "open").length}`}</span>
         </button>
       )}
-      {ideasVisible && hoveredIdeaId && (
-        <div className="idea-sticky-layer">
-          {stickies.filter((sticky) => sticky.idea.id === hoveredIdeaId).map((sticky) => (
-            <IdeaStickyNote
-              key={sticky.idea.id}
-              placement={sticky}
-              onUpdate={onUpdateIdea}
-              onEnter={() => showIdea(sticky.idea.id)}
-              onLeave={hideIdea}
-            />
-          ))}
-        </div>
-      )}
-      {selection && (
-        <button
-          type="button"
-          className="idea-selection-action"
-          style={{ left: selection.x, top: selection.y }}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => openComposer(selection)}
-        >
-          + Idea
-        </button>
-      )}
-      {composer && (
-        <div className="idea-composer" style={{ left: composer.x, top: composer.y }}>
-          <div className="idea-composer-quote">“{(composer.selector.exact ?? "选中区域").slice(0, 120)}”</div>
-          <textarea
-            autoFocus
-            value={content}
-            maxLength={20_000}
-            placeholder="记下你的想法…"
-            onChange={(event) => setContent(event.target.value)}
-            onKeyDown={(event) => {
-              if ((event.ctrlKey || event.metaKey) && event.key === "Enter") void submitIdea();
-              if (event.key === "Escape") setComposer(null);
-            }}
+      {ideasVisible && hoveredIdeaId && (() => {
+        const visible = stickies.filter((sticky) => sticky.idea.id === hoveredIdeaId);
+        if (visible.length === 0) return null;
+        const layer = visible.map((sticky) => (
+          <IdeaStickyNote
+            key={sticky.idea.id}
+            placement={sticky}
+            onUpdate={onUpdateIdea}
+            onEnter={() => showIdea(sticky.idea.id)}
+            onLeave={hideIdea}
           />
-          <div className="idea-composer-actions">
-            <button type="button" onClick={() => setComposer(null)}>取消</button>
-            <button type="button" className="primary" disabled={!content.trim()} onClick={() => void submitIdea()}>保存 Idea</button>
-          </div>
-        </div>
-      )}
+        ));
+        // Fixed agent stickies portal out so chat overflow cannot clip them.
+        if (visible.some((sticky) => sticky.fixed)) {
+          return createPortal(<div className="idea-sticky-layer idea-sticky-layer-fixed">{layer}</div>, document.body);
+        }
+        return <div className="idea-sticky-layer">{layer}</div>;
+      })()}
+      {selection &&
+        createPortal(
+          <div
+            className="idea-selection-actions"
+            style={{
+              top: "auto",
+              left: "auto",
+              right: Math.max(8, window.innerWidth - selection.x),
+              bottom: Math.max(8, window.innerHeight - selection.y),
+            }}
+            onMouseDown={(event) => event.preventDefault()}
+          >
+            {onCreateIdea && (
+              <button type="button" className="idea-selection-action" onClick={() => openComposer(selection)}>
+                + Idea
+              </button>
+            )}
+            {onAddToChat && (
+              <button type="button" className="idea-selection-action" onClick={() => addSelectionToChat(selection)}>
+                加入对话
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
+      {composer &&
+        createPortal(
+          <div
+            className="idea-composer idea-composer-anchor"
+            style={{
+              top: "auto",
+              left: "auto",
+              right: Math.max(8, window.innerWidth - composer.x),
+              bottom: Math.max(8, window.innerHeight - composer.y),
+            }}
+          >
+            <div className="idea-composer-quote">“{(composer.selector.exact ?? "选中区域").slice(0, 120)}”</div>
+            <textarea
+              autoFocus
+              value={content}
+              maxLength={20_000}
+              placeholder="记下你的想法…"
+              onChange={(event) => setContent(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === "Enter") void submitIdea();
+                if (event.key === "Escape") setComposer(null);
+              }}
+            />
+            <div className="idea-composer-actions">
+              <button type="button" onClick={() => setComposer(null)}>取消</button>
+              <button type="button" className="primary" disabled={!content.trim()} onClick={() => void submitIdea()}>保存 Idea</button>
+            </div>
+          </div>,
+          document.body,
+        )}
       <ContextMenu
-        open={menu !== null}
+        open={menu !== null && menuItems.length > 0}
         x={menu?.x ?? 0}
         y={menu?.y ?? 0}
-        items={menu ? [{ type: "item", label: "添加 Idea", onClick: () => openComposer(menu) }] : []}
+        items={menuItems}
         onClose={() => setMenu(null)}
       />
     </div>
@@ -439,7 +532,7 @@ function IdeaStickyNote({
   onEnter: () => void;
   onLeave: () => void;
 }) {
-  const { idea, left, top, anchorX, anchorY } = placement;
+  const { idea, left, top, width, right, bottom, anchorX, anchorY, fixed } = placement;
   const [draft, setDraft] = useState(idea.content);
   const [saving, setSaving] = useState(false);
   const dirty = draft.trim() !== idea.content;
@@ -449,19 +542,37 @@ function IdeaStickyNote({
     setSaving(true);
     try { await onUpdate(idea.id, { content: draft.trim() }); } finally { setSaving(false); }
   };
+  const threadWidth = fixed ? 0 : Math.max(10, Math.abs(anchorX - (left + width)));
+  const threadDx = Math.min(0, anchorX - left);
   return (
     <div
-      className="idea-sticky idea-sticky-hover"
-      style={{ transform: `translate3d(${left}px, ${top}px, 0)` }}
+      className={`idea-sticky idea-sticky-hover${fixed ? " idea-sticky-fixed" : ""}`}
+      style={
+        fixed
+          ? {
+              width,
+              top: "auto",
+              left: "auto",
+              right: right ?? 0,
+              bottom: bottom ?? 0,
+              transform: "none",
+            }
+          : { width, transform: `translate3d(${left}px, ${top}px, 0)` }
+      }
       data-idea-sticky={idea.id}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >
-      <span
-        className="idea-sticky-thread"
-        style={{ width: Math.max(16, Math.abs(left - anchorX)), transform: `translate3d(${Math.min(0, anchorX - left)}px, ${anchorY - top}px, 0)` }}
-        aria-hidden="true"
-      />
+      {!fixed && (
+        <span
+          className="idea-sticky-thread"
+          style={{
+            width: threadWidth,
+            transform: `translate3d(${threadDx}px, ${anchorY - top}px, 0)`,
+          }}
+          aria-hidden="true"
+        />
+      )}
       <div className="idea-sticky-head">
         <span>IDEA</span>
         <small>{new Date(idea.updatedAt).toLocaleDateString()}</small>

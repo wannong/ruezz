@@ -1,7 +1,8 @@
 import { Plus } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import type { AgentAttachment, AgentSessionMessage, AgentSessionSummary, Idea, IdeaSelector, PageSummary } from "../api";
-import { AgentChatFeed, AgentComposer } from "./agentChatCore";
+import { ruezzActivityFromAgent } from "../lib/centaur-character/activity";
+import { AgentChatFeed, AgentComposer, appendSelectionToDraft } from "./agentChatCore";
 import { CentaurChromeSlot } from "./CentaurChromeSlot";
 import { Presence } from "./Presence";
 import { ContextMenu } from "./ContextMenu";
@@ -46,6 +47,7 @@ type AgentPaneProps = {
   onCreateIdea: (messageId: string, selector: IdeaSelector, content: string) => Promise<boolean>;
   onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
   headerCentaurShown?: boolean;
+  ruezzCelebrate?: boolean;
 };
 
 function formatSessionTime(iso: string): string {
@@ -96,6 +98,7 @@ export function AgentPane({
   onCreateIdea,
   onUpdateIdea,
   headerCentaurShown = true,
+  ruezzCelebrate = false,
 }: AgentPaneProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const followOutput = useRef(true);
@@ -108,6 +111,18 @@ export function AgentPane({
   } | null>(null);
 
   const empty = messages.length === 0 && !pendingUser && !busy;
+  const ruezzActivity = useMemo(
+    () =>
+      ruezzActivityFromAgent({
+        busy,
+        pendingUser,
+        streamingPhase,
+        streamingText,
+        streamingTools,
+        celebrate: ruezzCelebrate,
+      }),
+    [busy, pendingUser, streamingPhase, streamingText, streamingTools, ruezzCelebrate],
+  );
   const liveSessions = useMemo(() => sessions.filter((s) => !s.archived), [sessions]);
   const archivedSessions = useMemo(() => sessions.filter((s) => s.archived), [sessions]);
 
@@ -135,7 +150,7 @@ export function AgentPane({
             );
           })}
         </div>
-        <CentaurChromeSlot variant="header" open={!empty && headerCentaurShown} />
+        <CentaurChromeSlot variant="header" open={!empty && headerCentaurShown} activity={ruezzActivity} />
         <button
           type="button"
           className={`agent-round-btn${historyOpen ? " active" : ""}`}
@@ -252,7 +267,9 @@ export function AgentPane({
           sessionId={sessionId}
           onCreateIdea={onCreateIdea}
           onUpdateIdea={onUpdateIdea}
+          onAddToChat={(text) => onDraft(appendSelectionToDraft(draft, text))}
           onOpen={onOpen}
+          ruezzCelebrate={ruezzCelebrate}
         />
 
         <AgentComposer

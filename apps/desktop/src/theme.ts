@@ -1,14 +1,18 @@
 export type Theme = "dark" | "light";
 
-const KEY = "centaur.theme";
+const KEY = "ruezz.theme";
+const LEGACY_KEYS = ["centaur.theme", "wikihome.theme"];
 
 export function loadTheme(): Theme {
   try {
-    const stored = localStorage.getItem(KEY);
-    return stored === "light" ? "light" : "dark";
+    for (const key of [KEY, ...LEGACY_KEYS]) {
+      const stored = localStorage.getItem(key);
+      if (stored === "light" || stored === "dark") return stored;
+    }
   } catch {
-    return "dark";
+    /* ignore */
   }
+  return "dark";
 }
 
 export function applyTheme(theme: Theme): void {
