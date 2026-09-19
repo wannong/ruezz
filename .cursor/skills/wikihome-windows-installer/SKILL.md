@@ -15,12 +15,13 @@ Deliverable: `release/Ruezz_<version>_x64-setup.exe` (typically ~150MB). Do not 
 
 ## Preconditions
 
-- Repo root is `D:\WikiHome` (or the current WikiHome checkout).
+- Work from this repo's checkout root.
 - Active Rust: `stable-x86_64-pc-windows-gnu`. Do not use MSVC (`cl.exe` / missing manifest).
-- Put MinGW on PATH before every Tauri release build:
+- Put MinGW (`windres.exe`) on PATH before every Tauri release build:
 
 ```powershell
-$env:PATH = "D:\winlibs\mingw64\bin;" + $env:PATH
+$env:PATH = "<mingw64-bin>;" + $env:PATH
+# example: C:\tools\mingw64\bin
 ```
 
 Confirm `windres.exe` exists. PowerShell 5.1: use `;`, never `&&`.
@@ -81,7 +82,7 @@ Also confirm `resources\sidecar\node_modules\@wikihome\agent\skills\grill-me\SKI
 ### 3. Build NSIS
 
 ```powershell
-$env:PATH = "D:\winlibs\mingw64\bin;" + $env:PATH
+$env:PATH = "<mingw64-bin>;" + $env:PATH
 pnpm --filter @wikihome/desktop tauri build
 ```
 
@@ -116,7 +117,7 @@ Give the user **one file**: `release/Ruezz_<ver>_x64-setup.exe`.
 For updater-capable builds, set before `tauri build`:
 
 ```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY_PATH = "D:\WikiHome\.cache\signing\ruezz.key"
+$env:TAURI_SIGNING_PRIVATE_KEY_PATH = "<repo-root>\.cache\signing\ruezz.key"
 ```
 
 Also upload `.sig` + `latest.json` to `wannong/ruezz` GitHub Releases (public). Do not commit the private key.

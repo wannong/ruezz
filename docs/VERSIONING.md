@@ -26,7 +26,7 @@ Vaults write `format: 1` in `.wikihome/meta.json`. Engine upgrades that cannot r
 5. For Windows updater artifacts, set signing env before `tauri build`:
 
 ```powershell
-$env:TAURI_SIGNING_PRIVATE_KEY_PATH = "D:\WikiHome\.cache\signing\ruezz.key"
+$env:TAURI_SIGNING_PRIVATE_KEY_PATH = "<repo-root>\.cache\signing\ruezz.key"
 # private key lives only under .cache/signing/ (gitignored)
 ```
 

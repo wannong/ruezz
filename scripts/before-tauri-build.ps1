@@ -6,9 +6,9 @@ $keyPath = Join-Path $PSScriptRoot "..\.cache\signing\ruezz.key"
 if (-not $env:TAURI_SIGNING_PRIVATE_KEY -and -not $env:TAURI_SIGNING_PRIVATE_KEY_PATH) {
   if (Test-Path $keyPath) {
     $env:TAURI_SIGNING_PRIVATE_KEY_PATH = (Resolve-Path $keyPath).Path
-    Write-Host "updater signing key: $env:TAURI_SIGNING_PRIVATE_KEY_PATH"
+    Write-Host "updater signing key: loaded from .cache/signing/"
   } else {
-    Write-Host "WARN: no updater signing key at $keyPath (createUpdaterArtifacts builds need it)"
+    Write-Host "WARN: no updater signing key under .cache/signing/ (createUpdaterArtifacts builds need it)"
   }
 }
 
