@@ -29,6 +29,9 @@ release/
 *.key
 *.key.pub
 *.sig
+*.msix
+*.msixbundle
+devcert.pfx
 apps/desktop/src-tauri/resources/runtime/
 apps/desktop/src-tauri/resources/sidecar/
 apps/desktop/src-tauri/resources/WebView2Loader.dll

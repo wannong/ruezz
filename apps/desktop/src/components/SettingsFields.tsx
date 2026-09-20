@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { Update } from "@tauri-apps/plugin-updater";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import afdianQr from "../assets/afdian-qr.jpg";
-import { api, type LlmProvider, type VaultSettings } from "../api";
+import { api, isTauriRuntime, type LlmProvider, type VaultSettings } from "../api";
 import {
   checkForAppUpdate,
   currentAppVersion,
@@ -417,34 +418,56 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
         <p className="hint">
           Ruezz（瑞知） {appVersion}
           <span className="settings-about-sep">·</span>
-          更新源 GitHub Releases
+          {import.meta.env.VITE_RUEZZ_CHANNEL === "store" ? "Microsoft Store" : "更新源 GitHub Releases"}
         </p>
-        <div className="settings-provider-actions">
-          <button type="button" disabled={updateBusy} onClick={() => void onCheckUpdate()}>
-            {updateBusy && !pendingUpdate ? "检查中…" : "检查更新"}
-          </button>
-          {pendingUpdate && (
-            <button type="button" className="primary" disabled={updateBusy} onClick={() => void onInstallUpdate()}>
-              {updateBusy ? "安装中…" : `下载并安装 ${pendingUpdate.version}`}
-            </button>
-          )}
-        </div>
-        {updateProgress && (
-          <p className="hint">
-            已下载 {formatBytes(updateProgress.downloaded)}
-            {updateProgress.contentLength != null ? ` / ${formatBytes(updateProgress.contentLength)}` : ""}
-          </p>
-        )}
-        {updateStatus && (
-          <div
-            className={
-              updateStatus.kind === "err"
-                ? "settings-status settings-status-err"
-                : "settings-status"
-            }
+        <p className="hint">
+          <a
+            className="settings-privacy-link"
+            href="https://github.com/wannong/ruezz/blob/store/msix/PRIVACY.md"
+            target="_blank"
+            rel="noreferrer"
+            onClick={(event) => {
+              event.preventDefault();
+              const url = "https://github.com/wannong/ruezz/blob/store/msix/PRIVACY.md";
+              if (isTauriRuntime()) void openUrl(url);
+              else window.open(url, "_blank", "noopener,noreferrer");
+            }}
           >
-            {updateStatus.text}
-          </div>
+            隐私政策
+          </a>
+        </p>
+        {import.meta.env.VITE_RUEZZ_CHANNEL === "store" ? (
+          <p className="hint">商店版请通过 Microsoft Store 获取更新；应用内 GitHub 更新已关闭。</p>
+        ) : (
+          <>
+            <div className="settings-provider-actions">
+              <button type="button" disabled={updateBusy} onClick={() => void onCheckUpdate()}>
+                {updateBusy && !pendingUpdate ? "检查中…" : "检查更新"}
+              </button>
+              {pendingUpdate && (
+                <button type="button" className="primary" disabled={updateBusy} onClick={() => void onInstallUpdate()}>
+                  {updateBusy ? "安装中…" : `下载并安装 ${pendingUpdate.version}`}
+                </button>
+              )}
+            </div>
+            {updateProgress && (
+              <p className="hint">
+                已下载 {formatBytes(updateProgress.downloaded)}
+                {updateProgress.contentLength != null ? ` / ${formatBytes(updateProgress.contentLength)}` : ""}
+              </p>
+            )}
+            {updateStatus && (
+              <div
+                className={
+                  updateStatus.kind === "err"
+                    ? "settings-status settings-status-err"
+                    : "settings-status"
+                }
+              >
+                {updateStatus.text}
+              </div>
+            )}
+          </>
         )}
         <div className="settings-support">
           <p className="hint">

@@ -16,7 +16,8 @@
     "smoke": "pnpm --filter @wikihome/sidecar smoke",
     "release:stage": "powershell -ExecutionPolicy Bypass -File scripts/stage-installer-runtime.ps1",
     "release:prepare": "powershell -ExecutionPolicy Bypass -File scripts/copy-webview2-dll.ps1",
-    "release:pack": "powershell -ExecutionPolicy Bypass -File scripts/copy-release-pack.ps1"
+    "release:pack": "powershell -ExecutionPolicy Bypass -File scripts/copy-release-pack.ps1",
+    "release:msix": "powershell -ExecutionPolicy Bypass -File scripts/pack-msix.ps1"
   },
   "engines": {
     "node": ">=20"

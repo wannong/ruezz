@@ -2689,6 +2689,13 @@ button.ghost {
   color: var(--muted);
 }
 
+.settings-privacy-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+
 .settings-support {
   display: grid;
   gap: 0.45rem;

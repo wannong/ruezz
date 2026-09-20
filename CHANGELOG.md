@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Microsoft Store / MSIX packaging scaffold (`store/msix`, `pnpm release:msix`, `docs/MICROSOFT_STORE.md`).
+- Public privacy policy (`PRIVACY.md`) for Partner Center.
+
 ## [1.2.3] - 2026-09-19
 
 ### Added

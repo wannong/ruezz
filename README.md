@@ -6,6 +6,8 @@
 
 免费开源桌面壳；对话与内化需自行接入 OpenAI-compatible API。
 
+**隐私政策**：[PRIVACY.md](./PRIVACY.md)（Microsoft Store / Partner Center 可用）
+
 ## 适合谁
 
 - 做科研阅读、文献综述、长期课题积累的人

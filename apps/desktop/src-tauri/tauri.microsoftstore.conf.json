@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Ruezz",
+  "identifier": "app.ruezz.desktop",
+  "bundle": {
+    "publisher": "wannong",
+    "createUpdaterArtifacts": false,
+    "targets": [],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "offlineInstaller"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQyNDJDNDc5NEE4ODI3QjkKUldTNUo0aEtlY1JDMG84UHFTMWFDVE43TS9pcVhKVis4bXZrZ1RjVm52aHJOWU9CZTVUUzZ4YmUK",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}
