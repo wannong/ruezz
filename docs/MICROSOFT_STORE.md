@@ -20,14 +20,16 @@ Use either:
 
 ## Identity (must match Partner Center)
 
-Edit `store/msix/Package.appxmanifest`:
+`store/msix/Package.appxmanifest` is already filled from Partner Center:
 
-1. Open Partner Center → your app → **Product identity**
-2. Copy **Package/Identity/Name** → `Identity@Name`
-3. Copy **Publisher** (looks like `CN=XXXXXXXX-XXXX-...`) → `Identity@Publisher`
-4. Set `Identity@Version` to a four-part version that **increases** each upload (map `1.2.3` → `1.2.3.0`)
+| Field | Value |
+|---|---|
+| Name | `nong.Ruezz` |
+| Publisher | `CN=A9453A2B-53CD-4F9F-8509-8A51777F01E8` |
+| PublisherDisplayName | `晓nong` |
+| Version | `1.2.3.0` (bump four-part version on every Store upload) |
 
-`PublisherDisplayName` can stay as your public publisher name (e.g. `wannong`).
+If Partner Center identity ever changes, update the manifest to match exactly.
 
 ## Store vs GitHub builds
 

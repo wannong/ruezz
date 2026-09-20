@@ -65,21 +65,39 @@ if (Test-Path $assetsSrc) {
 
 $winapp = Get-Command winapp -ErrorAction SilentlyContinue
 if (-not $winapp) {
+  $shim = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\winapp.exe"
+  if (Test-Path $shim) {
+    $env:PATH = "$(Split-Path $shim -Parent);$env:PATH"
+    $winapp = Get-Command winapp -ErrorAction SilentlyContinue
+  }
+}
+if (-not $winapp) {
   Write-Host "winapp CLI not found. Install: winget install Microsoft.WinAppCli"
   Write-Host "Layout staged at: $Layout"
-  Write-Host "Then: winapp pack `"$Layout`""
+  Write-Host "Then: winapp package `"$Layout`" --manifest Package.appxmanifest --generate-cert --publisher `"CN=A9453A2B-53CD-4F9F-8509-8A51777F01E8`""
   exit 0
 }
 
+$OutDir = Join-Path $Root "release\msix"
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+$MsixName = "Ruezz_1.2.3.0_x64.msix"
+$MsixPath = Join-Path $OutDir $MsixName
+
 Push-Location $Layout
 try {
-  Write-Host "==> winapp cert generate (dev, local sideload only)"
-  winapp cert generate --if-exists skip
-  Write-Host "==> winapp pack"
-  winapp pack . --cert .\devcert.pfx
+  Write-Host "==> winapp package (dev cert publisher must match Partner Center)"
+  winapp package . `
+    --manifest .\Package.appxmanifest `
+    --generate-cert `
+    --publisher "CN=A9453A2B-53CD-4F9F-8509-8A51777F01E8" `
+    --output $MsixPath `
+    --verbose
+  if ($LASTEXITCODE -ne 0) { throw "winapp package failed ($LASTEXITCODE)" }
 } finally {
   Pop-Location
 }
 
-Write-Host "Done. Look for .msix under $Layout (and/or cwd)."
-Write-Host "Store submission: follow docs/MICROSOFT_STORE.md (Microsoft re-signs; update Identity from Partner Center)."
+Write-Host "Done: $MsixPath"
+Get-Item $MsixPath | Format-List FullName, Length, LastWriteTime
+Write-Host "Upload this .msix in Partner Center. Microsoft re-signs after certification."
+Write-Host "Identity: nong.Ruezz / CN=A9453A2B-53CD-4F9F-8509-8A51777F01E8 / 晓nong"
