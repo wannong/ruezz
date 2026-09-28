@@ -1,4 +1,20 @@
 # Third-party notices
 
-This product vendors **llmwiki-core** (MIT License), Copyright (c) 2026 LLM Wiki Contributors.
+This product vendors the following components:
+
+## llmwiki-core
+
+MIT License. Copyright (c) 2026 LLM Wiki Contributors.  
 See `vendor/llmwiki-core/LICENSE` and `vendor/llmwiki-core/ORIGIN.md`.
+
+## @earendil-works/pi-ai
+
+MIT License. Copyright (c) Mario Zechner / earendil-works.  
+Vendored under `vendor/pi-ai/` (upstream: https://github.com/earendil-works/pi).  
+Package metadata declares MIT; no separate LICENSE file is shipped in this vendor snapshot.
+
+## @earendil-works/pi-agent-core
+
+MIT License. Copyright (c) Mario Zechner / earendil-works.  
+Vendored under `vendor/pi-agent-core/` (upstream: https://github.com/earendil-works/pi).  
+Package metadata declares MIT; no separate LICENSE file is shipped in this vendor snapshot.

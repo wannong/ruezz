@@ -1,27 +1,58 @@
 # Changelog
 
-All notable changes to WikiHome are documented in this file.
+All notable changes to **Ruezz** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.8] - 2026-09-28
+
 ### Added
 
-- Microsoft Store / MSIX packaging scaffold (`store/msix`, `pnpm release:msix`, `docs/MICROSOFT_STORE.md`).
-- Public privacy policy (`PRIVACY.md`) for Partner Center.
+- GitHub landing screenshots and bilingual README (README.md / README.en.md).
+- Comparison with Zotero / Obsidian / LLM Wiki; Releases download badge.
+
+### Changed
+
+- Workspace hooks / lazy chunks / path helper cleanup (desktop).
+- Public docs branding unified to Ruezz; NOTICE credits vendored pi-ai and pi-agent-core.
+- Documented Node.js >= 22.19; moved agent harness notes to docs/dev/.
+
+## [1.2.7] - 2026-09-28
+
+### Added
+
+- Microsoft Store listing copy and MSIX logo assets.
+
+## [1.2.6] - 2026-09-28
+
+### Added
+
+- View memory; Inter / LXGW WenKai fonts; refined button shadows.
+
+## [1.2.5] - 2026-09-28
+
+### Added
+
+- Graph navigation improvements, library rename, and source preview.
 
 ## [1.2.4] - 2026-09-28
 
 ### Added
 
-- Settings **界面配色** picker with four layered themes: classic **暗色** / **明亮**, plus **米白** and **蓝调** reading palettes.
+- Settings **界面配色** picker with four layered themes: classic **浅色** / **深色**, plus **米白** and **蓝调** reading palettes.
 - Status bar palette button to cycle themes without opening settings.
+- Microsoft Store / MSIX packaging scaffold (store/msix, docs/MICROSOFT_STORE.md).
+- Public privacy policy (PRIVACY.md) for Partner Center.
 
 ### Changed
 
-- Replaced the simple dark/light toggle with persistent `ruezz.palette` selection (legacy theme keys still migrate).
+- Replaced the simple dark/light toggle with persistent 
+uezz.palette selection (legacy theme keys still migrate).
+
+## [1.2.3] - 2026-09-19
 
 ## [1.2.3] - 2026-09-19
 
@@ -372,26 +403,32 @@ WikiHome’s first feature-complete release: local wiki, graph, and a vertical A
 
 - Vendored Store uses JSON index instead of `better-sqlite3` (Windows-friendly, no node-gyp)
 
-[Unreleased]: https://github.com/wikihome/wikihome/compare/v1.0.10...HEAD
-[1.0.10]: https://github.com/wikihome/wikihome/releases/tag/v1.0.10
-[1.0.9]: https://github.com/wikihome/wikihome/releases/tag/v1.0.9
-[1.0.8]: https://github.com/wikihome/wikihome/releases/tag/v1.0.8
-[1.0.7]: https://github.com/wikihome/wikihome/releases/tag/v1.0.7
-[1.0.6]: https://github.com/wikihome/wikihome/releases/tag/v1.0.6
-[1.0.5]: https://github.com/wikihome/wikihome/releases/tag/v1.0.5
-[1.0.4]: https://github.com/wikihome/wikihome/releases/tag/v1.0.4
-[1.0.3]: https://github.com/wikihome/wikihome/releases/tag/v1.0.3
-[1.0.2]: https://github.com/wikihome/wikihome/releases/tag/v1.0.2
-[1.0.1]: https://github.com/wikihome/wikihome/releases/tag/v1.0.1
-[1.0.0]: https://github.com/wikihome/wikihome/releases/tag/v1.0.0
-[0.1.10]: https://github.com/wikihome/wikihome/releases/tag/v0.1.10
-[0.1.9]: https://github.com/wikihome/wikihome/releases/tag/v0.1.9
-[0.1.8]: https://github.com/wikihome/wikihome/releases/tag/v0.1.8
-[0.1.7]: https://github.com/wikihome/wikihome/releases/tag/v0.1.7
-[0.1.6]: https://github.com/wikihome/wikihome/releases/tag/v0.1.6
-[0.1.5]: https://github.com/wikihome/wikihome/releases/tag/v0.1.5
-[0.1.4]: https://github.com/wikihome/wikihome/releases/tag/v0.1.4
-[0.1.3]: https://github.com/wikihome/wikihome/releases/tag/v0.1.3
-[0.1.2]: https://github.com/wikihome/wikihome/releases/tag/v0.1.2
-[0.1.1]: https://github.com/wikihome/wikihome/releases/tag/v0.1.1
-[0.1.0]: https://github.com/wikihome/wikihome/releases/tag/v0.1.0
+[Unreleased]: https://github.com/wannong/ruezz/compare/v1.2.8...HEAD
+[1.2.8]: https://github.com/wannong/ruezz/releases/tag/v1.2.8
+[1.2.7]: https://github.com/wannong/ruezz/releases/tag/v1.2.7
+[1.2.6]: https://github.com/wannong/ruezz/releases/tag/v1.2.6
+[1.2.5]: https://github.com/wannong/ruezz/releases/tag/v1.2.5
+[1.2.4]: https://github.com/wannong/ruezz/releases/tag/v1.2.4
+[OLDUNRELEASED]: https://github.com/wannong/ruezz/compare/v1.0.10...HEAD
+[1.0.10]: https://github.com/wannong/ruezz/releases/tag/v1.0.10
+[1.0.9]: https://github.com/wannong/ruezz/releases/tag/v1.0.9
+[1.0.8]: https://github.com/wannong/ruezz/releases/tag/v1.0.8
+[1.0.7]: https://github.com/wannong/ruezz/releases/tag/v1.0.7
+[1.0.6]: https://github.com/wannong/ruezz/releases/tag/v1.0.6
+[1.0.5]: https://github.com/wannong/ruezz/releases/tag/v1.0.5
+[1.0.4]: https://github.com/wannong/ruezz/releases/tag/v1.0.4
+[1.0.3]: https://github.com/wannong/ruezz/releases/tag/v1.0.3
+[1.0.2]: https://github.com/wannong/ruezz/releases/tag/v1.0.2
+[1.0.1]: https://github.com/wannong/ruezz/releases/tag/v1.0.1
+[1.0.0]: https://github.com/wannong/ruezz/releases/tag/v1.0.0
+[0.1.10]: https://github.com/wannong/ruezz/releases/tag/v0.1.10
+[0.1.9]: https://github.com/wannong/ruezz/releases/tag/v0.1.9
+[0.1.8]: https://github.com/wannong/ruezz/releases/tag/v0.1.8
+[0.1.7]: https://github.com/wannong/ruezz/releases/tag/v0.1.7
+[0.1.6]: https://github.com/wannong/ruezz/releases/tag/v0.1.6
+[0.1.5]: https://github.com/wannong/ruezz/releases/tag/v0.1.5
+[0.1.4]: https://github.com/wannong/ruezz/releases/tag/v0.1.4
+[0.1.3]: https://github.com/wannong/ruezz/releases/tag/v0.1.3
+[0.1.2]: https://github.com/wannong/ruezz/releases/tag/v0.1.2
+[0.1.1]: https://github.com/wannong/ruezz/releases/tag/v0.1.1
+[0.1.0]: https://github.com/wannong/ruezz/releases/tag/v0.1.0

@@ -1,94 +1,80 @@
-# Ruezz（瑞知）
+<p align="center">
+  <img src="docs/assets/ruezz-icon.png" width="96" alt="Ruezz icon" />
+</p>
 
-面向科研文献的本地知识库 Agent。
+<h1 align="center">Ruezz（瑞知）</h1>
 
-在 AI 时代，真正稀缺的往往不是模型能力，而是**你自己的 idea**。Ruezz 在常见的「提问 / 入库 / 浏览」之外，把便签式 Idea、检索与回看做成一等公民：读文献时随手钉住想法，之后还能找回来。
+<p align="center">
+  <b>给科研人的本地 AI 文献库</b>：像 Zotero 一样管 PDF，像 Wiki 一样沉淀知识，随手钉 Idea。<br/>
+  <i>Local-first research paper knowledge base with LLM Wiki &amp; sticky Ideas (Windows).</i>
+</p>
 
-免费开源桌面壳；对话与内化需自行接入 OpenAI-compatible API。
+<p align="center">
+  <a href="https://github.com/wannong/ruezz/releases/latest"><img src="https://img.shields.io/github/v/release/wannong/ruezz?label=Download%20Windows&color=2f6fed" alt="Download" /></a>
+  <a href="README.en.md">English</a>
+  ·
+  <a href="CHANGELOG.md">Changelog</a>
+  ·
+  <a href="LICENSE">MIT</a>
+</p>
 
-**隐私政策**：[PRIVACY.md](./PRIVACY.md)（Microsoft Store / Partner Center 可用）
+<p align="center">
+  <a href="https://github.com/wannong/ruezz/releases/latest"><b>⬇ 下载 Windows 安装包（Releases）</b></a>
+</p>
 
-## 适合谁
+<p align="center">
+  <img src="docs/assets/ruezz-main.png" width="900" alt="Ruezz 主界面：文献库 + Agent" />
+</p>
 
-- 做科研阅读、文献综述、长期课题积累的人
-- 想要「文献原件 + 可浏览 wiki + Agent」在同一处，又不想被 Obsidian / Claude Code CLI 绑死的人
-- 需要 Windows 安装包、尽量少折腾环境的人
+安装包内置 Node / Python / MarkItDown，**不用**再装开发工具。需要自备 OpenAI-compatible API（DeepSeek、智谱、Kimi、OpenAI 等均可）。
 
-## 它做什么
+## 和同类工具差在哪
 
-| 能力 | 说明 |
-|------|------|
-| 文献库 | 借鉴 Zotero 思路：原件归档、按库组织；支持 Markdown / PDF / Word 等拖入 |
-| LLM Wiki | 采用 LLM Wiki 管理：原件进 `raw/`，可读页面进 `wiki/`，索引可重建 |
-| Agent | 基于本地库提问、浏览与后续内化（编译概念页） |
-| Idea | 知识页 / PDF / Agent 回复上的便签批注；可折叠、可统一显隐，并支持检索与回看 |
+Ruezz 站在 [Karpathy 提出的 LLM Wiki](https://github.com/karpathy/llm-wiki) 思路上，但面向**科研文献阅读**做了产品化：原件管理、PDF 区域便签、本地桌面壳。
+
+| | Ruezz | Zotero | Obsidian | [llm_wiki](https://github.com/nashsu/llm_wiki) 等 |
+|---|---|---|---|---|
+| 文献原件归档（类 Zotero） | ✅ | ✅ | 插件/自建 | 偏 wiki 文本 |
+| LLM Wiki（raw → wiki，可重建索引） | ✅ | ❌ | 需自建工作流 | ✅ |
+| PDF 上框选公式/图表贴 **Idea 便签** | ✅ | 标注不同 | 取决于插件 | 少见 |
+| 本地桌面安装包（零环境） | ✅ Windows | ✅ | ✅ | 多为源码/CLI |
+| 自带 Agent 对话 + 工具循环 | ✅ | 有限 | 需外挂 | 视实现 |
 
 导入会整篇归档为文献页，**不会**在导入时自动拆概念；「内化」是你主动让 Agent 做的后续步骤。
 
-## 和常见工具的关系
+## 三步开始
 
-- **不必**安装 Obsidian 或 Claude Code CLI 才能用
-- **不是**云端团队 Agent 平台；数据在你选的本地知识库目录
-- **开源免费**的是客户端与引擎外壳；LLM 费用与可用性取决于你接入的 API
+1. 打开 [最新 Release](https://github.com/wannong/ruezz/releases/latest)，下载 `Ruezz_*_x64-setup.exe`
+2. 双击安装（默认当前用户，一般不需要管理员）
+3. 选一个知识库文件夹，在设置里填入 API 地址与 Key → 进入工作台
 
-## 快速开始（安装包）
+<p align="center">
+  <img src="docs/assets/ruezz-settings.png" width="520" alt="Ruezz 设置 / 首次进入" />
+</p>
 
-给没有开发环境的电脑：
+系统要求：64 位 Windows 10 / 11。装好后可在 **设置 → 关于与更新** 检查新版本（签名校验）。
 
-1. 使用 `release/` 下的 Windows 安装包（`Ruezz_<版本>_x64-setup.exe`）
-2. 双击安装，一直点「下一步」（默认装到当前用户目录，一般不需要管理员权限）
-3. 首次打开时选择知识库文件夹，在设置里填入 API 地址与密钥
-4. 之后可在「设置 → 关于与更新」检查更新（发布到公开仓库 `wannong/ruezz` 后生效）
+更多界面：
 
-安装包内置 Node 引擎、PDF/Office 转换（MarkItDown）与 WebView2 相关运行时，一般不必再装 Node / Python / Git。
-
-系统要求：64 位 Windows 10 或 11。
+<p align="center">
+  <img src="docs/assets/ruezz-main-alt.png" width="720" alt="Ruezz Agent 浮岛" />
+</p>
 
 ## 开发
 
-- Node.js 20+
+- Node.js **22.19+**（与 vendored `pi-ai` 一致）
 - pnpm 9+
-- Rust + Cargo（Tauri 桌面）
-- 可用的 OpenAI-compatible API（或 `--mock` 冒烟）
+- Rust + Cargo（可选，桌面壳）
 
 ```bash
 pnpm install
 pnpm build
-pnpm smoke          # mock LLM 端到端（Node）
+pnpm smoke          # mock LLM 端到端
+pnpm dev:desktop    # Tauri 桌面
 ```
 
-### 无 Rust 时（Web 模式）
+架构：GUI（React）→ Tauri → Node sidecar；引擎经 `@wikihome/engine-api` 接入 vendored `llmwiki-core`。详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
-```powershell
-pnpm build
-$env:WIKIHOME_MOCK="1"; $env:WIKIHOME_HTTP_TOKEN="replace-with-at-least-24-random-characters"; node packages/sidecar/dist/http-main.js   # 终端 1
-# 终端 2：
-cd apps/desktop
-$env:VITE_SIDECAR_HTTP="http://127.0.0.1:8787"
-$env:VITE_SIDECAR_HTTP_TOKEN="replace-with-at-least-24-random-characters"
-pnpm dev
-```
+## 许可
 
-打开 http://localhost:1420
-
-### Tauri 桌面
-
-```bash
-pnpm dev:desktop
-pnpm --filter @wikihome/desktop tauri build
-pnpm release:prepare
-```
-
-开发机也可用绿色目录 `release/`（`Centaur.exe`、`WebView2Loader.dll`、`启动Centaur.bat` 等；品牌文件名将随后续版本统一为 Ruezz）。
-
-架构概要：GUI（React）→ Tauri → Node sidecar；引擎经 `@wikihome/engine-api` 接入 vendored `llmwiki-core`，可替换。详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
-
-## 版本
-
-见 [docs/VERSIONING.md](docs/VERSIONING.md) 与 [CHANGELOG.md](CHANGELOG.md)。
-
----
-
-**GitHub About 建议文案（可粘贴到仓库 Description）**
-
-> Ruezz（睿智）：科研文献本地知识库 Agent。LLM Wiki + 类 Zotero 原件管理；Idea 便签与检索。开源桌面壳，需自备 API。
+MIT。第三方声明见 [NOTICE](NOTICE)。

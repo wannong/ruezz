@@ -1,4 +1,4 @@
-# Centaur architecture
+# Ruezz architecture
 
 ```
 GUI (React) → Tauri commands → Node sidecar (JSON-RPC)
@@ -15,7 +15,7 @@ Replace the engine later by implementing `@wikihome/engine-api` in a new package
 - `raw/sources/` — immutable originals (Markdown, PDF, Word, …)
 - `wiki/` — wiki pages you browse (always Markdown)
 - `.llmwiki/` — derived JSON index (rebuildable)
-- `.wikihome/meta.json` — Centaur vault metadata (`format: 1`)
+- `.wikihome/meta.json` — vault metadata (`format: 1`; path prefix kept for compatibility)
 
 ## Import vs 内化
 

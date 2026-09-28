@@ -2,7 +2,7 @@
 
 ## Required for Node engine / Web UI
 
-- Node.js 20+
+- Node.js 22.19+
 - pnpm 9+
 
 ## Required for `pnpm dev:desktop` (Tauri)
