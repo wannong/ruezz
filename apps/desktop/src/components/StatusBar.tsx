@@ -1,6 +1,6 @@
-import { Moon, Sun } from "lucide-react";
-import type { Theme } from "../theme";
+import { Palette } from "lucide-react";
 import { vaultName } from "../lib/fileTree";
+import { PALETTE_META, type ColorPalette } from "../theme";
 
 type StatusBarProps = {
   vaultPath: string;
@@ -10,8 +10,8 @@ type StatusBarProps = {
   notice?: string | null;
   dirty: boolean;
   saving: boolean;
-  theme: Theme;
-  onToggleTheme: () => void;
+  palette: ColorPalette;
+  onCyclePalette: () => void;
 };
 
 export function StatusBar({
@@ -22,9 +22,11 @@ export function StatusBar({
   notice,
   dirty,
   saving,
-  theme,
-  onToggleTheme,
+  palette,
+  onCyclePalette,
 }: StatusBarProps) {
+  const paletteLabel = PALETTE_META[palette].label;
+
   return (
     <footer className="status-bar">
       <span className="status-item" title={vaultPath ? `${vaultPath} / wiki` : ""}>
@@ -40,11 +42,12 @@ export function StatusBar({
       <button
         type="button"
         className="icon-btn status-theme"
-        data-icon={theme === "dark" ? "sun" : "moon"}
-        onClick={onToggleTheme}
-        title="切换深浅色"
+        data-icon="palette"
+        onClick={onCyclePalette}
+        title={`界面配色：${paletteLabel}（点击切换）`}
       >
-        {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+        <Palette size={14} />
+        <span className="status-palette-label">{paletteLabel}</span>
       </button>
     </footer>
   );

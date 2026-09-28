@@ -5,7 +5,13 @@ import { TitleBar, type TitleBarCentaurProps } from "./components/TitleBar";
 import { Workspace } from "./components/Workspace";
 import { vaultName } from "./lib/fileTree";
 import { hydrateProviders } from "./lib/llmProviders";
-import { applyTheme, loadTheme, type Theme } from "./theme";
+import {
+  applyPalette,
+  cyclePalette,
+  loadPalette,
+  paletteGraphTheme,
+  type ColorPalette,
+} from "./theme";
 
 const defaultSettings: VaultSettings = {
   vaultPath: "",
@@ -20,7 +26,8 @@ const defaultSettings: VaultSettings = {
 };
 
 export default function App() {
-  const [theme, setTheme] = useState<Theme>(() => loadTheme());
+  const [palette, setPalette] = useState<ColorPalette>(() => loadPalette());
+  const graphTheme = paletteGraphTheme(palette);
   const [screen, setScreen] = useState<"onboarding" | "main">("onboarding");
   const [settings, setSettings] = useState<VaultSettings>(defaultSettings);
   const [error, setError] = useState<string | null>(null);
@@ -29,8 +36,8 @@ export default function App() {
   const [titleBarCentaur, setTitleBarCentaur] = useState<TitleBarCentaurProps | null>(null);
 
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    applyPalette(palette);
+  }, [palette]);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,10 +60,15 @@ export default function App() {
     };
   }, []);
 
-  const toggleTheme = useCallback(() => {
-    setTheme((t) => {
-      const next = t === "dark" ? "light" : "dark";
-      applyTheme(next);
+  const onPaletteChange = useCallback((next: ColorPalette) => {
+    setPalette(next);
+    applyPalette(next);
+  }, []);
+
+  const cycleColorPalette = useCallback(() => {
+    setPalette((current) => {
+      const next = cyclePalette(current);
+      applyPalette(next);
       return next;
     });
   }, []);
@@ -114,6 +126,8 @@ export default function App() {
           <Onboarding
             settings={settings}
             onChange={setSettings}
+            palette={palette}
+            onPaletteChange={onPaletteChange}
             busy={busy}
             error={error}
             onStart={() => void start()}
@@ -123,8 +137,10 @@ export default function App() {
             key={settings.vaultPath}
             settings={settings}
             onSettings={setSettings}
-            theme={theme}
-            onToggleTheme={toggleTheme}
+            colorPalette={palette}
+            graphTheme={graphTheme}
+            onColorPaletteChange={onPaletteChange}
+            onCycleColorPalette={cycleColorPalette}
             error={error}
             setError={setError}
             busy={busy}

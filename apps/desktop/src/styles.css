@@ -15,13 +15,15 @@
   --dur-icon: 250ms;
 }
 
-html[data-theme="dark"],
-html:not([data-theme]) {
+/* Palette — 暗色：经典深色界面 */
+html[data-palette="dark"],
+html:not([data-palette]) {
   color-scheme: dark;
-  --bg: #1e1e1e;
-  --bg-elevated: #161616;
+  --chrome: #111111;
   --ribbon: #111111;
   --sidebar: #202020;
+  --bg: #1e1e1e;
+  --bg-elevated: #161616;
   --panel: #1e1e1e;
   --ink: #dcddde;
   --muted: #8b8b8b;
@@ -40,12 +42,14 @@ html:not([data-theme]) {
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
 }
 
-html[data-theme="light"] {
+/* Palette — 明亮：经典浅色界面 */
+html[data-palette="light"] {
   color-scheme: light;
-  --bg: #ffffff;
-  --bg-elevated: #f4f4f4;
+  --chrome: #f0f0f0;
   --ribbon: #f0f0f0;
   --sidebar: #f7f7f7;
+  --bg: #ffffff;
+  --bg-elevated: #f4f4f4;
   --panel: #ffffff;
   --ink: #222222;
   --muted: #6b6b6b;
@@ -62,6 +66,58 @@ html[data-theme="light"] {
   --status: #f4f4f4;
   --input: #ffffff;
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+}
+
+/* Palette 2 — 暖调 / 米白：阅读区浅底深字，边框最深，主色为奶油米白 */
+html[data-palette="warm"] {
+  color-scheme: light;
+  --chrome: #dfb6b2;
+  --ribbon: #dfb6b2;
+  --sidebar: #fbe4d8;
+  --bg: #fbe4d8;
+  --bg-elevated: #f5d9d2;
+  --panel: #fff9f4;
+  --ink: #190019;
+  --muted: #522b5b;
+  --line: #190019;
+  --line-strong: #2b124c;
+  --hover: rgba(25, 0, 25, 0.05);
+  --active: rgba(25, 0, 25, 0.09);
+  --accent: #2b124c;
+  --accent-ink: #fbe4d8;
+  --danger: #b83232;
+  --link: #522b5b;
+  --user-bg: #f5d9d2;
+  --agent-bg: #fff9f4;
+  --status: #dfb6b2;
+  --input: #fff9f4;
+  --shadow: 0 12px 40px rgba(25, 0, 25, 0.12);
+}
+
+/* Palette 3 — 蓝调：阅读区浅灰蓝底深字，边框最深 */
+html[data-palette="blue-tone"] {
+  color-scheme: light;
+  --chrome: #9ba8ab;
+  --ribbon: #9ba8ab;
+  --sidebar: #ccd0cf;
+  --bg: #e3e6e5;
+  --bg-elevated: #ccd0cf;
+  --panel: #f2f3f3;
+  --ink: #06141b;
+  --muted: #4a5c6a;
+  --line: #06141b;
+  --line-strong: #11212d;
+  --hover: rgba(6, 20, 27, 0.05);
+  --active: rgba(6, 20, 27, 0.09);
+  --accent: #253745;
+  --accent-ink: #ccd0cf;
+  --danger: #b83232;
+  --link: #253745;
+  --user-bg: #ccd0cf;
+  --agent-bg: #f2f3f3;
+  --status: #9ba8ab;
+  --input: #f2f3f3;
+  --shadow: 0 12px 40px rgba(6, 20, 27, 0.14);
 }
 
 * {
@@ -2485,6 +2541,99 @@ textarea:focus {
   font-size: 0.85rem;
 }
 
+.palette-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.65rem;
+}
+
+.palette-card {
+  display: grid;
+  gap: 0.55rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  text-align: left;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.palette-card:hover {
+  border-color: var(--line-strong);
+}
+
+.palette-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.palette-card-preview {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  grid-template-rows: 0.55rem 1.35rem 0.9rem;
+  gap: 2px;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.palette-layer-chrome {
+  grid-column: 1 / -1;
+}
+
+.palette-layer-sidebar {
+  grid-row: 2 / 4;
+}
+
+.palette-layer-panel {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.palette-layer-accent {
+  grid-column: 2;
+  grid-row: 3;
+  opacity: 0.92;
+}
+
+.palette-card-copy {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.palette-card-copy strong {
+  font-size: 0.82rem;
+}
+
+.palette-card-copy span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.palette-swatches {
+  display: flex;
+  gap: 0.28rem;
+  flex-wrap: wrap;
+}
+
+.palette-swatch {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.status-palette-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
 .provider-picker {
   display: grid;
   border: 1px solid var(--line);
@@ -3088,9 +3237,6 @@ button.ghost {
   cursor: pointer;
 }
 
-html[data-theme="light"] .graph-hop {
-  background: #ececec;
-}
 
 .graph-hop.active {
   background: var(--ink);
@@ -3143,9 +3289,11 @@ html[data-theme="light"] .graph-hop {
 }
 
 .status-theme {
-  width: 22px;
-  height: 22px;
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  min-height: 22px;
+  padding: 0 0.2rem;
 }
 
 .toast-error {

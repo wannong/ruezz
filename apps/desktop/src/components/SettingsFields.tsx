@@ -19,10 +19,13 @@ import {
   syncSettings,
   uniqueModelIds,
 } from "../lib/llmProviders";
+import { PALETTE_META, PALETTE_ORDER, type ColorPalette } from "../theme";
 
 type SettingsFieldsProps = {
   settings: VaultSettings;
   onChange: (next: VaultSettings) => void;
+  palette: ColorPalette;
+  onPaletteChange: (palette: ColorPalette) => void;
 };
 
 function hostLabel(url: string): string {
@@ -35,7 +38,7 @@ function hostLabel(url: string): string {
   }
 }
 
-export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
+export function SettingsFields({ settings, onChange, palette, onPaletteChange }: SettingsFieldsProps) {
   const providers = providersOf(settings);
   const activeId = activeProviderIdOf(settings, providers);
   const [providerBusy, setProviderBusy] = useState<string | null>(null);
@@ -227,6 +230,42 @@ export function SettingsFields({ settings, onChange }: SettingsFieldsProps) {
           </button>
         </div>
       </label>
+
+      <div className="settings-section-head"><span>界面配色</span></div>
+      <p className="hint">暗色 / 明亮为经典深浅色；米白、蓝调为定制浅色阅读区 + 深色文字。</p>
+      <div className="palette-picker" role="radiogroup" aria-label="界面配色">
+        {PALETTE_ORDER.map((id) => {
+          const meta = PALETTE_META[id];
+          const active = palette === id;
+          const { chrome, sidebar, panel, border } = meta.preview;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              className={`palette-card${active ? " active" : ""}`}
+              onClick={() => onPaletteChange(id)}
+            >
+              <span className="palette-card-preview" aria-hidden="true">
+                <span className="palette-layer palette-layer-chrome" style={{ background: chrome }} />
+                <span className="palette-layer palette-layer-sidebar" style={{ background: sidebar, borderRight: `2px solid ${border}` }} />
+                <span className="palette-layer palette-layer-panel" style={{ background: panel }} />
+                <span className="palette-layer palette-layer-accent" style={{ background: border }} />
+              </span>
+              <span className="palette-card-copy">
+                <strong>{meta.label}</strong>
+                <span>{meta.description}</span>
+              </span>
+              <span className="palette-swatches" aria-hidden="true">
+                {meta.swatches.map((color) => (
+                  <span key={color} className="palette-swatch" style={{ background: color }} />
+                ))}
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
       <div className="settings-section-head"><span>便签外观</span></div>
       <div className="idea-appearance-settings">

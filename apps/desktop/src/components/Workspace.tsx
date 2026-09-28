@@ -36,7 +36,8 @@ import { joinWikiId, parentWikiId, pasteDest, type WikiClip } from "../lib/fileT
 import { tabKey, type Tab } from "../lib/tabs";
 import { activeProviderIdOf, modelSwitchKey, providersOf, syncSettings, uniqueModelIds } from "../lib/llmProviders";
 import { useMediaQuery } from "../lib/useMediaQuery";
-import type { Theme } from "../theme";
+import type { ColorPalette, Theme } from "../theme";
+import { PALETTE_META } from "../theme";
 import { PanelOpenGlyph } from "./iconGlyphs";
 import { appendSelectionToDraft } from "./agentChatCore";
 import { CommandPalette, type PaletteCommand, type PaletteMode } from "./CommandPalette";
@@ -59,8 +60,10 @@ import type { TitleBarCentaurProps } from "./TitleBar";
 type WorkspaceProps = {
   settings: VaultSettings;
   onSettings: (next: VaultSettings) => void;
-  theme: Theme;
-  onToggleTheme: () => void;
+  colorPalette: ColorPalette;
+  graphTheme: Theme;
+  onColorPaletteChange: (palette: ColorPalette) => void;
+  onCycleColorPalette: () => void;
   error: string | null;
   setError: (message: string | null) => void;
   busy: boolean;
@@ -105,8 +108,10 @@ function clampHops(n: unknown): number {
 export function Workspace({
   settings,
   onSettings,
-  theme,
-  onToggleTheme,
+  colorPalette,
+  graphTheme,
+  onColorPaletteChange,
+  onCycleColorPalette,
   error,
   setError,
   busy,
@@ -1365,11 +1370,11 @@ export function Workspace({
       { id: "graph", label: "打开图谱", hint: "Ctrl+G", run: () => { setRightCollapsed(false); setRightView("graph"); } },
       { id: "ingest", label: "入库…", run: () => { setIngestFolderId(null); setIngestOpen(true); } },
       { id: "settings", label: "打开设置", run: () => setSettingsOpen(true) },
-      { id: "theme", label: "切换深浅色", run: onToggleTheme },
+      { id: "theme", label: `切换界面配色（${PALETTE_META[colorPalette].label}）`, run: onCycleColorPalette },
       { id: "left", label: "折叠/展开左栏", hint: "Ctrl+[", run: () => setLeftCollapsed((v) => !v) },
       { id: "right", label: "折叠/展开右栏", hint: "Ctrl+]", run: () => setRightCollapsedAnimated(!rightCollapsed) },
     ],
-    [onToggleTheme, activePageId, saveNote, rightCollapsed, setRightCollapsedAnimated],
+    [onCycleColorPalette, colorPalette, activePageId, saveNote, rightCollapsed, setRightCollapsedAnimated],
   );
 
   useEffect(() => {
@@ -1585,7 +1590,7 @@ export function Workspace({
           graph={graph}
           ideas={ideas}
           ideasVisible={ideasVisible}
-          theme={theme}
+          theme={graphTheme}
            onDraft={(value) => sessionId ? updateAgentState(sessionId, { draft: value }) : setDraftFallback(value)}
           onSend={() => void sendMessage()}
           onStop={() => void stopGeneration()}
@@ -1665,8 +1670,8 @@ export function Workspace({
         notice={notice}
         dirty={activeDirty}
         saving={noteSaving}
-        theme={theme}
-        onToggleTheme={onToggleTheme}
+        palette={colorPalette}
+        onCyclePalette={onCycleColorPalette}
       />
       <Presence open={!!error}>
         <div className="toast-error" onClick={() => setError(null)}>
@@ -1702,6 +1707,8 @@ export function Workspace({
       <Presence open={settingsOpen}>
         <SettingsModal
           settings={settings}
+          palette={colorPalette}
+          onPaletteChange={onColorPaletteChange}
           busy={busy}
           onClose={() => setSettingsOpen(false)}
           onSave={saveSettings}

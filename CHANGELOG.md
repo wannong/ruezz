@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Microsoft Store / MSIX packaging scaffold (`store/msix`, `pnpm release:msix`, `docs/MICROSOFT_STORE.md`).
 - Public privacy policy (`PRIVACY.md`) for Partner Center.
 
+## [1.2.4] - 2026-09-28
+
+### Added
+
+- Settings **界面配色** picker with four layered themes: classic **暗色** / **明亮**, plus **米白** and **蓝调** reading palettes.
+- Status bar palette button to cycle themes without opening settings.
+
+### Changed
+
+- Replaced the simple dark/light toggle with persistent `ruezz.palette` selection (legacy theme keys still migrate).
+
 ## [1.2.3] - 2026-09-19
 
 ### Added
