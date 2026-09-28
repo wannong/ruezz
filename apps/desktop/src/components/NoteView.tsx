@@ -1,13 +1,18 @@
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
 import { Star } from "lucide-react";
 import type { Idea, IdeaSelector, PageContent, PageSummary } from "../api";
 import { markdownBody } from "../lib/noteId";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { MarkdownPreview } from "./MarkdownPreview";
-import { DocumentPreview } from "./DocumentPreview";
 import type { PageViewMemory } from "../lib/pageViewMemory";
 
+const DocumentPreview = lazy(() =>
+  import("./DocumentPreview").then((mod) => ({ default: mod.DocumentPreview })),
+);
+
 export type NoteMode = "read" | "edit" | "source";
+
+const documentPreviewFallback = <div className="empty-center loading-breathe">正在加载预览…</div>;
 
 type NoteViewProps = {
   page: PageContent;
@@ -258,6 +263,26 @@ export function NoteView({
       </div>
       {isLiterature ? (
         hasSource ? (
+          <Suspense fallback={documentPreviewFallback}>
+            <DocumentPreview
+              pageId={page.id}
+              type={sourceType!}
+              title={page.title ?? page.id.split("/").pop() ?? page.id}
+              onRename={onRename}
+              ideas={ideas}
+              ideasVisible={ideasVisible}
+              onIdeasVisible={onIdeasVisible}
+              onCreateIdea={onCreateIdea}
+              onUpdateIdea={onUpdateIdea}
+              viewMemory={viewMemory}
+              onViewMemoryChange={onViewMemoryChange}
+            />
+          </Suspense>
+        ) : (
+          <div className="empty-center">此文献暂无可浏览的原件</div>
+        )
+      ) : mode === "source" && hasSource ? (
+        <Suspense fallback={documentPreviewFallback}>
           <DocumentPreview
             pageId={page.id}
             type={sourceType!}
@@ -271,23 +296,7 @@ export function NoteView({
             viewMemory={viewMemory}
             onViewMemoryChange={onViewMemoryChange}
           />
-        ) : (
-          <div className="empty-center">此文献暂无可浏览的原件</div>
-        )
-      ) : mode === "source" && hasSource ? (
-        <DocumentPreview
-          pageId={page.id}
-          type={sourceType!}
-          title={page.title ?? page.id.split("/").pop() ?? page.id}
-          onRename={onRename}
-          ideas={ideas}
-          ideasVisible={ideasVisible}
-          onIdeasVisible={onIdeasVisible}
-          onCreateIdea={onCreateIdea}
-          onUpdateIdea={onUpdateIdea}
-          viewMemory={viewMemory}
-          onViewMemoryChange={onViewMemoryChange}
-        />
+        </Suspense>
       ) : mode === "edit" ? (
         <div className="note-edit-split">
           <textarea

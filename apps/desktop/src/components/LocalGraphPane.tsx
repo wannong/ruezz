@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { Share2 } from "lucide-react";
 import type { GraphDto } from "../api";
 import { egoGraph, type GraphViewScope } from "../lib/graph";
 import type { Theme } from "../theme";
-import { GraphView } from "./GraphView";
+
+const GraphView = lazy(() => import("./GraphView").then((mod) => ({ default: mod.GraphView })));
 
 const HOP_LABELS: Record<1 | 2 | 3, string> = {
   1: "1 层邻居",
@@ -36,14 +37,16 @@ export function LocalGraphPane({ graph, pageId, theme, scope, onScope, onOpen }:
       {waitingForPage && <div className="empty">打开一篇笔记查看相连图谱</div>}
       {loading && <div className="empty loading-breathe">正在加载图谱…</div>}
       {!waitingForPage && shown && (
-        <GraphView
-          graph={shown}
-          theme={theme}
-          focusId={pageId}
-          compact
-          replayKey={String(scope)}
-          onOpen={onOpen}
-        />
+        <Suspense fallback={<div className="empty loading-breathe">正在加载图谱…</div>}>
+          <GraphView
+            graph={shown}
+            theme={theme}
+            focusId={pageId}
+            compact
+            replayKey={String(scope)}
+            onOpen={onOpen}
+          />
+        </Suspense>
       )}
       <div className="graph-hops" role="radiogroup" aria-label="图谱范围">
         <button

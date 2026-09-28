@@ -10,6 +10,7 @@ import {
   placePdfAssetsBesidePage,
   type Pdf2mdLayoutResult,
 } from "./pdf2md-layout.js";
+import { isInsideOrEqualDir, isStrictlyInsideDir } from "./path-helpers.js";
 
 export const TEXT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".text"]);
 
@@ -165,7 +166,7 @@ async function archiveIntoSources(root: string, absFile: string): Promise<string
   const rawDir = path.join(root, "raw", "sources");
   const realRaw = await fs.realpath(rawDir);
   const realFile = await fs.realpath(absFile);
-  if (isWithinDir(root, realRaw) && isUnderDir(realRaw, realFile)) {
+  if (isInsideOrEqualDir(root, realRaw) && isStrictlyInsideDir(realRaw, realFile)) {
     return realFile;
   }
   const dest = await uniqueFilePath(rawDir, path.basename(absFile));
@@ -272,16 +273,6 @@ async function appendIndexRow(root: string, pageId: string, summary: string, day
   if (prev.includes(link)) return;
   if (!prev.endsWith("\n")) prev += "\n";
   await fs.writeFile(indexPath, `${prev}| ${link} | ${summary} | ${day} |\n`, "utf8");
-}
-
-function isUnderDir(dir: string, file: string): boolean {
-  const rel = path.relative(path.resolve(dir), path.resolve(file));
-  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
-}
-
-function isWithinDir(dir: string, file: string): boolean {
-  const rel = path.relative(path.resolve(dir), path.resolve(file));
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
 async function pathExists(target: string): Promise<boolean> {

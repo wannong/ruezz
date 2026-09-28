@@ -16,6 +16,7 @@ import {
 import { createLlmClient, type LlmClient } from "@wikihome/llm";
 import { createWiki, parseFrontmatter, sourceReferenceIdentity, type Wiki } from "llmwiki-core";
 import { ingestWholeDocument, slugify, uniqueFilePath } from "./ingest-document.js";
+import { isInsideOrEqualDir, isStrictlyInsideDir } from "./path-helpers.js";
 export { findBundledPython, pythonCandidates } from "./markitdown.js";
 export {
   convertPdfToTemp,
@@ -41,16 +42,6 @@ function normalizePageId(idOrPath: string): string {
     throw new Error("页面 id 无效");
   }
   return parts.join("/");
-}
-
-function isInsideDir(dir: string, file: string): boolean {
-  const rel = path.relative(path.resolve(dir), path.resolve(file));
-  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
-}
-
-function isWithinDir(dir: string, file: string): boolean {
-  const rel = path.relative(path.resolve(dir), path.resolve(file));
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
 function wikiDir(root: string): string {
@@ -96,11 +87,11 @@ async function sourceFileForPage(root: string, sources: unknown): Promise<string
     const identity = sourceReferenceIdentity(String(value)).replace(/\\/g, "/");
     if (!identity || identity.startsWith("/") || identity.split("/").some((part) => part === ".." || part === ".")) continue;
     const candidate = path.resolve(rawDir, ...identity.split("/"));
-    if (!isInsideDir(rawDir, candidate)) continue;
+    if (!isStrictlyInsideDir(rawDir, candidate)) continue;
     const info = await fs.lstat(candidate).catch(() => null);
     if (!info?.isFile() || info.isSymbolicLink() || !SOURCE_EXTENSIONS.has(path.extname(candidate).toLowerCase())) continue;
     const realFile = await fs.realpath(candidate);
-    if (!isInsideDir(realRawDir, realFile)) continue;
+    if (!isStrictlyInsideDir(realRawDir, realFile)) continue;
     return realFile;
   }
   return null;
@@ -143,13 +134,13 @@ async function ensureDirectoryInsideRoot(root: string, relative: string): Promis
       ancestor = parent;
     }
     const realAncestor = await fs.realpath(ancestor);
-    if (!isWithinDir(realRoot, realAncestor)) {
+    if (!isInsideOrEqualDir(realRoot, realAncestor)) {
       throw new Error(`知识库目录通过链接越出了 vault：${relative}`);
     }
     await fs.mkdir(target, { recursive: true });
   }
   const realTarget = await fs.realpath(target);
-  if (!isInsideDir(realRoot, realTarget)) {
+  if (!isStrictlyInsideDir(realRoot, realTarget)) {
     throw new Error(`知识库目录通过链接越出了 vault：${relative}`);
   }
   return realTarget;
@@ -202,12 +193,12 @@ async function dirHasMarkdown(abs: string): Promise<boolean> {
 }
 
 async function assertInsideWiki(root: string, target: string): Promise<void> {
-  if (!isInsideDir(wikiDir(root), target)) {
+  if (!isStrictlyInsideDir(wikiDir(root), target)) {
     throw new Error("只能操作 wiki/ 下的路径");
   }
   const realRoot = await fs.realpath(root);
   const realWiki = await fs.realpath(wikiDir(root));
-  if (!isInsideDir(realRoot, realWiki)) {
+  if (!isStrictlyInsideDir(realRoot, realWiki)) {
     throw new Error("wiki/ 路径通过链接越出了 vault");
   }
   const existing = await fs.realpath(target).catch(() => null);
@@ -221,7 +212,7 @@ async function assertInsideWiki(root: string, target: string): Promise<void> {
     }
     realTarget = path.resolve(await fs.realpath(ancestor), path.relative(ancestor, target));
   }
-  if (!isInsideDir(realWiki, realTarget) || !isInsideDir(realRoot, realTarget)) {
+  if (!isStrictlyInsideDir(realWiki, realTarget) || !isStrictlyInsideDir(realRoot, realTarget)) {
     throw new Error("路径通过链接越出了 wiki/");
   }
 }

@@ -213,8 +213,6 @@ export type AgentProviderCatalog = {
 export const isTauriRuntime = () =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-const isTauri = isTauriRuntime;
-
 /** Dev fallback: talk to sidecar over HTTP if VITE_SIDECAR_HTTP is set. */
 async function httpRpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
   const base = import.meta.env.VITE_SIDECAR_HTTP as string | undefined;
@@ -244,7 +242,7 @@ function rpcError(err: unknown): Error {
 
 async function rpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
   try {
-    if (isTauri()) {
+    if (isTauriRuntime()) {
       return await invoke<T>("rpc", { method, params });
     }
     return await httpRpc<T>(method, params);
@@ -372,7 +370,7 @@ export const api = {
     onEvent: (event: AgentStreamEvent) => void,
     signal?: AbortSignal,
   ) =>
-    isTauri()
+    isTauriRuntime()
       ? tauriPromptStream(opts, onEvent)
       : httpPromptStream(opts, onEvent, signal),
   agentAbort: () => rpc<{ ok: boolean }>("agent_abort"),
@@ -411,7 +409,7 @@ export const api = {
   vaultGraph: () => rpc<GraphDto>("vault_graph"),
   vaultBacklinks: (id: string) => rpc<PageSummary[]>("vault_backlinks", { id }),
   pickFolder: async (title?: string) => {
-    if (!isTauri()) {
+    if (!isTauriRuntime()) {
       const typed = window.prompt(title ?? "知识库文件夹路径");
       return typed?.trim() || null;
     }
@@ -419,7 +417,7 @@ export const api = {
     return typeof selected === "string" ? selected : null;
   },
   pickFiles: async () => {
-    if (!isTauri()) return [] as string[];
+    if (!isTauriRuntime()) return [] as string[];
     const selected = await open({
       multiple: true,
       filters: [

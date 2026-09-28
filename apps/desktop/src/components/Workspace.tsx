@@ -3,39 +3,23 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   api,
   isTauriRuntime,
-  type AgentSession,
-  type AgentAttachment,
-  type AgentSessionMessage,
   type AgentSessionSummary,
   type GraphDto,
   type Idea,
   type IdeaSelector,
-  type PageContent,
-  type PageSummary,
   type VaultSettings,
 } from "../api";
 import { clampGraphScope } from "../lib/graph";
 import { loadPref, savePref } from "../lib/prefs";
 import { loadFavorites, remapFavoriteFolder, remapFavoritePage, saveFavorites } from "../lib/favorites";
-import {
-  addLibraryFolder,
-  assignPagesToFolder,
-  clearLegacyLibraryStorage,
-  deleteLibraryFolder,
-  folderDescendantIds,
-  loadLibraryOrganization,
-  pickLegacyLibraryToMigrate,
-  renameLibraryFolder,
-  staleLegacyVaultPaths,
-  emptyLibraryOrganization,
-  type LibraryOrganization,
-} from "../lib/libraryFolders";
+import { assignPagesToFolder } from "../lib/libraryFolders";
 import { parseOutline } from "../lib/outline";
 import { markdownBody } from "../lib/noteId";
 import { joinWikiId, parentWikiId, pasteDest, type WikiClip } from "../lib/fileTree";
-import { tabKey, type Tab } from "../lib/tabs";
-import { activeProviderIdOf, modelSwitchKey, providersOf, syncSettings, uniqueModelIds } from "../lib/llmProviders";
 import { useMediaQuery } from "../lib/useMediaQuery";
+import { useAgentSession } from "../lib/workspace/useAgentSession";
+import { useLibraryOrganization } from "../lib/workspace/useLibraryOrganization";
+import { usePageTabs } from "../lib/workspace/usePageTabs";
 import type { ColorPalette, Theme } from "../theme";
 import { PALETTE_META } from "../theme";
 import { PanelOpenGlyph } from "./iconGlyphs";
@@ -44,20 +28,13 @@ import { CommandPalette, type PaletteCommand, type PaletteMode } from "./Command
 import { IngestModal } from "./IngestModal";
 import { LeftSidebar, type LeftView, type LinkPicker } from "./LeftSidebar";
 import { NewNoteModal } from "./NewNoteModal";
-import {
-  defaultPageMode,
-  remapRecordId,
-  remapRecordIds,
-  type PageViewMemory,
-} from "../lib/pageViewMemory";
-import { NoteView, type NoteMode } from "./NoteView";
+import { NoteView } from "./NoteView";
 import { Modal } from "./Modal";
 import { Presence } from "./Presence";
 import { Ribbon } from "./Ribbon";
 import { RightSidebar, type RightView } from "./RightSidebar";
 import { SettingsModal } from "./SettingsModal";
 import { AgentFloatingIsland } from "./AgentFloatingIsland";
-import { RUEZZ_CELEBRATE_MS } from "../lib/centaur-character/activity";
 import { centaurTransferMs } from "./CentaurChromeSlot";
 import { StatusBar } from "./StatusBar";
 import { TabBar } from "./TabBar";
@@ -83,23 +60,9 @@ const LEFT_MAX = 420;
 const RIGHT_MIN = 240;
 const RIGHT_MAX = 480;
 
-type AgentUiState = {
-  messages: AgentSessionMessage[];
-  attachments: AgentAttachment[];
-  pendingUser: string | null;
-  streamingText: string;
-  streamingTools: Array<{ id: string; name: string; status: "running" | "done" | "error" }>;
-  streamingPhase: "thinking" | "tool" | "answer" | null;
-  draft: string;
-  busy: boolean;
-};
 type RelatedPanel =
   | { kind: "sessions"; label: string; sessions: AgentSessionSummary[] }
   | { kind: "files"; label: string; files: Array<{ id: string; label: string }> };
-
-const emptyAgentState = (): AgentUiState => ({
-  messages: [], attachments: [], pendingUser: null, streamingText: "", streamingTools: [], streamingPhase: null, draft: "", busy: false,
-});
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -133,20 +96,7 @@ export function Workspace({
     pink: { paper: "239, 202, 214", ink: "65, 33, 44" },
   }[settings.ideaColor] ?? { paper: "255, 255, 255", ink: "38, 38, 38" };
   const narrow = useMediaQuery("(max-width: 960px)");
-  const [pages, setPages] = useState<PageSummary[]>([]);
-  const [folders, setFolders] = useState<string[]>([]);
   const [clip, setClip] = useState<WikiClip | null>(null);
-  const [tabs, setTabs] = useState<Tab[]>([]);
-  const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [pageHistory, setPageHistory] = useState<string[]>([]);
-  const [pageHistoryIndex, setPageHistoryIndex] = useState(-1);
-  const [pageCache, setPageCache] = useState<Record<string, PageContent>>({});
-  const [missingIds, setMissingIds] = useState<Record<string, true>>({});
-  const [pageModes, setPageModes] = useState<Record<string, NoteMode>>({});
-  const pageViewMemoryRef = useRef<Record<string, PageViewMemory>>({});
-  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
-  const [noteSaving, setNoteSaving] = useState(false);
-  const [tagError, setTagError] = useState<string | null>(null);
   const [leftView, setLeftView] = useState<LeftView>("library");
   const [favoriteIds, setFavoriteIds] = useState<string[]>(() => loadFavorites(settings.vaultPath));
   const [rightView, setRightView] = useState<RightView>("agent");
@@ -155,119 +105,168 @@ export function Workspace({
   const [headerCentaurShown, setHeaderCentaurShown] = useState(true);
   const [titlebarCentaurShown, setTitlebarCentaurShown] = useState(() => loadPref("rightCollapsed", false));
   const [agentIslandOpen, setAgentIslandOpen] = useState(false);
-  const [ruezzCelebrate, setRuezzCelebrate] = useState(false);
-  const ruezzCelebrateTimer = useRef<number | undefined>(undefined);
   const centaurTransferTimer = useRef<number | undefined>(undefined);
   const [leftWidth, setLeftWidth] = useState(() => loadPref("leftWidth", 240));
   const [rightWidth, setRightWidth] = useState(() => loadPref("rightWidth", 320));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [ingestOpen, setIngestOpen] = useState(false);
   const [ingestFolderId, setIngestFolderId] = useState<string | null>(null);
-  const [libraryOrganization, setLibraryOrganization] = useState(() => loadLibraryOrganization(settings.vaultPath));
-  const libraryRef = useRef(libraryOrganization);
-  libraryRef.current = libraryOrganization;
   const [newNoteOpen, setNewNoteOpen] = useState(false);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [graph, setGraph] = useState<GraphDto | null>(null);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [ideasVisible, setIdeasVisible] = useState(() => loadPref("ideasVisible", true));
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [openSessionIds, setOpenSessionIds] = useState<string[]>([]);
-  const [sessions, setSessions] = useState<AgentSessionSummary[]>([]);
-  const [agentStates, setAgentStates] = useState<Record<string, AgentUiState>>({});
-  const [draftFallback, setDraftFallback] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [relatedPanel, setRelatedPanel] = useState<RelatedPanel | null>(null);
   const graphDepth = clampHops(loadPref("agentGraphDepth", 0));
   const [graphHops, setGraphHops] = useState(() => clampGraphScope(loadPref("graphViewDepth", 1)));
   const [linkPicker, setLinkPicker] = useState<LinkPicker | null>(null);
-  const [runnerProviders, setRunnerProviders] = useState<Array<{ name: string; models: string[] }>>([]);
-  const sendingRef = useRef(false);
-  const abortingRef = useRef(false);
-  const sessionLoadGen = useRef(0);
   const lastPaletteMode = useRef<PaletteMode>("quick");
   const lastError = useRef<string | null>(null);
   if (error) lastError.current = error;
 
-  const activeTab = tabs.find((t) => tabKey(t) === activeKey) ?? null;
-  const activePageId = activeTab?.kind === "page" ? activeTab.id : null;
-  const activePage = activePageId ? (pageCache[activePageId] ?? null) : null;
-  const activePageNoteMode = useMemo((): NoteMode => {
-    if (!activePage) return "read";
-    const savedMode = pageModes[activePage.id];
-    if (savedMode) return savedMode;
-    const sourceType = activePage.sourceType?.toLowerCase();
-    const hasSource = sourceType === "pdf" || sourceType === "docx";
-    return defaultPageMode(activePage.type, hasSource);
-  }, [activePage, pageModes]);
-  const setPageNoteMode = useCallback((mode: NoteMode) => {
-    if (!activePageId) return;
-    setPageModes((prev) => ({ ...prev, [activePageId]: mode }));
-    pageViewMemoryRef.current[activePageId] = { ...pageViewMemoryRef.current[activePageId], mode };
-  }, [activePageId]);
-  const togglePageNoteMode = useCallback(() => {
-    setPageNoteMode(activePageNoteMode === "edit" ? "read" : "edit");
-  }, [activePageNoteMode, setPageNoteMode]);
-  const patchPageViewMemory = useCallback((pageId: string, patch: Partial<PageViewMemory>) => {
-    pageViewMemoryRef.current[pageId] = { ...pageViewMemoryRef.current[pageId], ...patch };
+  const onError = useCallback((message: string) => setError(message), [setError]);
+
+  const loadGraph = useCallback(async () => {
+    const g = await api.vaultGraph();
+    setGraph(g);
   }, []);
-  const activeViewMemory = useMemo(() => {
-    if (!activePageId) return undefined;
-    return pageViewMemoryRef.current[activePageId];
-  }, [activePageId, activeKey]);
-  const handleActiveViewMemoryChange = useCallback((patch: Partial<PageViewMemory>) => {
-    if (!activePageId) return;
-    patchPageViewMemory(activePageId, patch);
-  }, [activePageId, patchPageViewMemory]);
-  const activeAgentState = sessionId ? (agentStates[sessionId] ?? emptyAgentState()) : emptyAgentState();
-  const { messages, attachments, pendingUser, streamingText, streamingTools, streamingPhase } = activeAgentState;
-  const draft = sessionId ? activeAgentState.draft : draftFallback;
-  const agentBusy = activeAgentState.busy;
-  const updateAgentState = useCallback((id: string, update: Partial<AgentUiState> | ((state: AgentUiState) => AgentUiState)) => {
-    setAgentStates((prev) => {
-      const current = prev[id] ?? emptyAgentState();
-      const next = typeof update === "function" ? update(current) : { ...current, ...update };
-      return { ...prev, [id]: next };
-    });
-  }, []);
-  const triggerRuezzCelebrate = useCallback(() => {
-    setRuezzCelebrate(true);
-    window.clearTimeout(ruezzCelebrateTimer.current);
-    ruezzCelebrateTimer.current = window.setTimeout(() => setRuezzCelebrate(false), RUEZZ_CELEBRATE_MS);
-  }, []);
-  const modelMissing = !settings.mock && !settings.model.trim();
-  const modelProviders = providersOf(settings);
-  const activeProviderId = activeProviderIdOf(settings, modelProviders);
-  const modelGroups = useMemo(() => {
-    const fromSettings = modelProviders
-      .map((provider) => ({
-        providerId: provider.id,
-        providerName: provider.name,
-        models:
-          provider.id === activeProviderId
-            ? uniqueModelIds([
-                settings.model,
-                ...provider.models,
-                ...runnerProviders.flatMap((item) => item.models),
-              ])
-            : provider.models,
-      }))
-      .filter((group) => group.models.length > 0);
-    if (fromSettings.length > 0) return fromSettings;
-    return runnerProviders
-      .map((provider) => ({
-        providerId: provider.name,
-        providerName: provider.name === "openai-compatible" ? "当前端点" : provider.name,
-        models: provider.models,
-      }))
-      .filter((group) => group.models.length > 0);
-  }, [modelProviders, activeProviderId, settings.model, runnerProviders]);
-  const modelValue = modelSwitchKey(activeProviderId, settings.model);
-  const modelLabel = settings.mock
-    ? "模型：Mock（不走 API）"
-    : modelMissing
-      ? "未选择模型 — 请在设置中填写 API 并拉取或输入模型名"
-      : `模型：${settings.model}`;
+
+  const onVaultMutated = useCallback(async () => {
+    await loadGraph();
+  }, [loadGraph]);
+
+  const pageTabs = usePageTabs({
+    onError,
+    setError,
+    onVaultMutated,
+    onPageIdRemapped: (oldId, newId) => {
+      setFavoriteIds((ids) => {
+        const next = remapFavoritePage(ids, oldId, newId);
+        saveFavorites(settings.vaultPath, next);
+        return next;
+      });
+    },
+    onFolderPrefixRemapped: (from, to, mapId) => {
+      setClip((cur) => {
+        if (!cur) return cur;
+        if (cur.kind === "folder" && cur.id === from) return { ...cur, id: to };
+        return { ...cur, id: mapId(cur.id) };
+      });
+      setFavoriteIds((ids) => {
+        const next = remapFavoriteFolder(ids, from, to);
+        saveFavorites(settings.vaultPath, next);
+        return next;
+      });
+    },
+  });
+
+  const {
+    pages,
+    folders,
+    tabs,
+    activeKey,
+    setActiveKey,
+    activeTab,
+    activePageId,
+    activePage,
+    activePageNoteMode,
+    setPageCache,
+    missingIds,
+    setPageModes,
+    noteDrafts,
+    setNoteDrafts,
+    noteSaving,
+    tagError,
+    pageHistory,
+    pageHistoryIndex,
+    activeViewMemory,
+    loadPages,
+    isDirty,
+    saveNote,
+    updatePageTags,
+    setPageNoteMode,
+    togglePageNoteMode,
+    handleActiveViewMemoryChange,
+    openPage: openPageInternal,
+    navigatePageHistory,
+    insertWikilink,
+    closeTab,
+    remapPageId,
+    remapFolderPrefix,
+    titleFor,
+    takenIds,
+  } = pageTabs;
+
+  const openPage = useCallback((id: string, recordHistory = true) => {
+    openPageInternal(id, recordHistory);
+    if (narrow) setLeftCollapsed(true);
+  }, [narrow, openPageInternal]);
+
+  const {
+    libraryOrganization,
+    persistLibrary,
+    createLibraryFolderIn,
+    renameLibraryFolderIn,
+    deleteLibraryFolderIn,
+    moveLibraryPages,
+  } = useLibraryOrganization({
+    vaultPath: settings.vaultPath,
+    onError,
+    onMigrated: setNotice,
+  });
+
+  const agent = useAgentSession({
+    settings,
+    onSettings,
+    onAgentTitle,
+    onError,
+    setError,
+    activePageId,
+    titleFor,
+    graphDepth,
+    onVaultMutated: async () => {
+      await loadPages();
+      await loadGraph();
+    },
+  });
+
+  const {
+    sessionId,
+    openSessionIds,
+    sessions,
+    setDraftFallback,
+    ruezzCelebrate,
+    messages,
+    attachments,
+    pendingUser,
+    streamingText,
+    streamingTools,
+    streamingPhase,
+    draft,
+    agentBusy,
+    modelGroups,
+    modelValue,
+    modelMissing,
+    modelLabel,
+    updateAgentState,
+    applySession,
+    refreshSessions,
+    refreshRunnerProviders,
+    triggerRuezzCelebrate,
+    createAgentIdea: createAgentIdeaInternal,
+    sendMessage,
+    stopGeneration,
+    newChat,
+    attachCurrentPage,
+    detachAttachment,
+    selectSession,
+    closeAgentSession,
+    deleteAgentSession,
+    archiveAgentSession,
+    switchModel,
+  } = agent;
+
   const agentOpen = !rightCollapsed && rightView === "agent";
   const graphOpen = !rightCollapsed && rightView === "graph";
   const shouldHandoffCentaur =
@@ -341,13 +340,20 @@ export function Workspace({
   ]);
 
   useEffect(() => () => window.clearTimeout(centaurTransferTimer.current), []);
-  useEffect(() => () => window.clearTimeout(ruezzCelebrateTimer.current), []);
-
   useEffect(() => () => onTitleBarCentaur?.(null), [onTitleBarCentaur]);
-
   useEffect(() => {
     if (!rightCollapsed) setAgentIslandOpen(false);
   }, [rightCollapsed]);
+
+  useEffect(() => {
+    loadGraph().catch(() => {
+      /* graph may be empty on fresh vault */
+    });
+  }, [loadGraph]);
+
+  useEffect(() => {
+    setFavoriteIds(loadFavorites(settings.vaultPath));
+  }, [settings.vaultPath]);
 
   const relatedSessions = useCallback((pageId: string, label: string) => {
     const matches = sessions.filter((session) =>
@@ -363,293 +369,11 @@ export function Workspace({
     setRelatedPanel({ kind: "files", label: session.title || "新对话", files });
   }, [pages]);
 
-  const onError = useCallback(
-    (message: string) => setError(message),
-    [setError],
-  );
-
-  const loadPages = useCallback(async () => {
-    const [list, folderList] = await Promise.all([api.vaultListPages(), api.vaultListFolders()]);
-    setPages(list);
-    setFolders(folderList);
-    return list;
-  }, []);
-
-  const loadGraph = useCallback(async () => {
-    const g = await api.vaultGraph();
-    setGraph(g);
-  }, []);
-
   const loadIdeas = useCallback(async () => {
     const result = await api.ideaList();
     setIdeas(result.ideas);
     return result.ideas;
   }, []);
-
-  const isDirty = useCallback(
-    (id: string) => {
-      const page = pageCache[id];
-      const text = noteDrafts[id];
-      return text != null && page != null && text !== page.raw;
-    },
-    [noteDrafts, pageCache],
-  );
-
-  const saveNote = useCallback(
-    async (id: string) => {
-      const page = pageCache[id];
-      const text = noteDrafts[id] ?? page?.raw;
-      if (!page || text == null || text === page.raw) return true;
-      setNoteSaving(true);
-      setError(null);
-      try {
-        const saved = await api.vaultWritePage(id, text);
-        setPageCache((c) => ({ ...c, [saved.id]: saved }));
-        setNoteDrafts((d) => {
-          if (d[id] !== text) return d;
-          const next = { ...d };
-          delete next[id];
-          return next;
-        });
-        await loadPages();
-        await loadGraph();
-        return true;
-      } catch (e) {
-        onError(e instanceof Error ? e.message : String(e));
-        return false;
-      } finally {
-        setNoteSaving(false);
-      }
-    },
-    [pageCache, noteDrafts, loadPages, loadGraph, onError, setError],
-  );
-
-  const updatePageTags = useCallback(async (id: string, tags: string[]) => {
-    setTagError(null);
-    try {
-      // Save an edited body first so the tag write cannot be overwritten by the autosave timer.
-      if (isDirty(id) && !(await saveNote(id))) throw new Error("正文保存失败，未更新标签");
-      const updated = await api.vaultUpdatePageTags(id, tags);
-      setPageCache((cache) => ({ ...cache, [id]: updated }));
-      setPages((current) => current.map((page) => page.id === id ? { ...page, tags: updated.tags } : page));
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      setTagError(message);
-      onError(message);
-      throw e;
-    }
-  }, [isDirty, onError, saveNote]);
-
-  useEffect(() => {
-    if (!activePageId) return;
-    const page = pageCache[activePageId];
-    const text = noteDrafts[activePageId];
-    if (!page || text == null || text === page.raw) return;
-    const timer = window.setTimeout(() => {
-      void saveNote(activePageId);
-    }, 1200);
-    return () => window.clearTimeout(timer);
-  }, [activePageId, noteDrafts, pageCache, saveNote]);
-
-  useEffect(() => {
-    loadPages().catch((e) => onError(String(e)));
-    loadGraph().catch(() => {
-      /* graph may be empty on fresh vault */
-    });
-  }, [loadPages, loadGraph, onError]);
-
-  useEffect(() => {
-    setFavoriteIds(loadFavorites(settings.vaultPath));
-  }, [settings.vaultPath]);
-
-  const librarySaving = useRef(false);
-  const persistLibrary = useCallback(async (mutate: (current: LibraryOrganization) => LibraryOrganization) => {
-    const current = libraryRef.current;
-    const drafted = mutate(current);
-    if (drafted === current) return;
-    librarySaving.current = true;
-    libraryRef.current = drafted;
-    setLibraryOrganization(drafted);
-    try {
-      const saved = await api.librarySave(drafted, current.revision);
-      libraryRef.current = saved;
-      setLibraryOrganization(saved);
-      clearLegacyLibraryStorage([settings.vaultPath, ...staleLegacyVaultPaths(saved)]);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-      try {
-        const remote = await api.libraryGet();
-        libraryRef.current = remote;
-        setLibraryOrganization(remote);
-      } catch {
-        libraryRef.current = current;
-        setLibraryOrganization(current);
-      }
-    } finally {
-      librarySaving.current = false;
-    }
-  }, [onError, settings.vaultPath]);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!librarySaving.current && libraryRef.current.revision === 0) {
-      const localFallback = loadLibraryOrganization(settings.vaultPath);
-      setLibraryOrganization(localFallback);
-      libraryRef.current = localFallback;
-    }
-    void (async () => {
-      try {
-        const remote = await api.libraryGet();
-        const registry = await api.vaultRegistry().catch(() => null);
-        const extraPaths: string[] = [];
-        if (registry) {
-          const entry = Object.values(registry.vaults).find((item) => item.currentPath === settings.vaultPath)
-            ?? registry.vaults[registry.activeVaultId];
-          if (entry) extraPaths.push(entry.currentPath, ...entry.pathHistory.map((item) => item.path));
-        }
-        const paths = [...new Set([settings.vaultPath, ...extraPaths])];
-        if (cancelled) return;
-        if (librarySaving.current || libraryRef.current.revision > remote.revision) {
-          clearLegacyLibraryStorage([...paths, ...staleLegacyVaultPaths(libraryRef.current)]);
-          return;
-        }
-        const candidates = paths.map((vaultPath) => loadLibraryOrganization(vaultPath));
-        const legacy = pickLegacyLibraryToMigrate(remote, [libraryRef.current, ...candidates]);
-        let next = remote;
-        if (legacy) {
-          next = await api.librarySave(legacy, remote.revision);
-          if (!cancelled) setNotice("已将旧的文献分类迁移到知识库");
-        }
-        if (cancelled) return;
-        libraryRef.current = next;
-        setLibraryOrganization(next);
-        clearLegacyLibraryStorage([...paths, ...staleLegacyVaultPaths(next)]);
-      } catch (e) {
-        if (cancelled) return;
-        if (libraryRef.current.folders.length === 0 && Object.keys(libraryRef.current.assignments).length === 0) {
-          libraryRef.current = emptyLibraryOrganization();
-        }
-        onError(e instanceof Error ? e.message : String(e));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [onError, settings.vaultPath]);
-
-  const createLibraryFolderIn = useCallback((parentId: string | null, name: string) => {
-    void persistLibrary((org) => addLibraryFolder(org, name, parentId));
-  }, [persistLibrary]);
-
-  const renameLibraryFolderIn = useCallback((folderId: string, name: string) => {
-    void persistLibrary((org) => renameLibraryFolder(org, folderId, name));
-  }, [persistLibrary]);
-
-  const deleteLibraryFolderIn = useCallback((folderId: string) => {
-    const org = libraryRef.current;
-    const folder = org.folders.find((item) => item.id === folderId);
-    if (!folder) return;
-    const removing = folderDescendantIds(org.folders, folderId);
-    const childCount = removing.size - 1;
-    const pageCount = Object.values(org.assignments).filter((id) => removing.has(id)).length;
-    const extra = [childCount > 0 ? `${childCount} 个子分类` : "", pageCount > 0 ? `${pageCount} 篇文献会移到上级或未分类` : ""].filter(Boolean).join("，");
-    if (!window.confirm(extra ? `确定删除分类「${folder.name}」吗？将同时处理${extra}。` : `确定删除分类「${folder.name}」吗？`)) return;
-    void persistLibrary((current) => deleteLibraryFolder(current, folderId));
-  }, [persistLibrary]);
-
-  const moveLibraryPages = useCallback((pageIds: string[], folderId: string | null) => {
-    void persistLibrary((org) => assignPagesToFolder(org, pageIds, folderId));
-  }, [persistLibrary]);
-
-  const openLibraryImport = useCallback((folderId: string | null) => {
-    setIngestFolderId(folderId);
-    setIngestOpen(true);
-  }, []);
-
-  const applySession = useCallback(
-    (session: AgentSession, activate = true) => {
-      if (activate) {
-        setSessionId(session.id);
-        setOpenSessionIds((prev) => prev.includes(session.id) ? prev : [...prev, session.id].slice(-3));
-      }
-      updateAgentState(session.id, (state) => ({ ...state, messages: session.messages, attachments: session.attachments ?? [], pendingUser: null, streamingText: "", streamingTools: [], streamingPhase: null, busy: false }));
-      setSessions((prev) => {
-           const summary: AgentSessionSummary = {
-          id: session.id,
-          title: session.title,
-          createdAt: session.createdAt,
-          updatedAt: session.updatedAt,
-          model: session.model,
-          messageCount: session.messages.length,
-           linkedPageIds: session.linkedPageIds,
-           attachments: session.attachments ?? [],
-          archived: Boolean(session.archived),
-        };
-        const index = prev.findIndex((item) => item.id === session.id);
-        if (index < 0) return [summary, ...prev];
-        const next = [...prev];
-        next[index] = summary;
-        return next;
-      });
-      if (activate) {
-        savePref(`agentSession:${settings.vaultPath}`, session.id);
-        onAgentTitle?.(session.title || "新对话");
-      }
-    },
-    [onAgentTitle, settings.vaultPath, updateAgentState],
-  );
-
-  const refreshSessions = useCallback(async () => {
-    const { sessions: list } = await api.agentSessionList();
-    setSessions(list);
-    return list;
-  }, []);
-
-  const refreshRunnerProviders = useCallback(async () => {
-    try {
-      const { providers } = await api.agentListProviders();
-      setRunnerProviders(providers);
-    } catch {
-      setRunnerProviders([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    const gen = ++sessionLoadGen.current;
-    let cancelled = false;
-    void (async () => {
-      try {
-        await refreshRunnerProviders();
-        const list = await refreshSessions();
-        if (cancelled || sessionLoadGen.current !== gen) return;
-        if (!list.length) {
-          setSessionId(null);
-          onAgentTitle?.(null);
-          return;
-        }
-        const saved = loadPref<string | null>(`agentSession:${settings.vaultPath}`, null);
-        const pick = list.find((item) => item.id === saved) ?? list[0];
-        const { session } = await api.agentSessionGet(pick.id);
-        if (cancelled || sessionLoadGen.current !== gen) return;
-        let current = session;
-        if (!settings.mock && settings.model.trim() && session.model.modelId !== settings.model) {
-          const updated = await api.agentSetModel({
-            sessionId: session.id,
-            provider: "openai-compatible",
-            model: settings.model,
-          });
-          current = updated.session;
-        }
-        if (cancelled || sessionLoadGen.current !== gen) return;
-        applySession(current);
-      } catch (e) {
-        if (!cancelled && sessionLoadGen.current === gen) onError(e instanceof Error ? e.message : String(e));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [applySession, onAgentTitle, onError, refreshRunnerProviders, refreshSessions, settings.vaultPath]);
 
   useEffect(() => {
     void loadIdeas().catch((e) => onError(e instanceof Error ? e.message : String(e)));
@@ -684,21 +408,12 @@ export function Workspace({
   }, [activePageId, onError]);
 
   const createAgentIdea = useCallback(async (messageId: string, selector: IdeaSelector, content: string) => {
-    if (!sessionId) return false;
-    try {
-      const { idea } = await api.ideaCreate({
-        content,
-        target: { kind: "assistant", sessionId, messageId },
-        selector,
-      });
-      setIdeas((current) => [idea, ...current]);
-      setRightView("ideas");
-      return true;
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-      return false;
-    }
-  }, [onError, sessionId]);
+    const idea = await createAgentIdeaInternal(messageId, selector, content);
+    if (!idea) return false;
+    setIdeas((current) => [idea, ...current]);
+    setRightView("ideas");
+    return true;
+  }, [createAgentIdeaInternal]);
 
   const updateIdea = useCallback(async (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => {
     try {
@@ -738,105 +453,10 @@ export function Workspace({
     if (palette) lastPaletteMode.current = palette;
   }, [palette]);
 
-  useEffect(() => {
-    if (!activePageId) return;
-    let cancelled = false;
-    api
-      .vaultReadPage(activePageId)
-      .then((p) => {
-        if (cancelled) return;
-        if (p) {
-          setPageCache((c) => ({ ...c, [p.id]: p }));
-          setMissingIds((m) => {
-            if (!(activePageId in m)) return m;
-            const next = { ...m };
-            delete next[activePageId];
-            return next;
-          });
-        } else {
-          setMissingIds((m) => ({ ...m, [activePageId]: true }));
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) onError(e instanceof Error ? e.message : String(e));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activePageId, onError]);
-
-  const openPage = useCallback(
-    (id: string, recordHistory = true) => {
-      setTabs((prev) => {
-        if (prev.some((t) => t.kind === "page" && t.id === id)) return prev;
-        return [...prev, { kind: "page", id }];
-      });
-      setActiveKey(`page:${id}`);
-      if (recordHistory) {
-        setPageHistory((prev) => {
-          const current = pageHistoryIndex >= 0 ? prev[pageHistoryIndex] : undefined;
-          if (current === id) return prev;
-          const next = prev.slice(0, pageHistoryIndex + 1);
-          next.push(id);
-          setPageHistoryIndex(next.length - 1);
-          return next;
-        });
-      }
-      if (narrow) setLeftCollapsed(true);
-    },
-    [narrow, pageHistoryIndex],
-  );
-
-  const navigatePageHistory = useCallback((direction: -1 | 1) => {
-    setPageHistoryIndex((index) => {
-      const nextIndex = index + direction;
-      if (nextIndex < 0 || nextIndex >= pageHistory.length) return index;
-      const id = pageHistory[nextIndex];
-      setTabs((prev) => prev.some((tab) => tab.id === id) ? prev : [...prev, { kind: "page", id }]);
-      setActiveKey(`page:${id}`);
-      return nextIndex;
-    });
-  }, [pageHistory]);
-
   const startLinkPicker = useCallback((fromId: string, range?: { start: number; end: number }) => {
     setLinkPicker({ fromId, range });
     setLeftCollapsed(false);
   }, []);
-
-  const insertWikilink = useCallback(
-    async (fromId: string, toId: string, range?: { start: number; end: number }) => {
-      if (!fromId || !toId || fromId === toId) return;
-      const link = `[[${toId}]]`;
-      let current = noteDrafts[fromId] ?? pageCache[fromId]?.raw;
-      if (current == null) {
-        try {
-          const page = await api.vaultReadPage(fromId);
-          if (page) {
-            setPageCache((c) => ({ ...c, [page.id]: page }));
-            current = page.raw;
-          } else {
-            current = "";
-          }
-        } catch (e) {
-          onError(e instanceof Error ? e.message : String(e));
-          return;
-        }
-      }
-      let next: string;
-      if (range) {
-        const start = Math.max(0, Math.min(range.start, current.length));
-        const end = Math.max(start, Math.min(range.end, current.length));
-        next = current.slice(0, start) + link + current.slice(end);
-      } else {
-        const trimmed = current.replace(/\s+$/, "");
-        next = trimmed ? `${trimmed}\n\n${link}\n` : `${link}\n`;
-      }
-      setNoteDrafts((d) => ({ ...d, [fromId]: next }));
-      setPageModes((d) => ({ ...d, [fromId]: "edit" }));
-      openPage(fromId);
-    },
-    [noteDrafts, pageCache, onError, openPage],
-  );
 
   const openAgent = useCallback(() => {
     if (!rightCollapsed && rightView === "agent") setRightCollapsedAnimated(true);
@@ -854,103 +474,10 @@ export function Workspace({
     }
   }, [rightCollapsed, rightView]);
 
-  const closeTab = useCallback(
-    (key: string) => {
-      const id = key.startsWith("page:") ? key.slice(5) : "";
-      if (id && isDirty(id)) {
-        const ok = window.confirm("有未保存的更改，确定关闭？未保存内容将丢失。");
-        if (!ok) return;
-        setNoteDrafts((d) => {
-          const next = { ...d };
-          delete next[id];
-          return next;
-        });
-      }
-      setTabs((prev) => {
-        const idx = prev.findIndex((t) => tabKey(t) === key);
-        const next = prev.filter((t) => tabKey(t) !== key);
-        if (activeKey === key) {
-          const neighbor = next[Math.min(idx, next.length - 1)];
-          setActiveKey(neighbor ? tabKey(neighbor) : null);
-        }
-        return next;
-      });
-    },
-    [activeKey, isDirty],
-  );
-
-  const remapPageId = useCallback((oldId: string, newId: string) => {
-    if (oldId === newId) return;
-    setTabs((prev) => prev.map((t) => (t.id === oldId ? { ...t, id: newId } : t)));
-    setActiveKey((key) => (key === `page:${oldId}` ? `page:${newId}` : key));
-    setPageCache((c) => {
-      if (!(oldId in c)) return c;
-      const next = { ...c };
-      next[newId] = { ...next[oldId], id: newId };
-      delete next[oldId];
-      return next;
-    });
-    setNoteDrafts((d) => {
-      if (!(oldId in d)) return d;
-      const next = { ...d };
-      next[newId] = next[oldId];
-      delete next[oldId];
-      return next;
-    });
-    setMissingIds((m) => {
-      if (!(oldId in m)) return m;
-      const next = { ...m };
-      delete next[oldId];
-      return next;
-    });
-    setPageModes((modes) => remapRecordId(modes, oldId, newId));
-    pageViewMemoryRef.current = remapRecordId(pageViewMemoryRef.current, oldId, newId);
-    setFavoriteIds((ids) => {
-      const next = remapFavoritePage(ids, oldId, newId);
-      saveFavorites(settings.vaultPath, next);
-      return next;
-    });
-  }, [settings.vaultPath]);
-
-  const remapFolderPrefix = useCallback((from: string, to: string) => {
-    if (from === to) return;
-    const mapId = (id: string) => (id.startsWith(`${from}/`) ? `${to}${id.slice(from.length)}` : id);
-    setTabs((prev) => prev.map((t) => ({ ...t, id: mapId(t.id) })));
-    setActiveKey((key) => {
-      if (!key?.startsWith("page:")) return key;
-      return `page:${mapId(key.slice(5))}`;
-    });
-    setPageCache((c) => {
-      const next: Record<string, PageContent> = {};
-      for (const [id, page] of Object.entries(c)) {
-        const nid = mapId(id);
-        next[nid] = nid === id ? page : { ...page, id: nid };
-      }
-      return next;
-    });
-    setNoteDrafts((d) => {
-      const next: Record<string, string> = {};
-      for (const [id, text] of Object.entries(d)) next[mapId(id)] = text;
-      return next;
-    });
-    setMissingIds((m) => {
-      const next: Record<string, true> = {};
-      for (const id of Object.keys(m)) next[mapId(id)] = true;
-      return next;
-    });
-    setPageModes((modes) => remapRecordIds(modes, mapId));
-    pageViewMemoryRef.current = remapRecordIds(pageViewMemoryRef.current, mapId);
-    setClip((cur) => {
-      if (!cur) return cur;
-      if (cur.kind === "folder" && cur.id === from) return { ...cur, id: to };
-      return { ...cur, id: mapId(cur.id) };
-    });
-    setFavoriteIds((ids) => {
-      const next = remapFavoriteFolder(ids, from, to);
-      saveFavorites(settings.vaultPath, next);
-      return next;
-    });
-  }, [settings.vaultPath]);
+  const openLibraryImport = useCallback((folderId: string | null) => {
+    setIngestFolderId(folderId);
+    setIngestOpen(true);
+  }, []);
 
   const toggleFavorite = useCallback((id: string) => {
     setFavoriteIds((ids) => {
@@ -960,17 +487,6 @@ export function Workspace({
     });
   }, [settings.vaultPath]);
 
-  const takenIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const page of pages) set.add(page.id);
-    for (const folder of folders) set.add(folder);
-    return set;
-  }, [pages, folders]);
-
-  const titleFor = useCallback(
-    (id: string) => pages.find((p) => p.id === id)?.title ?? pageCache[id]?.title ?? id.split("/").pop() ?? id,
-    [pages, pageCache],
-  );
 
   async function createNote(id: string, title: string) {
     setBusy(true);
@@ -1137,153 +653,6 @@ export function Workspace({
     }
   }
 
-  function isAbortError(error: unknown): boolean {
-    if (!error) return false;
-    if (error instanceof DOMException && error.name === "AbortError") return true;
-    if (error instanceof Error && (error.name === "AbortError" || /abort/i.test(error.message))) {
-      return true;
-    }
-    return false;
-  }
-
-  async function reloadSession(id: string) {
-    const { session } = await api.agentSessionGet(id);
-    applySession(session, id === sessionId);
-  }
-
-  async function stopGeneration() {
-    if (!agentBusy) return;
-    abortingRef.current = true;
-    try {
-      await api.agentAbort();
-    } catch {
-      /* stop is best-effort; the in-flight prompt still settles */
-    }
-  }
-
-  async function sendMessage() {
-    const text = draft.trim();
-    if (!text || agentBusy || sendingRef.current) return;
-    sendingRef.current = true;
-    abortingRef.current = false;
-    setError(null);
-    let id = sessionId;
-    let succeeded = false;
-    try {
-      if (!id) {
-        sessionLoadGen.current += 1;
-        const created = await api.agentSessionCreate({
-          currentPageId: activePageId ?? undefined,
-        });
-        id = created.session.id;
-        applySession(created.session);
-      }
-      updateAgentState(id, { draft: "", pendingUser: text, streamingText: "", streamingTools: [], streamingPhase: "thinking", busy: true });
-      const result = await api.agentPromptStream(
-        {
-          sessionId: id,
-          message: text,
-           currentPageId: undefined,
-          graphDepth,
-        },
-        (event) => {
-           if (event.type === "text") updateAgentState(id!, { streamingText: event.text });
-          if (event.type === "tool_start") {
-             updateAgentState(id!, (state) => ({ ...state, streamingTools: state.streamingTools.some((tool) => tool.id === event.id) ? state.streamingTools : [...state.streamingTools, { id: event.id, name: event.name, status: "running" }] }));
-           }
-           if (event.type === "phase") updateAgentState(id!, { streamingPhase: event.phase });
-           if (event.type === "tool_end") updateAgentState(id!, (state) => ({ ...state, streamingTools: state.streamingTools.map((tool) => tool.id === event.id ? { ...tool, status: event.isError ? "error" : "done" } : tool) }));
-        },
-      );
-       applySession(result.session, false);
-      await refreshSessions();
-      await loadPages();
-      await loadGraph();
-      succeeded = true;
-    } catch (e) {
-      if (abortingRef.current || isAbortError(e)) {
-        if (id) {
-          try {
-            await reloadSession(id);
-            await refreshSessions();
-          } catch {
-            /* session may not have been persisted yet */
-          }
-        }
-      } else {
-        onError(e instanceof Error ? e.message : String(e));
-      }
-    } finally {
-       if (id) updateAgentState(id, { pendingUser: null, streamingText: "", streamingTools: [], streamingPhase: null, busy: false });
-      if (succeeded && !abortingRef.current) triggerRuezzCelebrate();
-      sendingRef.current = false;
-      abortingRef.current = false;
-    }
-  }
-
-  async function newChat() {
-    if (Object.values(agentStates).some((state) => state.busy)) return;
-    sessionLoadGen.current += 1;
-    try {
-      const created = await api.agentSessionCreate({
-           currentPageId: undefined,
-      });
-      applySession(created.session);
-      await refreshSessions();
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function attachCurrentPage() {
-    if (!sessionId || !activePageId) return;
-    try {
-      const { session } = await api.agentSessionAttach(sessionId, {
-        id: activePageId,
-        kind: "page",
-        label: titleFor(activePageId),
-      });
-      applySession(session);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  const closeAgentSession = useCallback((id: string) => {
-    if (agentStates[id]?.busy) return;
-    setOpenSessionIds((prev) => {
-      const next = prev.filter((item) => item !== id);
-      if (id === sessionId) {
-        const replacement = next[next.length - 1] ?? null;
-        setSessionId(replacement);
-        if (replacement) void selectSession(replacement);
-        else onAgentTitle?.(null);
-      }
-      return next;
-    });
-  }, [agentStates, onAgentTitle, selectSession, sessionId]);
-
-  async function detachAttachment(id: string) {
-    if (!sessionId) return;
-    try {
-      const { session } = await api.agentSessionDetach(sessionId, id);
-      applySession(session);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function selectSession(id: string) {
-    if (id === sessionId) return;
-    sessionLoadGen.current += 1;
-    try {
-      const { session } = await api.agentSessionGet(id);
-      applySession(session);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
   const navigateIdea = (idea: Idea) => {
     if (idea.target.kind === "page") {
       openPage(idea.target.pageId);
@@ -1301,64 +670,6 @@ export function Workspace({
       }, 80);
     });
   };
-
-  async function deleteAgentSession(id: string) {
-    if (agentStates[id]?.busy) return;
-    try {
-      await api.agentSessionDelete(id);
-      setOpenSessionIds((prev) => prev.filter((item) => item !== id));
-      setAgentStates((prev) => { const next = { ...prev }; delete next[id]; return next; });
-      const list = await refreshSessions();
-      if (id !== sessionId) return;
-      const next = list.find((item) => !item.archived);
-      if (next) {
-        sessionLoadGen.current += 1;
-        const { session } = await api.agentSessionGet(next.id);
-        applySession(session);
-        return;
-      }
-      sessionLoadGen.current += 1;
-      setSessionId(null);
-      savePref(`agentSession:${settings.vaultPath}`, null);
-      onAgentTitle?.(null);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function archiveAgentSession(id: string, archived: boolean) {
-    if (agentStates[id]?.busy) return;
-    try {
-      await api.agentSessionArchive(id, archived);
-      await refreshSessions();
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function switchModel(providerId: string, modelId: string) {
-    if (!modelId.trim() || (providerId === activeProviderId && modelId === settings.model && !settings.mock)) {
-      return;
-    }
-    const settingsProvider = modelProviders.some((provider) => provider.id === providerId);
-    try {
-      if (settingsProvider) {
-        const next = { ...syncSettings(settings, modelProviders, providerId, modelId), mock: false };
-        await api.settingsSet(next);
-        onSettings(next);
-      }
-      if (sessionId) {
-        await api.agentSetModel({
-          sessionId,
-          provider: settingsProvider ? "openai-compatible" : providerId,
-          model: modelId,
-        });
-      }
-      await refreshRunnerProviders();
-    } catch (e) {
-      onError(e instanceof Error ? e.message : String(e));
-    }
-  }
 
   async function saveSettings(next: VaultSettings) {
     setBusy(true);
