@@ -44,7 +44,13 @@ import { CommandPalette, type PaletteCommand, type PaletteMode } from "./Command
 import { IngestModal } from "./IngestModal";
 import { LeftSidebar, type LeftView, type LinkPicker } from "./LeftSidebar";
 import { NewNoteModal } from "./NewNoteModal";
-import { NoteView } from "./NoteView";
+import {
+  defaultPageMode,
+  remapRecordId,
+  remapRecordIds,
+  type PageViewMemory,
+} from "../lib/pageViewMemory";
+import { NoteView, type NoteMode } from "./NoteView";
 import { Modal } from "./Modal";
 import { Presence } from "./Presence";
 import { Ribbon } from "./Ribbon";
@@ -136,7 +142,8 @@ export function Workspace({
   const [pageHistoryIndex, setPageHistoryIndex] = useState(-1);
   const [pageCache, setPageCache] = useState<Record<string, PageContent>>({});
   const [missingIds, setMissingIds] = useState<Record<string, true>>({});
-  const [noteMode, setNoteMode] = useState<"read" | "edit" | "source">("read");
+  const [pageModes, setPageModes] = useState<Record<string, NoteMode>>({});
+  const pageViewMemoryRef = useRef<Record<string, PageViewMemory>>({});
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [noteSaving, setNoteSaving] = useState(false);
   const [tagError, setTagError] = useState<string | null>(null);
@@ -185,6 +192,33 @@ export function Workspace({
   const activeTab = tabs.find((t) => tabKey(t) === activeKey) ?? null;
   const activePageId = activeTab?.kind === "page" ? activeTab.id : null;
   const activePage = activePageId ? (pageCache[activePageId] ?? null) : null;
+  const activePageNoteMode = useMemo((): NoteMode => {
+    if (!activePage) return "read";
+    const savedMode = pageModes[activePage.id];
+    if (savedMode) return savedMode;
+    const sourceType = activePage.sourceType?.toLowerCase();
+    const hasSource = sourceType === "pdf" || sourceType === "docx";
+    return defaultPageMode(activePage.type, hasSource);
+  }, [activePage, pageModes]);
+  const setPageNoteMode = useCallback((mode: NoteMode) => {
+    if (!activePageId) return;
+    setPageModes((prev) => ({ ...prev, [activePageId]: mode }));
+    pageViewMemoryRef.current[activePageId] = { ...pageViewMemoryRef.current[activePageId], mode };
+  }, [activePageId]);
+  const togglePageNoteMode = useCallback(() => {
+    setPageNoteMode(activePageNoteMode === "edit" ? "read" : "edit");
+  }, [activePageNoteMode, setPageNoteMode]);
+  const patchPageViewMemory = useCallback((pageId: string, patch: Partial<PageViewMemory>) => {
+    pageViewMemoryRef.current[pageId] = { ...pageViewMemoryRef.current[pageId], ...patch };
+  }, []);
+  const activeViewMemory = useMemo(() => {
+    if (!activePageId) return undefined;
+    return pageViewMemoryRef.current[activePageId];
+  }, [activePageId, activeKey]);
+  const handleActiveViewMemoryChange = useCallback((patch: Partial<PageViewMemory>) => {
+    if (!activePageId) return;
+    patchPageViewMemory(activePageId, patch);
+  }, [activePageId, patchPageViewMemory]);
   const activeAgentState = sessionId ? (agentStates[sessionId] ?? emptyAgentState()) : emptyAgentState();
   const { messages, attachments, pendingUser, streamingText, streamingTools, streamingPhase } = activeAgentState;
   const draft = sessionId ? activeAgentState.draft : draftFallback;
@@ -798,7 +832,7 @@ export function Workspace({
         next = trimmed ? `${trimmed}\n\n${link}\n` : `${link}\n`;
       }
       setNoteDrafts((d) => ({ ...d, [fromId]: next }));
-      setNoteMode("edit");
+      setPageModes((d) => ({ ...d, [fromId]: "edit" }));
       openPage(fromId);
     },
     [noteDrafts, pageCache, onError, openPage],
@@ -869,6 +903,8 @@ export function Workspace({
       delete next[oldId];
       return next;
     });
+    setPageModes((modes) => remapRecordId(modes, oldId, newId));
+    pageViewMemoryRef.current = remapRecordId(pageViewMemoryRef.current, oldId, newId);
     setFavoriteIds((ids) => {
       const next = remapFavoritePage(ids, oldId, newId);
       saveFavorites(settings.vaultPath, next);
@@ -902,6 +938,8 @@ export function Workspace({
       for (const id of Object.keys(m)) next[mapId(id)] = true;
       return next;
     });
+    setPageModes((modes) => remapRecordIds(modes, mapId));
+    pageViewMemoryRef.current = remapRecordIds(pageViewMemoryRef.current, mapId);
     setClip((cur) => {
       if (!cur) return cur;
       if (cur.kind === "folder" && cur.id === from) return { ...cur, id: to };
@@ -943,7 +981,7 @@ export function Workspace({
       await loadPages();
       await loadGraph();
       openPage(created.id);
-      setNoteMode("edit");
+      setPageModes((modes) => ({ ...modes, [created.id]: "edit" }));
       setNewNoteOpen(false);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -1365,7 +1403,7 @@ export function Workspace({
       { id: "search", label: "搜索", run: () => { setLeftCollapsed(false); setLeftView("search"); } },
       { id: "favorites", label: "显示收藏", run: () => { setLeftCollapsed(false); setLeftView("favorites"); } },
       { id: "new-note", label: "新建笔记", hint: "Ctrl+N", run: () => setNewNoteOpen(true) },
-      { id: "edit", label: "切换阅读/编辑", hint: "Ctrl+E", run: () => setNoteMode((m) => (m === "edit" ? "read" : "edit")) },
+      { id: "edit", label: "切换阅读/编辑", hint: "Ctrl+E", run: togglePageNoteMode },
       { id: "agent", label: "显示 Agent", run: () => { setRightCollapsedAnimated(false); setRightView("agent"); } },
       { id: "graph", label: "打开图谱", hint: "Ctrl+G", run: () => { setRightCollapsed(false); setRightView("graph"); } },
       { id: "ingest", label: "入库…", run: () => { setIngestFolderId(null); setIngestOpen(true); } },
@@ -1374,7 +1412,7 @@ export function Workspace({
       { id: "left", label: "折叠/展开左栏", hint: "Ctrl+[", run: () => setLeftCollapsed((v) => !v) },
       { id: "right", label: "折叠/展开右栏", hint: "Ctrl+]", run: () => setRightCollapsedAnimated(!rightCollapsed) },
     ],
-    [onCycleColorPalette, colorPalette, activePageId, saveNote, rightCollapsed, setRightCollapsedAnimated],
+    [onCycleColorPalette, colorPalette, activePageId, saveNote, rightCollapsed, setRightCollapsedAnimated, togglePageNoteMode],
   );
 
   useEffect(() => {
@@ -1401,7 +1439,7 @@ export function Workspace({
         setNewNoteOpen(true);
       } else if (key === "e") {
         e.preventDefault();
-        setNoteMode((m) => (m === "edit" ? "read" : "edit"));
+        togglePageNoteMode();
       } else if (key === "g") {
         e.preventDefault();
         setRightCollapsed(false);
@@ -1538,15 +1576,18 @@ export function Workspace({
             )}
             {activeTab && activePage && (
               <NoteView
+                key={activePage.id}
                 page={activePage}
                 pages={pages}
-                mode={noteMode}
+                mode={activePageNoteMode}
                 draft={noteDrafts[activePage.id] ?? activePage.raw}
                 dirty={isDirty(activePage.id)}
                 saving={noteSaving}
                 favorite={favoriteIds.includes(activePage.id)}
                 onFavorite={() => toggleFavorite(activePage.id)}
-                onMode={setNoteMode}
+                onMode={setPageNoteMode}
+                viewMemory={activeViewMemory}
+                onViewMemoryChange={handleActiveViewMemoryChange}
                 onDraft={(value) =>
                   setNoteDrafts((d) => ({ ...d, [activePage.id]: value }))
                 }

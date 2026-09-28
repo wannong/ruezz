@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import type { PageSummary } from "../api";
 import { attachResizeX } from "../lib/pointerResize";
@@ -88,7 +88,21 @@ export function LeftSidebar({
   onError,
   onResize,
 }: LeftSidebarProps) {
+  const filesScrollRef = useRef<HTMLDivElement>(null);
+  const libraryScrollRef = useRef<HTMLDivElement>(null);
+  const leftScrollMemory = useRef<Partial<Record<LeftView, number>>>({});
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
+  useEffect(() => {
+    const restore = () => {
+      if (view === "files" && filesScrollRef.current) {
+        filesScrollRef.current.scrollTop = leftScrollMemory.current.files ?? 0;
+      } else if (view === "library" && libraryScrollRef.current) {
+        libraryScrollRef.current.scrollTop = leftScrollMemory.current.library ?? 0;
+      }
+    };
+    requestAnimationFrame(() => requestAnimationFrame(restore));
+  }, [view]);
   const filteredPages = useMemo(() => selectedTags.length === 0 ? pages : pages.filter((page) => selectedTags.every((tag) => page.tags?.includes(tag))), [pages, selectedTags]);
   const filteredFolders = useMemo(() => {
     if (selectedTags.length === 0) return folders;
@@ -150,10 +164,14 @@ export function LeftSidebar({
           onCreateNote={onCreateNote}
           onCreateFolder={onCreateFolder}
           onReveal={onReveal}
-           onLink={onLink}
-           onRelatedSessions={onRelatedSessions}
-           favorites={new Set(favoriteIds)}
-           onFavorite={onFavorite}
+          onLink={onLink}
+          onRelatedSessions={onRelatedSessions}
+          favorites={new Set(favoriteIds)}
+          onFavorite={onFavorite}
+          scrollRef={filesScrollRef}
+          onScroll={(event) => {
+            leftScrollMemory.current.files = event.currentTarget.scrollTop;
+          }}
         />
       ) : view === "search" ? (
         <SearchPane onOpen={onOpen} onError={onError} browsePages={pages} selectedTags={selectedTags} onTags={setSelectedTags} />
@@ -173,6 +191,10 @@ export function LeftSidebar({
           onDeleteFolder={onDeleteLibraryFolder}
           onMovePages={onMoveLibraryPages}
           onAddToFolder={onAddToLibraryFolder}
+          scrollRef={libraryScrollRef}
+          onScroll={(event) => {
+            leftScrollMemory.current.library = event.currentTarget.scrollTop;
+          }}
         />
       )}
       <div

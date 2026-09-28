@@ -5,6 +5,7 @@ import { markdownBody } from "../lib/noteId";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { DocumentPreview } from "./DocumentPreview";
+import type { PageViewMemory } from "../lib/pageViewMemory";
 
 export type NoteMode = "read" | "edit" | "source";
 
@@ -32,6 +33,8 @@ type NoteViewProps = {
   onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
   onAddToChat?: (text: string) => void;
   onRename?: (name: string) => void;
+  viewMemory?: PageViewMemory;
+  onViewMemoryChange?: (patch: Partial<PageViewMemory>) => void;
 };
 
 export function NoteView({
@@ -58,8 +61,15 @@ export function NoteView({
   onUpdateIdea,
   onAddToChat,
   onRename,
+  viewMemory,
+  onViewMemoryChange,
 }: NoteViewProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
+  const readRef = useRef<HTMLDivElement>(null);
+  const readRestoredRef = useRef(false);
+  const skipReadPersistRef = useRef(true);
+  const savedReadMemoryRef = useRef(viewMemory?.readScrollTop ?? 0);
+  savedReadMemoryRef.current = viewMemory?.readScrollTop ?? 0;
   const [menu, setMenu] = useState<{ x: number; y: number; start: number; end: number } | null>(null);
   const sourceType = page.sourceType?.toLowerCase();
   const hasSource = sourceType === "pdf" || sourceType === "docx";
@@ -69,12 +79,42 @@ export function NoteView({
   const [tagSaving, setTagSaving] = useState(false);
   useEffect(() => setTags(page.tags ?? []), [page.id, page.tags]);
   useEffect(() => {
-    if (!isLiterature) return;
-    if (hasSource) onMode("source");
-  }, [page.id, isLiterature, hasSource, onMode]);
+    readRestoredRef.current = false;
+    skipReadPersistRef.current = true;
+  }, [page.id]);
+  useEffect(() => {
+    return () => {
+      const element = readRef.current;
+      if (element && onViewMemoryChange) {
+        onViewMemoryChange({ readScrollTop: element.scrollTop });
+      }
+    };
+  }, [page.id, onViewMemoryChange]);
   useEffect(() => {
     if (!isLiterature && mode === "source" && !hasSource) onMode("read");
   }, [hasSource, isLiterature, mode, onMode]);
+  useEffect(() => {
+    if (mode !== "read") return;
+    const element = readRef.current;
+    if (!element || readRestoredRef.current) return;
+    const saved = savedReadMemoryRef.current;
+    requestAnimationFrame(() => {
+      if (!readRef.current) return;
+      readRef.current.scrollTop = saved;
+      readRestoredRef.current = true;
+      skipReadPersistRef.current = false;
+    });
+  }, [mode, page.id]);
+  useEffect(() => {
+    const element = readRef.current;
+    if (!element || mode !== "read" || !onViewMemoryChange) return;
+    const onScroll = () => {
+      if (skipReadPersistRef.current) return;
+      onViewMemoryChange({ readScrollTop: element.scrollTop });
+    };
+    element.addEventListener("scroll", onScroll, { passive: true });
+    return () => element.removeEventListener("scroll", onScroll);
+  }, [mode, onViewMemoryChange, page.id]);
 
   const updateTags = async (next: string[]) => {
     const normalized = [...new Set(next.map((tag) => tag.trim()).filter(Boolean))];
@@ -218,17 +258,19 @@ export function NoteView({
       </div>
       {isLiterature ? (
         hasSource ? (
-        <DocumentPreview
-          pageId={page.id}
-          type={sourceType!}
-          title={page.title ?? page.id.split("/").pop() ?? page.id}
-          onRename={onRename}
-          ideas={ideas}
-          ideasVisible={ideasVisible}
-          onIdeasVisible={onIdeasVisible}
-          onCreateIdea={onCreateIdea}
-          onUpdateIdea={onUpdateIdea}
-        />
+          <DocumentPreview
+            pageId={page.id}
+            type={sourceType!}
+            title={page.title ?? page.id.split("/").pop() ?? page.id}
+            onRename={onRename}
+            ideas={ideas}
+            ideasVisible={ideasVisible}
+            onIdeasVisible={onIdeasVisible}
+            onCreateIdea={onCreateIdea}
+            onUpdateIdea={onUpdateIdea}
+            viewMemory={viewMemory}
+            onViewMemoryChange={onViewMemoryChange}
+          />
         ) : (
           <div className="empty-center">此文献暂无可浏览的原件</div>
         )
@@ -243,6 +285,8 @@ export function NoteView({
           onIdeasVisible={onIdeasVisible}
           onCreateIdea={onCreateIdea}
           onUpdateIdea={onUpdateIdea}
+          viewMemory={viewMemory}
+          onViewMemoryChange={onViewMemoryChange}
         />
       ) : mode === "edit" ? (
         <div className="note-edit-split">
@@ -265,7 +309,7 @@ export function NoteView({
           </div>
         </div>
       ) : (
-        <div className="note-read">
+        <div className="note-read" ref={readRef}>
           <MarkdownPreview
             markdown={page.body}
             pages={pages}

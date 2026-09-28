@@ -408,8 +408,8 @@ export function GraphView({
               ctx.stroke();
             }
             if (compact || globalScale > 1.1) {
-              const fontSize = Math.max(compact ? 4 : 8, Math.min(compact ? 12 : 18, 12 / globalScale));
-              ctx.font = `${focused ? "600 " : ""}${fontSize}px sans-serif`;
+              const fontSize = Math.max(compact ? 6 : 10, Math.min(compact ? 14 : 20, 14 / globalScale));
+              ctx.font = `${focused ? "600 " : ""}${fontSize}px Inter, "LXGW WenKai", sans-serif`;
               const maxWidth = compact ? 104 : 168;
               const sourceLabel = n.label || n.id;
               let label = sourceLabel;

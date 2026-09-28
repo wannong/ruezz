@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type RefObject, type UIEvent } from "react";
 import { ChevronRight, FileText, Folder } from "lucide-react";
 import type { PageSummary } from "../api";
 import {
@@ -34,6 +34,8 @@ type FileTreeProps = {
   onRelatedSessions?: (pageId: string, label: string) => void;
   favorites?: Set<string>;
   onFavorite?: (pageId: string) => void;
+  scrollRef?: RefObject<HTMLDivElement | null>;
+  onScroll?: (event: UIEvent<HTMLDivElement>) => void;
 };
 
 export function FileTree({
@@ -53,6 +55,8 @@ export function FileTree({
   onRelatedSessions,
   favorites,
   onFavorite,
+  scrollRef,
+  onScroll,
 }: FileTreeProps) {
   const taken = useMemo(() => {
     const set = new Set<string>();
@@ -176,7 +180,9 @@ export function FileTree({
 
   return (
     <div
+      ref={scrollRef}
       className="file-tree-wrap"
+      onScroll={onScroll}
       onContextMenu={(e) => openMenu(e, { type: "blank" })}
     >
       {empty && (

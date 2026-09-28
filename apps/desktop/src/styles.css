@@ -1,7 +1,32 @@
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/InterVariable.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "LXGW WenKai";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/LXGWWenKai-Regular.ttf") format("truetype");
+}
+
+@font-face {
+  font-family: "LXGW WenKai";
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url("/fonts/LXGWWenKai-Medium.ttf") format("truetype");
+}
+
 :root {
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-ui: "Inter", "LXGW WenKai", sans-serif;
+  font-family: var(--font-ui);
   line-height: 1.45;
-  font-size: 13px;
+  font-size: 15px;
   --pane-header-height: 36px;
 
   /* Motion: keep daily navigation instant; animate overlays and agent feedback only.
@@ -46,6 +71,11 @@ html:not([data-palette]) {
   --status: #161616;
   --input: #161616;
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --shadow-button: 0 1px 0 rgba(255, 255, 255, 0.07) inset, 0 1px 2px rgba(0, 0, 0, 0.38);
+  --shadow-button-hover: 0 1px 0 rgba(255, 255, 255, 0.09) inset, 0 2px 6px rgba(0, 0, 0, 0.44);
+  --shadow-button-active: 0 1px 3px rgba(0, 0, 0, 0.45) inset;
+  --shadow-button-primary: 0 1px 0 rgba(255, 255, 255, 0.14) inset, 0 1px 3px rgba(0, 0, 0, 0.42);
+  --shadow-button-primary-hover: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 2px 7px rgba(0, 0, 0, 0.48);
 }
 
 /* Palette — 明亮：经典浅色界面 */
@@ -72,6 +102,11 @@ html[data-palette="light"] {
   --status: #f4f4f4;
   --input: #ffffff;
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
+  --shadow-button: 0 1px 2px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-button-hover: 0 2px 5px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-button-active: 0 1px 2px rgba(0, 0, 0, 0.14) inset;
+  --shadow-button-primary: 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --shadow-button-primary-hover: 0 2px 6px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.07);
 }
 
 /* Palette 2 — 暖调 / 米白：阅读区浅底深字，边框最深，主色为奶油米白 */
@@ -98,6 +133,11 @@ html[data-palette="warm"] {
   --status: #dfb6b2;
   --input: #fff9f4;
   --shadow: 0 12px 40px rgba(25, 0, 25, 0.12);
+  --shadow-button: 0 1px 2px rgba(25, 0, 25, 0.1), 0 0 0 1px rgba(25, 0, 25, 0.05);
+  --shadow-button-hover: 0 2px 5px rgba(25, 0, 25, 0.14), 0 0 0 1px rgba(25, 0, 25, 0.06);
+  --shadow-button-active: 0 1px 2px rgba(25, 0, 25, 0.16) inset;
+  --shadow-button-primary: 0 1px 2px rgba(43, 18, 76, 0.2), 0 0 0 1px rgba(43, 18, 76, 0.08);
+  --shadow-button-primary-hover: 0 2px 6px rgba(43, 18, 76, 0.24), 0 0 0 1px rgba(43, 18, 76, 0.1);
 }
 
 /* Palette 3 — 蓝调：阅读区浅灰蓝底深字，边框最深 */
@@ -124,6 +164,11 @@ html[data-palette="blue-tone"] {
   --status: #9ba8ab;
   --input: #f2f3f3;
   --shadow: 0 12px 40px rgba(6, 20, 27, 0.14);
+  --shadow-button: 0 1px 2px rgba(6, 20, 27, 0.1), 0 0 0 1px rgba(6, 20, 27, 0.05);
+  --shadow-button-hover: 0 2px 5px rgba(6, 20, 27, 0.14), 0 0 0 1px rgba(6, 20, 27, 0.06);
+  --shadow-button-active: 0 1px 2px rgba(6, 20, 27, 0.16) inset;
+  --shadow-button-primary: 0 1px 2px rgba(37, 55, 69, 0.2), 0 0 0 1px rgba(37, 55, 69, 0.08);
+  --shadow-button-primary-hover: 0 2px 6px rgba(37, 55, 69, 0.24), 0 0 0 1px rgba(37, 55, 69, 0.1);
 }
 
 * {
@@ -159,17 +204,70 @@ button {
   padding: 0.35rem 0.7rem;
   white-space: nowrap;
   flex-shrink: 0;
+  box-shadow: var(--shadow-button);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+button:hover:not(:disabled) {
+  box-shadow: var(--shadow-button-hover);
+}
+
+button:active:not(:disabled) {
+  box-shadow: var(--shadow-button-active);
 }
 
 button.primary {
   background: var(--accent);
   color: var(--accent-ink);
   border-color: var(--accent);
+  box-shadow: var(--shadow-button-primary);
+}
+
+button.primary:hover:not(:disabled) {
+  box-shadow: var(--shadow-button-primary-hover);
 }
 
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Flat / chrome controls — no raised edge */
+.titlebar-menu-btn,
+.titlebar-btn,
+.tab-title,
+.tab-close,
+.tree-label,
+.tree-twist,
+.tree-rename,
+.sidebar-back,
+.sidebar-expand,
+.sidebar-collapse,
+.note-mode button,
+.icon-btn,
+.ctx-item,
+.outline-item,
+.model-chip,
+.agent-session-item,
+.agent-round-btn,
+.provider-picker-item,
+.provider-fold,
+.source-chip,
+.sidebar-tabs button,
+.status-theme,
+.favorite-star,
+.tag-chip button,
+.tag-clear,
+.library-folder-toggle,
+.library-folder-add,
+.favorite-page-open,
+button.ghost,
+.agent-model-menu button,
+.agent-model-name {
+  box-shadow: none;
 }
 
 input,
@@ -879,6 +977,8 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 0.3rem;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .tab-dirty {
@@ -974,6 +1074,18 @@ textarea:focus {
 .document-error { color: var(--danger); }
 .document-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 0.4rem; min-height: 36px; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--line); background: var(--panel); }
 .document-controls > button { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; flex: 0 0 auto; }
+.document-page-jump { display: inline-flex; align-items: center; gap: 0.2rem; color: var(--muted); font-size: 0.75rem; flex: 0 0 auto; }
+.document-page-input {
+  width: 3rem;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--input);
+  color: var(--ink);
+  font-size: 0.75rem;
+  text-align: center;
+}
+.document-page-input:focus { outline: none; border-color: var(--line-strong); }
 .document-title-slot {
   flex: 1 1 12rem;
   min-width: 0;
@@ -985,7 +1097,7 @@ textarea:focus {
   width: 100%;
   min-width: 0;
   color: var(--ink);
-  font-size: 0.82rem;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.35;
   text-align: left;
@@ -1006,8 +1118,45 @@ textarea:focus {
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
 }
-.pdf-page { flex: 1; overflow: auto; padding: 1rem; text-align: center; position: relative; }
-.pdf-page-surface { position: relative; margin: 0 auto; text-align: left; box-shadow: var(--shadow); background: white; touch-action: pan-x pan-y; }
+.pdf-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem 1rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+.pdf-page-block {
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+.pdf-page-label {
+  width: 100%;
+  max-width: 100%;
+  text-align: left;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.pdf-page-surface {
+  position: relative;
+  margin: 0 auto;
+  text-align: left;
+  box-shadow: var(--shadow);
+  background: white;
+  touch-action: pan-x pan-y;
+  min-height: 120px;
+}
+.pdf-page-surface-pending {
+  background: color-mix(in srgb, var(--panel) 88%, white);
+}
 .pdf-page-surface canvas { position: absolute; inset: 0; width: 100%; height: 100%; background: white; }
 .pdf-page-surface.annotating { cursor: crosshair; touch-action: none; }
 .pdf-page-surface.annotating .pdf-text-layer { pointer-events: none; user-select: none; }
@@ -1939,7 +2088,7 @@ textarea:focus {
   border-radius: var(--radius-pill);
   background: transparent;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2477,7 +2626,7 @@ textarea:focus {
 .related-result-list { display: grid; gap: 6px; }
 .related-result { display: grid; gap: 3px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; }
 .related-result:hover { border-color: var(--line-strong); background: var(--hover); }
-.related-result span { color: var(--muted); font-size: 12px; }
+.related-result span { color: var(--muted); font-size: 14px; }
 .related-empty { padding: 20px; color: var(--muted); text-align: center; }
 
 .agent-input-row textarea {

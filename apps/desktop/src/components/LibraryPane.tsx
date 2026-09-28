@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, FileText, FolderPlus, Plus, Star } from "lucide-react";
-import { useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { useRef, useState, type CSSProperties, type MouseEvent, type RefObject, type UIEvent } from "react";
 import type { PageSummary } from "../api";
 import {
   folderLabelPath,
@@ -23,6 +23,8 @@ type LibraryPaneProps = {
   onDeleteFolder: (folderId: string) => void;
   onMovePages: (pageIds: string[], folderId: string | null) => void;
   onAddToFolder: (folderId: string | null) => void;
+  scrollRef?: RefObject<HTMLDivElement | null>;
+  onScroll?: (event: UIEvent<HTMLDivElement>) => void;
 };
 
 type LibraryFolderTreeNode = LibraryFolder & {
@@ -90,6 +92,8 @@ export function LibraryPane({
   onDeleteFolder,
   onMovePages,
   onAddToFolder,
+  scrollRef,
+  onScroll,
 }: LibraryPaneProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [editor, setEditor] = useState<LibraryEditor | null>(null);
@@ -221,7 +225,7 @@ export function LibraryPane({
   };
 
   return (
-    <div className="library-pane" onContextMenu={(event) => openMenu(event, { type: "blank" })}>
+    <div ref={scrollRef} className="library-pane" onScroll={onScroll} onContextMenu={(event) => openMenu(event, { type: "blank" })}>
       <div className="library-actions">
         <span>{pages.length} 篇文献</span>
         <button type="button" title="新建文献文件夹" onClick={() => startCreate(null)}>

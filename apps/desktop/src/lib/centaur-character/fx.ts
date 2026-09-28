@@ -73,7 +73,7 @@ function makeText(text: string, size: number) {
   el.setAttribute("dominant-baseline", "middle");
   el.setAttribute(
     "font-family",
-    '"SF Pro Text", "PingFang SC", "Segoe UI Symbol", system-ui, sans-serif',
+    'Inter, "LXGW WenKai", sans-serif',
   );
   const fs = text === "z" ? size * 0.72 : size;
   el.setAttribute("font-size", String(fs));
