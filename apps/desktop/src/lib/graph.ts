@@ -1,4 +1,5 @@
 import type { GraphDto, GraphNodeDto } from "../api";
+import { graphCollideRadius, graphLinkDistance, graphLinkGap } from "./graph-layout.ts";
 
 export { applyGraphForces, graphNodeRadius } from "./graph-layout.ts";
 export type { GraphForceApi, GraphLayoutNode } from "./graph-layout.ts";
@@ -103,6 +104,44 @@ export type GraphFit = { k: number; cx: number; cy: number };
  * single node fills the sidebar — zoomToFit does that when the bbox is
  * only a node diameter.
  */
+/** Fit zoom around the focus node using farthest neighbor distance and link spacing. */
+export function graphFocusFitTransform(
+  nodes: Array<SimNode & { degree?: number }>,
+  focusId: string,
+  pane: { width: number; height: number },
+  compact = false,
+): GraphFit | null {
+  const leader = nodes.find((node) => node.id === focusId);
+  if (!leader || !Number.isFinite(leader.x) || !Number.isFinite(leader.y)) return null;
+
+  const cx = leader.x ?? 0;
+  const cy = leader.y ?? 0;
+  const leaderLayout = { degree: leader.degree ?? 0, focused: true };
+
+  let farthest = 0;
+  let farthestDegree = 0;
+  for (const node of nodes) {
+    if (node.id === focusId || !Number.isFinite(node.x) || !Number.isFinite(node.y)) continue;
+    const dist = Math.hypot((node.x ?? 0) - cx, (node.y ?? 0) - cy);
+    if (dist > farthest) {
+      farthest = dist;
+      farthestDegree = node.degree ?? 0;
+    }
+  }
+
+  const neighborLayout = { degree: farthestDegree };
+  const linkDist = graphLinkDistance(leaderLayout, neighborLayout, compact);
+  const outerR = graphCollideRadius(neighborLayout, compact);
+  const minRadius = linkDist * 0.92;
+  const radius = Math.max(minRadius, farthest + outerR + graphLinkGap(compact) * 0.45);
+
+  return graphFitTransform(
+    { x: [cx - radius, cx + radius], y: [cy - radius, cy + radius] },
+    pane,
+    compact,
+  );
+}
+
 export function graphFitTransform(
   bbox: GraphBBox | null | undefined,
   pane: { width: number; height: number },

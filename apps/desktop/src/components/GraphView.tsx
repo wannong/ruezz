@@ -6,6 +6,7 @@ import {
   dragLeashRadius,
   graphDepths,
   graphFitTransform,
+  graphFocusFitTransform,
   graphNodeRadius,
   maxDistanceFromLeader,
   releaseGraphPins,
@@ -79,6 +80,21 @@ const THEME_PALETTE = {
 };
 
 const GRAPH_PHYSICS_REV = Date.now();
+const SPAWN_MS = 420;
+const FOCUS_PAN_MS = 620;
+const HOP_FIT_MS = 480;
+const EGO_SCOPES = new Set(["1", "2", "3"]);
+
+function easeOutCubic(t: number): number {
+  return 1 - (1 - t) ** 3;
+}
+
+function findFocusCoords(nodes: GraphNode[], focusId: string | null): { x: number; y: number } | null {
+  if (!focusId) return null;
+  const focus = nodes.find((node) => node.id === focusId);
+  if (!focus || !Number.isFinite(focus.x) || !Number.isFinite(focus.y)) return null;
+  return { x: focus.x ?? 0, y: focus.y ?? 0 };
+}
 
 export function GraphView({
   graph,
@@ -91,8 +107,16 @@ export function GraphView({
   const wrap = useRef<HTMLDivElement>(null);
   const fgRef = useRef<ForceGraphMethods<GraphNode> | undefined>(undefined);
   const fitted = useRef(false);
+  const skipNextFitRef = useRef(false);
+  const prevReplayKeyRef = useRef(replayKey);
+  const prevFocusRef = useRef(focusId);
+  const prevNodeIdsRef = useRef<Set<string>>(new Set());
+  const pendingFocusPanRef = useRef(false);
+  const spawnProgressRef = useRef(new Map<string, number>());
+  const spawnRafRef = useRef<number | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [spawning, setSpawning] = useState(false);
   const sizeRef = useRef(size);
   sizeRef.current = size;
   const compactRef = useRef(compact);
@@ -100,6 +124,37 @@ export function GraphView({
   const leashRef = useRef<number | null>(null);
   const colors = THEME_PALETTE[theme];
   const depths = useMemo(() => (graph && focusId ? graphDepths(graph, focusId) : null), [graph, focusId]);
+
+  const stopSpawnLoop = useCallback(() => {
+    if (spawnRafRef.current != null) {
+      cancelAnimationFrame(spawnRafRef.current);
+      spawnRafRef.current = null;
+    }
+    setSpawning(false);
+  }, []);
+
+  const startSpawnLoop = useCallback(() => {
+    stopSpawnLoop();
+    setSpawning(true);
+    const started = performance.now();
+    const frame = (now: number) => {
+      const t = Math.min(1, (now - started) / SPAWN_MS);
+      const eased = easeOutCubic(t);
+      for (const id of spawnProgressRef.current.keys()) {
+        spawnProgressRef.current.set(id, eased);
+      }
+      if (t < 1) {
+        spawnRafRef.current = requestAnimationFrame(frame);
+      } else {
+        spawnProgressRef.current.clear();
+        spawnRafRef.current = null;
+        setSpawning(false);
+      }
+    };
+    spawnRafRef.current = requestAnimationFrame(frame);
+  }, [stopSpawnLoop]);
+
+  const shouldFocusFit = Boolean(compact && focusId && EGO_SCOPES.has(replayKey));
 
   const applyFit = useCallback((durationMs: number) => {
     const fg = fgRef.current;
@@ -111,19 +166,21 @@ export function GraphView({
     fg.zoom(next.k, durationMs);
   }, []);
 
-  useEffect(() => {
-    fitted.current = false;
-  }, [graph, theme, focusId, replayKey]);
+  const applyFocusFit = useCallback(
+    (durationMs: number) => {
+      const fg = fgRef.current;
+      const { width, height } = sizeRef.current;
+      if (!fg || !focusId || width < 8 || height < 8) return false;
+      const next = graphFocusFitTransform(dataRef.current.nodes, focusId, { width, height }, compactRef.current);
+      if (!next) return false;
+      fg.centerAt(next.cx, next.cy, durationMs);
+      fg.zoom(next.k, durationMs);
+      return true;
+    },
+    [focusId],
+  );
 
-  useEffect(() => {
-    const el = wrap.current;
-    if (!el) return;
-    const applySize = () => setSize({ width: el.clientWidth, height: el.clientHeight });
-    applySize();
-    const observer = new ResizeObserver(applySize);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [graph, theme]);
+  const dataRef = useRef({ nodes: [] as GraphNode[], links: [] as Array<{ source: string; target: string }> });
 
   const data = useMemo(() => {
     if (!graph) return { nodes: [] as GraphNode[], links: [] as Array<{ source: string; target: string }> };
@@ -148,10 +205,104 @@ export function GraphView({
     };
   }, [graph]);
 
+  dataRef.current = data;
+
+  const centerOnFocus = useCallback((durationMs: number) => {
+    const fg = fgRef.current;
+    if (!fg || !focusId) return false;
+    const coords = findFocusCoords(dataRef.current.nodes, focusId);
+    if (!coords) return false;
+    fg.centerAt(coords.x, coords.y, durationMs);
+    return true;
+  }, [focusId]);
+
+  const centerOnFocusRef = useRef(centerOnFocus);
+  centerOnFocusRef.current = centerOnFocus;
+
+  const graphEpoch = `${theme}:${graph?.dataVersion ?? 0}`;
+
+  const animateFocusPan = useCallback(() => {
+    const run = () => centerOnFocusRef.current(FOCUS_PAN_MS);
+    if (run()) {
+      pendingFocusPanRef.current = false;
+      return;
+    }
+    requestAnimationFrame(() => {
+      if (run()) pendingFocusPanRef.current = false;
+    });
+  }, []);
+
+  useEffect(() => {
+    fitted.current = false;
+    prevNodeIdsRef.current = new Set();
+    pendingFocusPanRef.current = false;
+    spawnProgressRef.current.clear();
+    stopSpawnLoop();
+  }, [graphEpoch, stopSpawnLoop]);
+
+  useEffect(() => {
+    const prev = prevReplayKeyRef.current;
+    prevReplayKeyRef.current = replayKey;
+    const egoHopChange = EGO_SCOPES.has(prev) && EGO_SCOPES.has(replayKey) && prev !== replayKey;
+    const globalHopChange = (prev === "global") !== (replayKey === "global");
+    if (egoHopChange) skipNextFitRef.current = true;
+    if (globalHopChange) fitted.current = false;
+  }, [replayKey]);
+
+  useEffect(() => {
+    const prev = prevFocusRef.current;
+    prevFocusRef.current = focusId;
+    if (!focusId || prev === focusId || !fitted.current) return;
+    pendingFocusPanRef.current = true;
+    requestAnimationFrame(animateFocusPan);
+    const retry1 = window.setTimeout(animateFocusPan, 180);
+    const retry2 = window.setTimeout(animateFocusPan, 420);
+    const cancelPending = window.setTimeout(() => {
+      pendingFocusPanRef.current = false;
+    }, FOCUS_PAN_MS + 400);
+    return () => {
+      window.clearTimeout(retry1);
+      window.clearTimeout(retry2);
+      window.clearTimeout(cancelPending);
+    };
+  }, [focusId, animateFocusPan]);
+
+  useEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const applySize = () => setSize({ width: el.clientWidth, height: el.clientHeight });
+    applySize();
+    const observer = new ResizeObserver(applySize);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [graph, theme]);
+
+  useLayoutEffect(() => {
+    const prevIds = prevNodeIdsRef.current;
+    const nextIds = new Set(data.nodes.map((node) => node.id));
+    const added = data.nodes.filter((node) => !prevIds.has(node.id));
+    const origin = findFocusCoords(data.nodes, focusId);
+
+    if (added.length > 0 && origin && prevIds.size > 0) {
+      for (const node of added) {
+        if (node.id === focusId) continue;
+        node.x = origin.x + (Math.random() - 0.5) * 6;
+        node.y = origin.y + (Math.random() - 0.5) * 6;
+        node.vx = 0;
+        node.vy = 0;
+        spawnProgressRef.current.set(node.id, 0);
+      }
+      if (spawnProgressRef.current.size > 0) startSpawnLoop();
+      fgRef.current?.d3ReheatSimulation?.();
+    }
+
+    prevNodeIdsRef.current = nextIds;
+  }, [data.nodes, focusId, startSpawnLoop]);
+
   useEffect(() => {
     if (!fitted.current) return;
-    applyFit(0);
-  }, [size.width, size.height, applyFit]);
+    centerOnFocusRef.current(0);
+  }, [size.width, size.height]);
 
   useLayoutEffect(() => {
     const fg = fgRef.current;
@@ -160,6 +311,8 @@ export function GraphView({
     releaseGraphPins(data.nodes);
   }, [compact, size.width, size.height, data.nodes, replayKey, theme, focusId, GRAPH_PHYSICS_REV]);
 
+  useEffect(() => () => stopSpawnLoop(), [stopSpawnLoop]);
+
   if (!graph) {
     return <div className="empty-center">正在加载图谱…</div>;
   }
@@ -167,15 +320,18 @@ export function GraphView({
     return <div className="empty-center">知识图谱为空，先入库资料</div>;
   }
 
+  const graphKey = `${theme}:${graph.dataVersion ?? 0}`;
+
   return (
     <div className="graph-wrap" ref={wrap}>
       {size.width > 0 && size.height > 0 && (
         <ForceGraph2D
           ref={fgRef as never}
-          key={`${theme}:${focusId ?? ""}:${replayKey}:${data.nodes.length}`}
+          key={graphKey}
           width={size.width}
           height={size.height}
           backgroundColor={colors.bg}
+          autoPauseRedraw={!spawning}
           graphData={data}
           nodeId="id"
           nodeLabel="label"
@@ -185,11 +341,33 @@ export function GraphView({
           minZoom={0.08}
           maxZoom={compact ? 4 : 6}
           onEngineStop={() => {
+            if (pendingFocusPanRef.current) {
+              animateFocusPan();
+            }
+            if (skipNextFitRef.current) {
+              skipNextFitRef.current = false;
+              if (!fitted.current) fitted.current = true;
+              applyFocusFit(HOP_FIT_MS);
+              return;
+            }
             if (fitted.current) return;
             fitted.current = true;
-            applyFit(compact ? 360 : 480);
+            if (shouldFocusFit) applyFocusFit(compact ? 360 : HOP_FIT_MS);
+            else applyFit(compact ? 360 : 480);
           }}
-          linkColor={() => colors.line}
+          linkColor={(link) => {
+            const sourceId =
+              typeof link.source === "object" ? String((link.source as GraphNode).id) : String(link.source);
+            const targetId =
+              typeof link.target === "object" ? String((link.target as GraphNode).id) : String(link.target);
+            const grow = Math.min(
+              spawnProgressRef.current.get(sourceId) ?? 1,
+              spawnProgressRef.current.get(targetId) ?? 1,
+            );
+            if (grow >= 0.98) return colors.line;
+            const alpha = 0.12 + grow * 0.88;
+            return theme === "dark" ? `rgba(63, 63, 63, ${alpha})` : `rgba(208, 208, 208, ${alpha})`;
+          }}
           linkWidth={compact ? 1.2 : 1}
           linkDirectionalArrowLength={compact ? 3 : 4}
           linkDirectionalArrowRelPos={1}
@@ -198,12 +376,17 @@ export function GraphView({
             const n = node as GraphNode & { x?: number; y?: number };
             const x = n.x ?? 0;
             const y = n.y ?? 0;
+            const grow = easeOutCubic(spawnProgressRef.current.get(n.id) ?? 1);
+            if (grow < 0.02) return;
+
             const focused = Boolean(focusId && n.id === focusId);
             const hovered = hoveredId === n.id;
-            const r = graphNodeRadius({ degree: n.degree, focused }, compact) * (hovered ? 1.18 : 1);
+            const baseR = graphNodeRadius({ degree: n.degree, focused }, compact);
+            const r = baseR * grow * (hovered ? 1.18 : 1);
+
             if (focused) {
               ctx.beginPath();
-              ctx.arc(x, y, r + (compact ? 4 : 5), 0, Math.PI * 2);
+              ctx.arc(x, y, (r + (compact ? 4 : 5)) * grow, 0, Math.PI * 2);
               ctx.fillStyle = theme === "dark" ? "rgba(255, 244, 214, 0.18)" : "rgba(23, 23, 23, 0.12)";
               ctx.fill();
               ctx.strokeStyle = colors.accent;
@@ -225,7 +408,6 @@ export function GraphView({
               ctx.stroke();
             }
             if (compact || globalScale > 1.1) {
-              // Compact graph labels live in graph space so they shrink with the preview.
               const fontSize = Math.max(compact ? 4 : 8, Math.min(compact ? 12 : 18, 12 / globalScale));
               ctx.font = `${focused ? "600 " : ""}${fontSize}px sans-serif`;
               const maxWidth = compact ? 104 : 168;
@@ -240,21 +422,25 @@ export function GraphView({
               const labelWidth = ctx.measureText(label).width;
               const labelX = x - labelWidth / 2;
               const labelY = y + r + fontSize + (compact ? 3 : 5);
+              ctx.globalAlpha = grow;
               ctx.fillStyle = theme === "dark" ? "rgba(30, 30, 30, 0.5)" : "rgba(255, 255, 255, 0.5)";
               ctx.fillRect(labelX - 2, labelY - fontSize, labelWidth + 4, fontSize + 3);
               ctx.fillStyle = colors.ink;
               ctx.fillText(label, labelX, labelY);
+              ctx.globalAlpha = 1;
             }
           }}
-           nodePointerAreaPaint={(node, color, ctx) => {
+          nodePointerAreaPaint={(node, color, ctx) => {
             const n = node as GraphNode & { x?: number; y?: number };
-            const r = graphNodeRadius({ degree: n.degree }, compact) + 4;
+            const grow = spawnProgressRef.current.get(n.id) ?? 1;
+            if (grow < 0.02) return;
+            const r = graphNodeRadius({ degree: n.degree }, compact) * easeOutCubic(grow) + 4;
             ctx.fillStyle = color;
             ctx.beginPath();
             ctx.arc(n.x ?? 0, n.y ?? 0, r, 0, Math.PI * 2);
             ctx.fill();
-           }}
-           onNodeHover={(node) => setHoveredId(node ? String((node as GraphNode).id) : null)}
+          }}
+          onNodeHover={(node) => setHoveredId(node ? String((node as GraphNode).id) : null)}
           onNodeDrag={(node) => {
             const id = String((node as GraphNode).id);
             const nodes = data.nodes;

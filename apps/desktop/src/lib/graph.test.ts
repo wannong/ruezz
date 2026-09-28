@@ -9,7 +9,7 @@ import {
   graphNodeRadius,
   type GraphForceApi,
 } from "./graph-layout.ts";
-import { graphDepths } from "./graph.ts";
+import { graphDepths, graphFocusFitTransform } from "./graph.ts";
 
 test("graphDepths computes shortest undirected distances", () => {
   const depths = graphDepths(
@@ -32,6 +32,32 @@ test("graphDepths computes shortest undirected distances", () => {
   assert.deepEqual(Object.fromEntries(depths), { a: 0, b: 1, d: 1, c: 2, e: 3, f: 4 });
   assert.equal(depths.has("x"), false);
   assert.equal(depths.has("y"), false);
+});
+
+test("graphFocusFitTransform scales from focus to farthest neighbor", () => {
+  const near = graphFocusFitTransform(
+    [
+      { id: "a", x: 0, y: 0, degree: 2 },
+      { id: "b", x: 80, y: 0, degree: 1 },
+    ],
+    "a",
+    { width: 320, height: 320 },
+    true,
+  );
+  const far = graphFocusFitTransform(
+    [
+      { id: "a", x: 0, y: 0, degree: 2 },
+      { id: "b", x: 220, y: 0, degree: 1 },
+    ],
+    "a",
+    { width: 320, height: 320 },
+    true,
+  );
+  assert.ok(near);
+  assert.ok(far);
+  assert.ok(far!.k < near!.k);
+  assert.equal(near!.cx, 0);
+  assert.equal(near!.cy, 0);
 });
 
 test("graphDepths includes an isolated focus", () => {

@@ -31,6 +31,7 @@ type NoteViewProps = {
   onCreateIdea: (selector: IdeaSelector, content: string) => Promise<boolean>;
   onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
   onAddToChat?: (text: string) => void;
+  onRename?: (name: string) => void;
 };
 
 export function NoteView({
@@ -56,21 +57,24 @@ export function NoteView({
   onCreateIdea,
   onUpdateIdea,
   onAddToChat,
+  onRename,
 }: NoteViewProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; start: number; end: number } | null>(null);
   const sourceType = page.sourceType?.toLowerCase();
   const hasSource = sourceType === "pdf" || sourceType === "docx";
+  const isLiterature = page.type === "source";
   const [tags, setTags] = useState<string[]>(page.tags ?? []);
   const [tagInput, setTagInput] = useState("");
   const [tagSaving, setTagSaving] = useState(false);
   useEffect(() => setTags(page.tags ?? []), [page.id, page.tags]);
   useEffect(() => {
-    if (mode === "source" && !hasSource) onMode("read");
-  }, [hasSource, mode, onMode]);
+    if (!isLiterature) return;
+    if (hasSource) onMode("source");
+  }, [page.id, isLiterature, hasSource, onMode]);
   useEffect(() => {
-    if (sourceType === "pdf") onMode("source");
-  }, [page.id, sourceType, onMode]);
+    if (!isLiterature && mode === "source" && !hasSource) onMode("read");
+  }, [hasSource, isLiterature, mode, onMode]);
 
   const updateTags = async (next: string[]) => {
     const normalized = [...new Set(next.map((tag) => tag.trim()).filter(Boolean))];
@@ -151,8 +155,8 @@ export function NoteView({
     <div className="note-view">
       <div className="note-header">
         <div>
-          <h1 className="note-title">{page.title ?? page.id}</h1>
-          <div className="note-id">{page.path}</div>
+          {!(isLiterature && hasSource) && <h1 className="note-title">{page.title ?? page.id}</h1>}
+          {!isLiterature && <div className="note-id">{page.path}</div>}
           <div className="note-tags" aria-label="页面标签">
             {tags.map((tag) => <span className="tag-chip" key={tag}>#{tag}<button type="button" aria-label={`删除标签 ${tag}`} disabled={tagSaving} onClick={() => void updateTags(tags.filter((item) => item !== tag))}>×</button></span>)}
             <input className="tag-input" value={tagInput} disabled={tagSaving} placeholder="添加标签" aria-label="添加标签" onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }} />
@@ -161,44 +165,79 @@ export function NoteView({
           {tagError && <div className="error note-tag-error">{tagError}</div>}
         </div>
           <div className="note-toolbar">
-            <div className="note-mode">
-            <button type="button" className={mode === "read" ? "active" : ""} onClick={() => onMode("read")}>
-              阅读
-            </button>
-            <button type="button" className={mode === "edit" ? "active" : ""} onClick={() => onMode("edit")}>
-              编辑
-            </button>
-          </div>
-          {page.type !== "source" && <button
-            type="button"
-            className={`favorite-star note-favorite${favorite ? " active" : ""}`}
-            title={favorite ? "取消收藏" : "收藏"}
-            aria-label={favorite ? `取消收藏 ${page.title ?? page.id}` : `收藏 ${page.title ?? page.id}`}
-            aria-pressed={favorite}
-            onClick={onFavorite}
-          >
-            <Star size={15} fill={favorite ? "currentColor" : "none"} />
-          </button>}
-          {hasSource && (
-            <div className="note-mode">
-              <button type="button" className={mode === "source" ? "active" : ""} onClick={() => onMode("source")}>原件</button>
-            </div>
-          )}
-          <button
-            type="button"
-            className="primary note-save"
-            disabled={!dirty || saving}
-            onClick={onSave}
-          >
-            {saving ? "保存中…" : dirty ? "保存" : "已保存"}
-          </button>
+            {!isLiterature && (
+              <div className="note-mode">
+                <button type="button" className={mode === "read" ? "active" : ""} onClick={() => onMode("read")}>
+                  阅读
+                </button>
+                <button type="button" className={mode === "edit" ? "active" : ""} onClick={() => onMode("edit")}>
+                  编辑
+                </button>
+              </div>
+            )}
+            {!isLiterature && (
+              <button
+                type="button"
+                className={`favorite-star note-favorite${favorite ? " active" : ""}`}
+                title={favorite ? "取消收藏" : "收藏"}
+                aria-label={favorite ? `取消收藏 ${page.title ?? page.id}` : `收藏 ${page.title ?? page.id}`}
+                aria-pressed={favorite}
+                onClick={onFavorite}
+              >
+                <Star size={15} fill={favorite ? "currentColor" : "none"} />
+              </button>
+            )}
+            {!isLiterature && hasSource && (
+              <div className="note-mode">
+                <button type="button" className={mode === "source" ? "active" : ""} onClick={() => onMode("source")}>原件</button>
+              </div>
+            )}
+            {isLiterature && (
+              <button
+                type="button"
+                className={`favorite-star note-favorite${favorite ? " active" : ""}`}
+                title={favorite ? "取消收藏" : "收藏"}
+                aria-label={favorite ? `取消收藏 ${page.title ?? page.id}` : `收藏 ${page.title ?? page.id}`}
+                aria-pressed={favorite}
+                onClick={onFavorite}
+              >
+                <Star size={15} fill={favorite ? "currentColor" : "none"} />
+              </button>
+            )}
+            {!isLiterature && (
+              <button
+                type="button"
+                className="primary note-save"
+                disabled={!dirty || saving}
+                onClick={onSave}
+              >
+                {saving ? "保存中…" : dirty ? "保存" : "已保存"}
+              </button>
+            )}
         </div>
       </div>
-      {mode === "source" && hasSource ? (
+      {isLiterature ? (
+        hasSource ? (
         <DocumentPreview
           pageId={page.id}
           type={sourceType!}
-          name={page.sourcePath?.split(/[\\/]/).pop()}
+          title={page.title ?? page.id.split("/").pop() ?? page.id}
+          onRename={onRename}
+          ideas={ideas}
+          ideasVisible={ideasVisible}
+          onIdeasVisible={onIdeasVisible}
+          onCreateIdea={onCreateIdea}
+          onUpdateIdea={onUpdateIdea}
+        />
+        ) : (
+          <div className="empty-center">此文献暂无可浏览的原件</div>
+        )
+      ) : mode === "source" && hasSource ? (
+        <DocumentPreview
+          pageId={page.id}
+          type={sourceType!}
+          title={page.title ?? page.id.split("/").pop() ?? page.id}
+          onRename={onRename}
           ideas={ideas}
           ideasVisible={ideasVisible}
           onIdeasVisible={onIdeasVisible}

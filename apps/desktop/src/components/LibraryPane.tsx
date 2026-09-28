@@ -7,6 +7,7 @@ import {
   uniqueFolderName,
   type LibraryFolder,
 } from "../lib/libraryFolders";
+import { validNameSegment } from "../lib/fileTree";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 
 type LibraryPaneProps = {
@@ -18,6 +19,7 @@ type LibraryPaneProps = {
   onFavorite: (id: string) => void;
   onCreateFolder: (parentId: string | null, name: string) => void;
   onRenameFolder: (folderId: string, name: string) => void;
+  onRenamePage: (pageId: string, name: string) => void;
   onDeleteFolder: (folderId: string) => void;
   onMovePages: (pageIds: string[], folderId: string | null) => void;
   onAddToFolder: (folderId: string | null) => void;
@@ -30,6 +32,7 @@ type LibraryFolderTreeNode = LibraryFolder & {
 
 type LibraryEditor =
   | { mode: "rename"; folderId: string; value: string }
+  | { mode: "rename-page"; pageId: string; value: string }
   | { mode: "create"; parentId: string | null; value: string };
 
 type MenuTarget =
@@ -83,6 +86,7 @@ export function LibraryPane({
   onFavorite,
   onCreateFolder,
   onRenameFolder,
+  onRenamePage,
   onDeleteFolder,
   onMovePages,
   onAddToFolder,
@@ -126,15 +130,28 @@ export function LibraryPane({
     setEditor({ mode: "rename", folderId, value: folder.name });
   };
 
+  const startRenamePage = (pageId: string) => {
+    const page = pages.find((item) => item.id === pageId);
+    if (!page) return;
+    setEditor({ mode: "rename-page", pageId, value: page.title ?? page.id.split("/").pop() ?? "" });
+  };
+
   const commitEditor = (next: string) => {
     if (!editor) return;
-    const name = next.trim();
+    const name = validNameSegment(next);
     const current = editor;
     setEditor(null);
     if (!name) return;
     if (current.mode === "rename") {
       if (name === folders.find((folder) => folder.id === current.folderId)?.name) return;
       onRenameFolder(current.folderId, name);
+      return;
+    }
+    if (current.mode === "rename-page") {
+      const page = pages.find((item) => item.id === current.pageId);
+      const previous = page?.title ?? page?.id.split("/").pop() ?? "";
+      if (name === previous) return;
+      onRenamePage(current.pageId, name);
       return;
     }
     onCreateFolder(current.parentId, name);
@@ -197,6 +214,7 @@ export function LibraryPane({
     const favorite = favorites.has(page.id);
     return [
       { type: "item", label: favorite ? "取消收藏" : "收藏", onClick: () => onFavorite(page.id) },
+      { type: "item", label: "重命名", onClick: () => startRenamePage(page.id) },
       { type: "sep" },
       ...moveItems(page.id, target.folderId),
     ];
@@ -267,9 +285,14 @@ export function LibraryPane({
                       page={page}
                       favorite={favorites.has(page.id)}
                       depth={1}
+                      renaming={editor?.mode === "rename-page" && editor.pageId === page.id}
+                      renameValue={editor?.mode === "rename-page" && editor.pageId === page.id ? editor.value : undefined}
                       onOpen={onOpen}
                       onFavorite={onFavorite}
                       onMenu={(event) => openMenu(event, { type: "page", pageId: page.id, folderId: null })}
+                      onRenameValue={(value) => editor?.mode === "rename-page" && setEditor({ ...editor, value })}
+                      onCommitRename={commitEditor}
+                      onCancelRename={() => setEditor(null)}
                     />
                   ))}
                 </div>
@@ -394,9 +417,14 @@ function FolderNode({
               page={page}
               favorite={favorites.has(page.id)}
               depth={depth + 1}
+              renaming={editor?.mode === "rename-page" && editor.pageId === page.id}
+              renameValue={editor?.mode === "rename-page" && editor.pageId === page.id ? editor.value : undefined}
               onOpen={onOpen}
               onFavorite={onFavorite}
               onMenu={(event) => onMenu(event, { type: "page", pageId: page.id, folderId: node.id })}
+              onRenameValue={onEditorValue}
+              onCommitRename={onCommitEditor}
+              onCancelRename={onCancelEditor}
             />
           ))}
           {node.children.length === 0 && node.pages.length === 0 && !creatingHere && (
@@ -412,28 +440,48 @@ export function LibraryRow({
   page,
   favorite,
   depth = 0,
+  renaming = false,
+  renameValue = "",
   onOpen,
   onFavorite,
   onMenu,
+  onRenameValue,
+  onCommitRename,
+  onCancelRename,
 }: {
   page: PageSummary;
   favorite: boolean;
   depth?: number;
+  renaming?: boolean;
+  renameValue?: string;
   onOpen: (id: string) => void;
   onFavorite: (id: string) => void;
   onMenu?: (event: MouseEvent) => void;
+  onRenameValue?: (value: string) => void;
+  onCommitRename?: (value: string) => void;
+  onCancelRename?: () => void;
 }) {
   const source = page.sourcePath ?? page.path ?? page.id;
+  const title = page.title ?? page.id.split("/").pop();
   return (
     <div
-      className="library-row"
+      className={`library-row${renaming ? " editing" : ""}`}
       style={{ "--depth": depth } as CSSProperties}
       onContextMenu={onMenu}
     >
-      <button type="button" className="library-open" onClick={() => onOpen(page.id)}>
+      <button type="button" className="library-open" onClick={() => !renaming && onOpen(page.id)}>
         <FileText size={15} />
         <span className="library-title">
-          <strong>{page.title ?? page.id.split("/").pop()}</strong>
+          {renaming && onRenameValue && onCommitRename && onCancelRename ? (
+            <NameInput
+              value={renameValue ?? title ?? ""}
+              onChange={onRenameValue}
+              onCommit={onCommitRename}
+              onCancel={onCancelRename}
+            />
+          ) : (
+            <strong>{title}</strong>
+          )}
           {page.tags?.length ? <small>{page.tags.map((tag) => `#${tag}`).join(" ")}</small> : null}
         </span>
         <span className="library-source">

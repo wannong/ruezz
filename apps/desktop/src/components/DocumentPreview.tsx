@@ -6,7 +6,8 @@ import "pdfjs-dist/web/pdf_viewer.css";
 type DocumentPreviewProps = {
   pageId: string;
   type: string;
-  name?: string;
+  title: string;
+  onRename?: (name: string) => void;
   ideas: Idea[];
   ideasVisible: boolean;
   onIdeasVisible: (visible: boolean) => void;
@@ -24,7 +25,64 @@ function decodeBase64(value: string): Uint8Array {
   return bytes;
 }
 
-export function DocumentPreview({ pageId, type, name, ideas, ideasVisible, onIdeasVisible, onCreateIdea, onUpdateIdea }: DocumentPreviewProps) {
+function EditableDocumentTitle({ title, onRename }: { title: string; onRename?: (name: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+  useEffect(() => {
+    setDraft(title);
+    setEditing(false);
+  }, [title]);
+
+  if (!onRename) {
+    return (
+      <div className="document-title-slot">
+        <span className="document-name">{title}</span>
+      </div>
+    );
+  }
+
+  if (editing) {
+    return (
+      <div className="document-title-slot">
+      <input
+        className="document-name-edit"
+        value={draft}
+        autoFocus
+        spellCheck={false}
+        aria-label="文献标题"
+        onFocus={(event) => event.currentTarget.select()}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          const next = draft.trim();
+          setEditing(false);
+          if (next && next !== title) onRename(next);
+          else setDraft(title);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+          } else if (event.key === "Escape") {
+            event.preventDefault();
+            setDraft(title);
+            setEditing(false);
+          }
+        }}
+      />
+      </div>
+    );
+  }
+
+  return (
+    <div className="document-title-slot">
+      <button type="button" className="document-name" title={title} onClick={() => setEditing(true)}>
+        {title}
+      </button>
+    </div>
+  );
+}
+
+export function DocumentPreview({ pageId, type, title, onRename, ideas, ideasVisible, onIdeasVisible, onCreateIdea, onUpdateIdea }: DocumentPreviewProps) {
   const normalizedType = type.toLowerCase().replace(/^\./, "");
   const isPdf = normalizedType === "pdf";
   const [pdf, setPdf] = useState<PdfDocument | null>(null);
@@ -215,7 +273,7 @@ export function DocumentPreview({ pageId, type, name, ideas, ideasVisible, onIde
   return <div className={isPdf ? "document-preview pdf-preview" : "document-preview docx-preview"}>
     {isPdf ? <>
       <div className="document-controls">
-        <span className="document-name">{name ?? "PDF 原件"}</span>
+        <EditableDocumentTitle title={title} onRename={onRename} />
         <button type="button" title="缩小" aria-label="缩小" onClick={() => setScale((value) => Math.max(0.6, value - 0.15))}><Minus size={15} /></button>
         <span>{Math.round(scale * 100)}%</span>
         <button type="button" title="放大" aria-label="放大" onClick={() => setScale((value) => Math.min(2.5, value + 0.15))}><Plus size={15} /></button>
@@ -272,7 +330,12 @@ export function DocumentPreview({ pageId, type, name, ideas, ideasVisible, onIde
         </div>
         {annotationMode && <div className="pdf-annotation-hint">拖动鼠标框选图片、公式、表格或扫描文字区域</div>}
       </div>
-    </> : <div ref={docxRef} className="docx-page" />}
+    </> : <>
+      <div className="document-controls">
+        <EditableDocumentTitle title={title} onRename={onRename} />
+      </div>
+      <div ref={docxRef} className="docx-page" />
+    </>}
   </div>;
 }
 

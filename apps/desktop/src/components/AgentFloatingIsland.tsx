@@ -39,6 +39,8 @@ export type AgentFloatingIslandProps = {
   ruezzCelebrate?: boolean;
 };
 
+const ISLAND_EXIT_MS = 320;
+
 export function AgentFloatingIsland({
   open,
   onClose,
@@ -109,7 +111,7 @@ export function AgentFloatingIsland({
           onClick={onClose}
         />
       </Presence>
-      <Presence open={open}>
+      <Presence open={open} duration={ISLAND_EXIT_MS}>
         <div
           ref={shellRef}
           className="agent-island"

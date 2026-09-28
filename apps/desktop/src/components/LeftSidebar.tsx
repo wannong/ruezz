@@ -43,6 +43,7 @@ type LeftSidebarProps = {
   onFavorite: (pageId: string) => void;
   onCreateLibraryFolder: (parentId: string | null, name: string) => void;
   onRenameLibraryFolder: (folderId: string, name: string) => void;
+  onRenameLibraryPage: (pageId: string, name: string) => void;
   onDeleteLibraryFolder: (folderId: string) => void;
   onMoveLibraryPages: (pageIds: string[], folderId: string | null) => void;
   onAddToLibraryFolder: (folderId: string | null) => void;
@@ -78,6 +79,7 @@ export function LeftSidebar({
   onFavorite,
   onCreateLibraryFolder,
   onRenameLibraryFolder,
+  onRenameLibraryPage,
   onDeleteLibraryFolder,
   onMoveLibraryPages,
   onAddToLibraryFolder,
@@ -167,6 +169,7 @@ export function LeftSidebar({
           onFavorite={onFavorite}
           onCreateFolder={onCreateLibraryFolder}
           onRenameFolder={onRenameLibraryFolder}
+          onRenamePage={onRenameLibraryPage}
           onDeleteFolder={onDeleteLibraryFolder}
           onMovePages={onMoveLibraryPages}
           onAddToFolder={onAddToLibraryFolder}

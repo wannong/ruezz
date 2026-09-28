@@ -1480,6 +1480,7 @@ export function Workspace({
           onFavorite={toggleFavorite}
           onCreateLibraryFolder={createLibraryFolderIn}
           onRenameLibraryFolder={renameLibraryFolderIn}
+          onRenameLibraryPage={(pageId, name) => void renameEntry("page", pageId, name)}
           onDeleteLibraryFolder={deleteLibraryFolderIn}
           onMoveLibraryPages={moveLibraryPages}
           onAddToLibraryFolder={openLibraryImport}
@@ -1564,6 +1565,7 @@ export function Workspace({
                   if (sessionId) updateAgentState(sessionId, { draft: appendSelectionToDraft(draft, text) });
                   else setDraftFallback(appendSelectionToDraft(draft, text));
                 }}
+                onRename={(name) => void renameEntry("page", activePage.id, name)}
               />
             )}
           </div>
