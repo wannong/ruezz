@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { useMemo } from "react";
 import { tabKey, tabLabel, type Tab } from "../lib/tabs";
+import { TabStrip, type TabStripItem } from "./TabStrip";
 
 type TabBarProps = {
   tabs: Tab[];
@@ -12,53 +12,33 @@ type TabBarProps = {
 };
 
 export function TabBar({ tabs, activeKey, titleFor, isDirty, onSelect, onClose }: TabBarProps) {
-  const scrollerRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const root = scrollerRef.current;
-    if (!root || !activeKey) return;
-    const el = root.querySelector(`[data-tab-key="${CSS.escape(activeKey)}"]`);
-    if (el instanceof HTMLElement) {
-      el.scrollIntoView({ inline: "nearest", block: "nearest" });
-    }
-  }, [activeKey, tabs]);
-
-  if (tabs.length === 0) return <div className="tab-bar empty-tabs" />;
+  const items = useMemo<TabStripItem[]>(
+    () =>
+      tabs.map((tab) => {
+        const key = tabKey(tab);
+        const label = tabLabel(tab, titleFor);
+        const dirty = isDirty(tab.id);
+        return {
+          key,
+          label: (
+            <>
+              {dirty && <span className="tab-dirty" title="未保存">●</span>}
+              {label}
+            </>
+          ),
+          closeLabel: "关闭标签",
+        };
+      }),
+    [tabs, titleFor, isDirty],
+  );
 
   return (
-    <div className="tab-bar" role="tablist" ref={scrollerRef}>
-      {tabs.map((tab) => {
-        const key = tabKey(tab);
-        const active = key === activeKey;
-        const dirty = isDirty(tab.id);
-        return (
-          <div
-            key={key}
-            data-tab-key={key}
-            className={`tab${active ? " active" : ""}`}
-            role="tab"
-            aria-selected={active}
-            onClick={() => onSelect(key)}
-          >
-            <button type="button" className="tab-title">
-              {dirty && <span className="tab-dirty" title="未保存">●</span>}
-              {tabLabel(tab, titleFor)}
-            </button>
-            <button
-              type="button"
-              className="tab-close"
-              data-icon="tab-close"
-              aria-label="关闭标签"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose(key);
-              }}
-            >
-              <X size={12} />
-            </button>
-          </div>
-        );
-      })}
-    </div>
+    <TabStrip
+      items={items}
+      activeKey={activeKey}
+      ariaLabel="已打开页面"
+      onSelect={onSelect}
+      onClose={onClose}
+    />
   );
 }

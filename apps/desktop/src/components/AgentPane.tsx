@@ -7,6 +7,7 @@ import { CentaurChromeSlot } from "./CentaurChromeSlot";
 import { Presence } from "./Presence";
 import { ContextMenu } from "./ContextMenu";
 import { HistoryGlyph } from "./iconGlyphs";
+import { TabStrip } from "./TabStrip";
 
 type AgentPaneProps = {
   messages: AgentSessionMessage[];
@@ -125,31 +126,27 @@ export function AgentPane({
   );
   const liveSessions = useMemo(() => sessions.filter((s) => !s.archived), [sessions]);
   const archivedSessions = useMemo(() => sessions.filter((s) => s.archived), [sessions]);
+  const sessionTabItems = useMemo(
+    () =>
+      openSessionIds.flatMap((id) => {
+        const session = sessions.find((item) => item.id === id);
+        if (!session) return [];
+        const title = session.title || "新对话";
+        return [{ key: id, label: title, closeLabel: `关闭 ${title}` }];
+      }),
+    [openSessionIds, sessions],
+  );
 
   return (
     <div className="agent-pane agent-chat">
       <div className="agent-chat-header">
-        <div className="agent-session-tabs" role="tablist" aria-label="已打开会话">
-          {openSessionIds.map((id) => {
-            const session = sessions.find((item) => item.id === id);
-            if (!session) return null;
-            return (
-              <div key={id} className={`agent-session-tab${id === sessionId ? " active" : ""}`}>
-                <button type="button" role="tab" aria-selected={id === sessionId} onClick={() => onSelectSession(id)}>
-                  {session.title || "新对话"}
-                </button>
-                <button
-                  type="button"
-                  className="agent-session-tab-close"
-                  aria-label={`关闭 ${session.title || "新对话"}`}
-                  onClick={() => onCloseSession(id)}
-                >
-                  ×
-                </button>
-              </div>
-            );
-          })}
-        </div>
+        <TabStrip
+          items={sessionTabItems}
+          activeKey={sessionId}
+          ariaLabel="已打开会话"
+          onSelect={onSelectSession}
+          onClose={onCloseSession}
+        />
         <CentaurChromeSlot variant="header" open={!empty && headerCentaurShown} activity={ruezzActivity} />
         <button
           type="button"

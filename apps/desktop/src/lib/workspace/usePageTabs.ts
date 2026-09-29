@@ -143,7 +143,7 @@ export function usePageTabs({
     if (!page || text == null || text === page.raw) return;
     const timer = window.setTimeout(() => {
       void saveNote(activePageId);
-    }, 1200);
+    }, 60_000);
     return () => window.clearTimeout(timer);
   }, [activePageId, noteDrafts, pageCache, saveNote]);
 

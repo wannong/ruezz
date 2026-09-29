@@ -1,5 +1,5 @@
-import { ensureSyntaxTree, syntaxTree } from "@codemirror/language";
-import { RangeSetBuilder, StateField, type EditorState, type Extension, type Transaction } from "@codemirror/state";
+import { ensureSyntaxTree, syntaxTree, syntaxTreeAvailable } from "@codemirror/language";
+import { RangeSetBuilder, StateField, Transaction, type EditorState, type Extension, type Transaction as EditorTransaction } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, WidgetType, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import type { Idea } from "../../api";
 import type { MarkdownRenderContext } from "./renderMarkdown";
@@ -180,13 +180,24 @@ function expandedSourceRange(state: EditorState): Span {
   const from = state.doc.line(keptFrom).from;
   const to = state.doc.line(keptTo).to;
   const blocks = blocksForRange(state, { from, to });
-  if (blocks.length > 0) {
-    return {
-      from: Math.min(...blocks.map((block) => block.from)),
-      to: Math.max(...blocks.map((block) => block.to)),
-    };
-  }
-  return { from, to };
+  const range =
+    blocks.length > 0
+      ? {
+          from: Math.min(...blocks.map((block) => block.from)),
+          to: Math.max(...blocks.map((block) => block.to)),
+        }
+      : { from, to };
+  return ensureRangeIncludesHead(state, range);
+}
+
+function ensureRangeIncludesHead(state: EditorState, range: Span): Span {
+  const head = state.selection.main.head;
+  if (head >= range.from && head <= range.to) return range;
+  const core = blockAtHead(state);
+  return {
+    from: Math.min(range.from, core.from),
+    to: Math.max(range.to, core.to),
+  };
 }
 
 function blocksForRange(state: EditorState, span: Span): BlockSpan[] {
@@ -210,8 +221,13 @@ function blocksForRange(state: EditorState, span: Span): BlockSpan[] {
  */
 export function editableSourceRange(state: EditorState, expandLines = true): Span {
   if (!state.field(livePreviewActiveField)) return EMPTY_EDITABLE_RANGE;
-  if (!expandLines) return blockAtHead(state);
+  if (!expandLines) return ensureRangeIncludesHead(state, blockAtHead(state));
   return expandedSourceRange(state);
+}
+
+function isDeleteUserEvent(tr: EditorTransaction): boolean {
+  const userEvent = tr.annotation(Transaction.userEvent);
+  return typeof userEvent === "string" && userEvent.startsWith("delete");
 }
 
 /** Move across rendered blocks when ArrowUp/Down would otherwise jump to the document start. */
@@ -244,18 +260,99 @@ export function livePreviewMoveVertically(view: EditorView, forward: boolean): b
   return true;
 }
 
-function shouldExpandLines(tr: Transaction): boolean {
-  if (tr.docChanged) return true;
+function shouldExpandLines(tr: EditorTransaction): boolean {
   if (tr.isUserEvent(POINTER_USER_EVENT)) return false;
+  if (tr.isUserEvent("select.correction")) return false;
+  if (tr.docChanged && isDeleteUserEvent(tr)) return false;
+  if (tr.docChanged) return true;
   return true;
 }
 
 function shouldKeepSource(state: EditorState, node: Span, expandLines: boolean): boolean {
+  const head = state.selection.main.head;
+  if (head >= node.from && head <= node.to) return true;
+  const headLine = state.doc.lineAt(head);
+  if (rangesOverlap({ from: headLine.from, to: headLine.to }, node)) return true;
   return rangesOverlap(node, editableSourceRange(state, expandLines));
 }
 
-function buildDecorations(state: EditorState, ctx: LivePreviewContext, expandLines: boolean): DecorationSet {
-  ensureSyntaxTree(state, state.doc.length, 30);
+function isHeadInPreviewWidget(view: EditorView, head = view.state.selection.main.head): boolean {
+  const coords = view.coordsAtPos(head);
+  if (!coords) return true;
+  const dom = view.domAtPos(head);
+  const element = dom.node instanceof Element ? dom.node : dom.node.parentElement;
+  return Boolean(element?.closest(".cm-live-preview-rendered"));
+}
+
+function isHeadOnVisibleSourceLine(view: EditorView, head = view.state.selection.main.head): boolean {
+  if (isHeadInPreviewWidget(view, head)) return false;
+  const coords = view.coordsAtPos(head);
+  if (!coords) return false;
+  const dom = view.domAtPos(head);
+  const element = dom.node instanceof Element ? dom.node : dom.node.parentElement;
+  return Boolean(element?.closest(".cm-line"));
+}
+
+function snapHeadToEditablePos(state: EditorState, head: number): number {
+  const range = editableSourceRange(state, true);
+  if (range.from > range.to) return head;
+  if (head >= range.from && head <= range.to) {
+    const line = state.doc.lineAt(head);
+    return Math.max(line.from, Math.min(head, line.to));
+  }
+  const distToFrom = Math.abs(head - range.from);
+  const distToTo = Math.abs(head - range.to);
+  return distToFrom <= distToTo ? range.from : range.to;
+}
+
+function pruneAdjacentAbandonedBlankLines(view: EditorView): void {
+  const state = view.state;
+  const headLine = state.doc.lineAt(state.selection.main.head);
+  const editable = editableSourceRange(state, false);
+  const changes: Array<{ from: number; to: number; insert: string }> = [];
+
+  for (const lineNumber of [headLine.number - 1, headLine.number + 1]) {
+    if (lineNumber < 1 || lineNumber > state.doc.lines) continue;
+    const line = state.doc.line(lineNumber);
+    if (line.text.trim().length > 0) continue;
+    if (rangesOverlap({ from: line.from, to: line.to }, editable)) continue;
+    if (line.number < state.doc.lines) {
+      changes.push({ from: line.from, to: line.to + 1, insert: "" });
+    } else if (line.from > 0) {
+      changes.push({ from: line.from - 1, to: line.to, insert: "" });
+    }
+  }
+
+  if (changes.length === 0) return;
+  view.dispatch({
+    changes,
+    userEvent: "delete.preview-prune",
+  });
+}
+
+function correctCursorIfHidden(view: EditorView): void {
+  if (!view.state.field(livePreviewActiveField)) return;
+  const head = view.state.selection.main.head;
+  if (!isHeadInPreviewWidget(view, head)) return;
+  const safe = snapHeadToEditablePos(view.state, head);
+  if (safe === head) return;
+  view.dispatch({
+    selection: { anchor: safe, head: safe },
+    scrollIntoView: true,
+    userEvent: "select.correction",
+  });
+}
+
+function buildDecorations(
+  state: EditorState,
+  ctx: LivePreviewContext,
+  expandLines: boolean,
+  previous?: DecorationSet,
+): DecorationSet {
+  ensureSyntaxTree(state, state.doc.length, 100);
+  if (!syntaxTreeAvailable(state, state.doc.length) && previous) {
+    return previous;
+  }
   const builder = new RangeSetBuilder<Decoration>();
   const tree = syntaxTree(state);
   if (!tree.length) return Decoration.none;
@@ -463,12 +560,43 @@ export function livePreviewPlugin(ctx: LivePreviewContext) {
         livePreviewActiveChanged(tr) ||
         tr.startState.field(livePreviewActiveField) !== tr.state.field(livePreviewActiveField)
       ) {
-        return buildDecorations(tr.state, ctx, shouldExpandLines(tr));
+        if (tr.docChanged && !syntaxTreeAvailable(tr.state, tr.state.doc.length)) {
+          return deco.map(tr.changes);
+        }
+        return buildDecorations(tr.state, ctx, shouldExpandLines(tr), deco);
       }
       return deco;
     },
     provide: (field) => EditorView.decorations.from(field),
   });
+}
+
+/** After delete, prune abandoned blank expansion lines and keep the caret on source text. */
+export function livePreviewEditHygiene(): Extension {
+  return ViewPlugin.fromClass(
+    class {
+      private scheduled = false;
+
+      update(update: ViewUpdate) {
+        if (!update.state.field(livePreviewActiveField)) return;
+        const needsHygiene =
+          update.docChanged ||
+          update.geometryChanged ||
+          update.selectionSet ||
+          update.transactions.some((tr) => isDeleteUserEvent(tr));
+        if (!needsHygiene || this.scheduled) return;
+        this.scheduled = true;
+        const view = update.view;
+        const hadDelete = update.transactions.some((tr) => tr.docChanged && isDeleteUserEvent(tr));
+        requestAnimationFrame(() => {
+          this.scheduled = false;
+          if (!view.state.field(livePreviewActiveField)) return;
+          if (hadDelete) pruneAdjacentAbandonedBlankLines(view);
+          correctCursorIfHidden(view);
+        });
+      }
+    },
+  );
 }
 
 /**
@@ -541,8 +669,11 @@ export function stabilizePreviewScroll(): Extension {
 
       update(update: ViewUpdate) {
         const view = update.view;
-        if (update.docChanged) {
-          const head = update.state.selection.main.head;
+        const deleteChange = update.transactions.some((tr) => tr.docChanged && isDeleteUserEvent(tr));
+        const head = update.state.selection.main.head;
+        if (!isHeadOnVisibleSourceLine(view, head)) {
+          this.anchorPos = -1;
+        } else if (update.docChanged && !deleteChange) {
           const coords = view.coordsAtPos(head);
           if (coords) {
             this.anchorPos = head;
@@ -550,7 +681,7 @@ export function stabilizePreviewScroll(): Extension {
           }
         }
 
-        if (!update.docChanged || !update.geometryChanged) return;
+        if (!update.docChanged || !update.geometryChanged || deleteChange) return;
         if (this.anchorPos < 0) return;
 
         requestAnimationFrame(() => {

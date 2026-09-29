@@ -76,6 +76,7 @@ html:not([data-palette]) {
   --shadow-button-active: 0 1px 3px rgba(0, 0, 0, 0.45) inset;
   --shadow-button-primary: 0 1px 0 rgba(255, 255, 255, 0.14) inset, 0 1px 3px rgba(0, 0, 0, 0.42);
   --shadow-button-primary-hover: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 2px 7px rgba(0, 0, 0, 0.48);
+  --shadow-chrome-edge: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 2px 5px rgba(0, 0, 0, 0.38);
 }
 
 /* Palette — 明亮：经典浅色界面 */
@@ -107,6 +108,7 @@ html[data-palette="light"] {
   --shadow-button-active: 0 1px 2px rgba(0, 0, 0, 0.14) inset;
   --shadow-button-primary: 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.06);
   --shadow-button-primary-hover: 0 2px 6px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.07);
+  --shadow-chrome-edge: 0 1px 2px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.04);
 }
 
 /* Palette 2 — 暖调 / 米白：阅读区浅底深字，边框最深，主色为奶油米白 */
@@ -138,6 +140,7 @@ html[data-palette="warm"] {
   --shadow-button-active: 0 1px 2px rgba(25, 0, 25, 0.16) inset;
   --shadow-button-primary: 0 1px 2px rgba(43, 18, 76, 0.2), 0 0 0 1px rgba(43, 18, 76, 0.08);
   --shadow-button-primary-hover: 0 2px 6px rgba(43, 18, 76, 0.24), 0 0 0 1px rgba(43, 18, 76, 0.1);
+  --shadow-chrome-edge: 0 1px 2px rgba(25, 0, 25, 0.12), 0 0 0 1px rgba(25, 0, 25, 0.05);
 }
 
 /* Palette 3 — 蓝调：阅读区浅灰蓝底深字，边框最深 */
@@ -169,6 +172,7 @@ html[data-palette="blue-tone"] {
   --shadow-button-active: 0 1px 2px rgba(6, 20, 27, 0.16) inset;
   --shadow-button-primary: 0 1px 2px rgba(37, 55, 69, 0.2), 0 0 0 1px rgba(37, 55, 69, 0.08);
   --shadow-button-primary-hover: 0 2px 6px rgba(37, 55, 69, 0.24), 0 0 0 1px rgba(37, 55, 69, 0.1);
+  --shadow-chrome-edge: 0 1px 2px rgba(6, 20, 27, 0.12), 0 0 0 1px rgba(6, 20, 27, 0.05);
 }
 
 * {
@@ -238,7 +242,6 @@ button:disabled {
 /* Flat / chrome controls — no raised edge */
 .titlebar-menu-btn,
 .titlebar-btn,
-.tab-title,
 .tab-close,
 .tree-label,
 .tree-twist,
@@ -378,6 +381,7 @@ textarea:focus {
 
 .titlebar {
   position: relative;
+  z-index: 2;
   height: 36px;
   flex-shrink: 0;
   display: flex;
@@ -385,6 +389,7 @@ textarea:focus {
   background: var(--ribbon);
   color: var(--ink);
   border-bottom: 1px solid var(--line);
+  box-shadow: var(--shadow-chrome-edge);
   user-select: none;
   -webkit-user-select: none;
 }
@@ -892,10 +897,10 @@ textarea:focus {
   height: var(--pane-header-height);
   min-height: var(--pane-header-height);
   background: var(--bg-elevated);
-  border-bottom: 1px solid var(--line);
 }
 
 .tab-bar {
+  position: relative;
   display: flex;
   align-items: flex-end;
   flex-wrap: nowrap;
@@ -903,13 +908,42 @@ textarea:focus {
   min-width: 0;
   height: 100%;
   min-height: 0;
-  gap: 3px;
+  gap: 0;
   padding: 0 6px;
   background: transparent;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
   scrollbar-color: var(--line-strong) transparent;
+}
+
+.tab-slide-indicator {
+  position: absolute;
+  bottom: 0;
+  margin-bottom: -1px;
+  height: calc(var(--pane-header-height) - 5px);
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--panel);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.tab-slide-indicator.ready {
+  transition:
+    left var(--dur-base) var(--ease-out),
+    width var(--dur-base) var(--ease-out);
+}
+
+.tab-slide-indicator::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--panel);
 }
 
 .tab-bar::-webkit-scrollbar {
@@ -942,6 +976,7 @@ textarea:focus {
 }
 
 .tab {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.15rem;
@@ -955,30 +990,34 @@ textarea:focus {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  box-shadow: none;
+  transition:
+    color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.tab:not(.active):has(.tab-title:hover) {
+  box-shadow: var(--shadow-button-hover);
 }
 
 .tab.active {
-  background: var(--panel);
-  border-color: var(--line);
-  border-bottom-color: var(--panel);
+  z-index: 1;
   color: var(--ink);
 }
 
 .tab-title {
-  border: none;
-  background: transparent;
+  flex: 1;
+  min-width: 0;
   padding: 0.45rem 0.5rem 0.45rem 0.7rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
-  flex: 1;
-  text-align: left;
   display: flex;
   align-items: center;
   gap: 0.3rem;
   font-size: 0.82rem;
   font-weight: 600;
+  text-align: left;
 }
 
 .tab-dirty {
@@ -1015,6 +1054,7 @@ textarea:focus {
   position: relative;
   background: var(--panel);
   color: var(--ink);
+  border-top: 1px solid var(--line);
 }
 
 .note-view {
@@ -2185,12 +2225,19 @@ textarea:focus {
 
 .agent-chat-header {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 0.35rem;
   flex-shrink: 0;
+  height: var(--pane-header-height);
   min-height: var(--pane-header-height);
-  padding: 0.2rem 0.5rem;
-  border-bottom: 1px solid var(--line);
+  padding: 0 0.35rem 0 0;
+  background: var(--bg-elevated);
+}
+
+.agent-chat-header > .wk-presence,
+.agent-chat-header > .agent-round-btn {
+  align-self: center;
+  flex-shrink: 0;
 }
 
 .search-filters { position: relative; display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem; padding: 0 0.6rem 0.45rem; }
@@ -2212,41 +2259,14 @@ textarea:focus {
 .search-history-items { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
 .search-history-items button { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid var(--line); border-radius: 999px; padding: 0.15rem 0.4rem; background: transparent; color: var(--muted); font-size: 0.7rem; cursor: pointer; }
 
-.agent-session-tabs {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  gap: 4px;
-  padding: 0 2px;
-  overflow-x: auto;
-}
-.agent-session-tabs button {
-  max-width: 130px;
-  overflow: hidden;
-  padding: 5px 10px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--muted);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.agent-session-tabs button.active,
-.agent-session-tabs button:hover {
-  background: var(--active);
-  border-color: var(--line);
-  color: var(--ink);
-}
-.agent-session-tab { display: inline-flex; min-width: 0; align-items: center; border-radius: var(--radius-pill); }
-.agent-session-tab-close { padding: 4px 5px !important; }
-
 .agent-chat-main {
   position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
 }
 
 .agent-round-btn {
@@ -3904,7 +3924,6 @@ button.ghost {
 
 /* Hover / press. Transform only on press targets, not window chrome. */
 .titlebar-menu-btn,
-.tab-title,
 .tab-close,
 .agent-model-name,
 .sidebar-tabs button,

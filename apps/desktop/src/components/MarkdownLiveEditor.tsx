@@ -9,6 +9,7 @@ import type { Idea, IdeaSelector, IdeaTarget, PageSummary } from "../api";
 import { createCodemirrorTheme } from "../lib/markdown/codemirrorTheme";
 import {
   liveEditingZoneHighlight,
+  livePreviewEditHygiene,
   livePreviewEmptyDocHint,
   livePreviewInteractionMode,
   livePreviewMoveVertically,
@@ -99,6 +100,7 @@ export function MarkdownLiveEditor({
       stabilizePreviewScroll(),
       livePreviewInteractionMode(),
       livePreviewRestoreOnBlur(),
+      livePreviewEditHygiene(),
       liveEditingZoneHighlight(),
       livePreviewEmptyDocHint(),
       livePreviewTailPlaceholder(),

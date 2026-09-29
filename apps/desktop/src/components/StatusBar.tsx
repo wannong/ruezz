@@ -46,7 +46,7 @@ export function StatusBar({
         onClick={onCyclePalette}
         title={`界面配色：${paletteLabel}（点击切换）`}
       >
-        <Palette size={14} />
+        <Palette size={12} />
         <span className="status-palette-label">{paletteLabel}</span>
       </button>
     </footer>
