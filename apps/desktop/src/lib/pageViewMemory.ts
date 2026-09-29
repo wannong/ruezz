@@ -9,9 +9,16 @@ export type PageViewMemory = {
   readScrollTop?: number;
 };
 
+export function normalizeNoteMode(mode?: string, hasSourceFile = false): NoteMode {
+  if (mode === "live" || mode === "source" || mode === "file") return mode;
+  if (mode === "read" || mode === "edit") return "live";
+  if (mode === "source") return hasSourceFile ? "file" : "live";
+  return "live";
+}
+
 export function defaultPageMode(pageType: string | undefined, hasSource: boolean): NoteMode {
-  if (pageType === "source" && hasSource) return "source";
-  return "read";
+  if (pageType === "source" && hasSource) return "file";
+  return "live";
 }
 
 export function detectPdfPageFromScroll(

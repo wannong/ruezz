@@ -497,7 +497,7 @@ export function Workspace({
       await loadPages();
       await loadGraph();
       openPage(created.id);
-      setPageModes((modes) => ({ ...modes, [created.id]: "edit" }));
+      setPageModes((modes) => ({ ...modes, [created.id]: "live" }));
       setNewNoteOpen(false);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
@@ -714,7 +714,7 @@ export function Workspace({
       { id: "search", label: "搜索", run: () => { setLeftCollapsed(false); setLeftView("search"); } },
       { id: "favorites", label: "显示收藏", run: () => { setLeftCollapsed(false); setLeftView("favorites"); } },
       { id: "new-note", label: "新建笔记", hint: "Ctrl+N", run: () => setNewNoteOpen(true) },
-      { id: "edit", label: "切换阅读/编辑", hint: "Ctrl+E", run: togglePageNoteMode },
+      { id: "edit", label: "切换 Live/源码", hint: "Ctrl+E", run: togglePageNoteMode },
       { id: "agent", label: "显示 Agent", run: () => { setRightCollapsedAnimated(false); setRightView("agent"); } },
       { id: "graph", label: "打开图谱", hint: "Ctrl+G", run: () => { setRightCollapsed(false); setRightView("graph"); } },
       { id: "ingest", label: "入库…", run: () => { setIngestFolderId(null); setIngestOpen(true); } },

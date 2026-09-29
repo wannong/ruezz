@@ -1,16 +1,16 @@
-import { lazy, Suspense, useEffect, useRef, useState, type MouseEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Star } from "lucide-react";
 import type { Idea, IdeaSelector, PageContent, PageSummary } from "../api";
-import { markdownBody } from "../lib/noteId";
-import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
-import { MarkdownPreview } from "./MarkdownPreview";
+import { splitFrontmatter, joinFrontmatter } from "../lib/frontmatter";
+import { MarkdownLiveEditor } from "./MarkdownLiveEditor";
+import { MarkdownSourceEditor } from "./MarkdownSourceEditor";
 import type { PageViewMemory } from "../lib/pageViewMemory";
 
 const DocumentPreview = lazy(() =>
   import("./DocumentPreview").then((mod) => ({ default: mod.DocumentPreview })),
 );
 
-export type NoteMode = "read" | "edit" | "source";
+export type NoteMode = "live" | "source" | "file";
 
 const documentPreviewFallback = <div className="empty-center loading-breathe">正在加载预览…</div>;
 
@@ -69,19 +69,32 @@ export function NoteView({
   viewMemory,
   onViewMemoryChange,
 }: NoteViewProps) {
-  const editorRef = useRef<HTMLTextAreaElement>(null);
   const readRef = useRef<HTMLDivElement>(null);
   const readRestoredRef = useRef(false);
   const skipReadPersistRef = useRef(true);
   const savedReadMemoryRef = useRef(viewMemory?.readScrollTop ?? 0);
   savedReadMemoryRef.current = viewMemory?.readScrollTop ?? 0;
-  const [menu, setMenu] = useState<{ x: number; y: number; start: number; end: number } | null>(null);
   const sourceType = page.sourceType?.toLowerCase();
   const hasSource = sourceType === "pdf" || sourceType === "docx";
   const isLiterature = page.type === "source";
   const [tags, setTags] = useState<string[]>(page.tags ?? []);
   const [tagInput, setTagInput] = useState("");
   const [tagSaving, setTagSaving] = useState(false);
+
+  const frontmatterParts = useMemo(() => splitFrontmatter(draft), [draft]);
+  const liveBody = frontmatterParts.body;
+  const frontmatterRef = useRef(frontmatterParts.frontmatter);
+  frontmatterRef.current = frontmatterParts.frontmatter;
+
+  const setLiveBody = useCallback((body: string) => {
+    onDraft(joinFrontmatter(frontmatterRef.current, body));
+  }, [onDraft]);
+
+  const linkRangeInDraft = (range: { start: number; end: number }) => {
+    const fmLen = (frontmatterParts.frontmatter?.length ?? 0);
+    onLink({ start: range.start + fmLen, end: range.end + fmLen });
+  };
+
   useEffect(() => setTags(page.tags ?? []), [page.id, page.tags]);
   useEffect(() => {
     readRestoredRef.current = false;
@@ -96,10 +109,7 @@ export function NoteView({
     };
   }, [page.id, onViewMemoryChange]);
   useEffect(() => {
-    if (!isLiterature && mode === "source" && !hasSource) onMode("read");
-  }, [hasSource, isLiterature, mode, onMode]);
-  useEffect(() => {
-    if (mode !== "read") return;
+    if (mode !== "live") return;
     const element = readRef.current;
     if (!element || readRestoredRef.current) return;
     const saved = savedReadMemoryRef.current;
@@ -112,7 +122,7 @@ export function NoteView({
   }, [mode, page.id]);
   useEffect(() => {
     const element = readRef.current;
-    if (!element || mode !== "read" || !onViewMemoryChange) return;
+    if (!element || mode !== "live" || !onViewMemoryChange) return;
     const onScroll = () => {
       if (skipReadPersistRef.current) return;
       onViewMemoryChange({ readScrollTop: element.scrollTop });
@@ -120,6 +130,9 @@ export function NoteView({
     element.addEventListener("scroll", onScroll, { passive: true });
     return () => element.removeEventListener("scroll", onScroll);
   }, [mode, onViewMemoryChange, page.id]);
+  useEffect(() => {
+    if (!isLiterature && mode === "file" && !hasSource) onMode("live");
+  }, [hasSource, isLiterature, mode, onMode]);
 
   const updateTags = async (next: string[]) => {
     const normalized = [...new Set(next.map((tag) => tag.trim()).filter(Boolean))];
@@ -133,67 +146,6 @@ export function NoteView({
     if (!value || tags.includes(value)) { setTagInput(""); return; }
     setTagInput("");
     void updateTags([...tags, value]);
-  };
-
-  const openEditorMenu = (e: MouseEvent<HTMLTextAreaElement>) => {
-    e.preventDefault();
-    const el = e.currentTarget;
-    setMenu({ x: e.clientX, y: e.clientY, start: el.selectionStart, end: el.selectionEnd });
-  };
-
-  const replaceRange = (next: string, start: number, end: number) => {
-    onDraft(draft.slice(0, start) + next + draft.slice(end));
-  };
-
-  const copyRange = async (start: number, end: number) => {
-    const text = draft.slice(start, end);
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      document.execCommand("copy");
-    }
-  };
-
-  const menuItems = (): ContextMenuItem[] => {
-    if (!menu) return [];
-    const { start, end } = menu;
-    return [
-      {
-        type: "item",
-        label: "剪切",
-        onClick: () => {
-          if (start === end) return;
-          void copyRange(start, end).then(() => replaceRange("", start, end));
-        },
-      },
-      {
-        type: "item",
-        label: "复制",
-        onClick: () => {
-          void copyRange(start, end);
-        },
-      },
-      {
-        type: "item",
-        label: "粘贴",
-        onClick: () => {
-          void navigator.clipboard
-            .readText()
-            .then((text) => replaceRange(text, start, end))
-            .catch(() => {
-              editorRef.current?.focus();
-              document.execCommand("paste");
-            });
-        },
-      },
-      { type: "sep" },
-      {
-        type: "item",
-        label: "链接",
-        onClick: () => onLink({ start, end }),
-      },
-    ];
   };
 
   return (
@@ -212,11 +164,11 @@ export function NoteView({
           <div className="note-toolbar">
             {!isLiterature && (
               <div className="note-mode">
-                <button type="button" className={mode === "read" ? "active" : ""} onClick={() => onMode("read")}>
-                  阅读
+                <button type="button" className={mode === "live" ? "active" : ""} onClick={() => onMode("live")}>
+                  Live
                 </button>
-                <button type="button" className={mode === "edit" ? "active" : ""} onClick={() => onMode("edit")}>
-                  编辑
+                <button type="button" className={mode === "source" ? "active" : ""} onClick={() => onMode("source")}>
+                  源码
                 </button>
               </div>
             )}
@@ -234,7 +186,7 @@ export function NoteView({
             )}
             {!isLiterature && hasSource && (
               <div className="note-mode">
-                <button type="button" className={mode === "source" ? "active" : ""} onClick={() => onMode("source")}>原件</button>
+                <button type="button" className={mode === "file" ? "active" : ""} onClick={() => onMode("file")}>原件</button>
               </div>
             )}
             {isLiterature && (
@@ -281,7 +233,7 @@ export function NoteView({
         ) : (
           <div className="empty-center">此文献暂无可浏览的原件</div>
         )
-      ) : mode === "source" && hasSource ? (
+      ) : mode === "file" && hasSource ? (
         <Suspense fallback={documentPreviewFallback}>
           <DocumentPreview
             pageId={page.id}
@@ -297,30 +249,23 @@ export function NoteView({
             onViewMemoryChange={onViewMemoryChange}
           />
         </Suspense>
-      ) : mode === "edit" ? (
-        <div className="note-edit-split">
-          <textarea
-            ref={editorRef}
-            className="note-editor"
+      ) : mode === "source" ? (
+        <div className="note-source-editor">
+          <MarkdownSourceEditor
+            key={page.id}
             value={draft}
-            spellCheck={false}
-            onContextMenu={openEditorMenu}
-            onChange={(e) => onDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
-                e.preventDefault();
-                if (dirty && !saving) onSave();
-              }
-            }}
+            onChange={onDraft}
+            onSave={onSave}
+            placeholder="Markdown 源码（含 YAML frontmatter）"
           />
-          <div className="note-edit-preview">
-            <MarkdownPreview markdown={markdownBody(draft)} pages={pages} onOpen={onOpen} assetRoot={assetRoot} basePath={page.path} />
-          </div>
         </div>
       ) : (
         <div className="note-read" ref={readRef}>
-          <MarkdownPreview
-            markdown={page.body}
+          <MarkdownLiveEditor
+            editorKey={page.id}
+            body={liveBody}
+            onBodyChange={setLiveBody}
+            onSave={onSave}
             pages={pages}
             onOpen={onOpen}
             assetRoot={assetRoot}
@@ -332,16 +277,10 @@ export function NoteView({
             onCreateIdea={onCreateIdea}
             onUpdateIdea={onUpdateIdea}
             onAddToChat={onAddToChat}
+            onLink={linkRangeInDraft}
           />
         </div>
       )}
-      <ContextMenu
-        open={menu !== null}
-        x={menu?.x ?? 0}
-        y={menu?.y ?? 0}
-        items={menu ? menuItems() : []}
-        onClose={() => setMenu(null)}
-      />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, type PageContent, type PageSummary } from "../../api";
 import {
   defaultPageMode,
+  normalizeNoteMode,
   remapRecordId,
   remapRecordIds,
   type PageViewMemory,
@@ -43,11 +44,11 @@ export function usePageTabs({
   const activePage = activePageId ? (pageCache[activePageId] ?? null) : null;
 
   const activePageNoteMode = useMemo((): NoteMode => {
-    if (!activePage) return "read";
-    const savedMode = pageModes[activePage.id];
-    if (savedMode) return savedMode;
+    if (!activePage) return "live";
     const sourceType = activePage.sourceType?.toLowerCase();
     const hasSource = sourceType === "pdf" || sourceType === "docx";
+    const savedMode = pageModes[activePage.id] ?? pageViewMemoryRef.current[activePage.id]?.mode;
+    if (savedMode) return normalizeNoteMode(savedMode, hasSource);
     return defaultPageMode(activePage.type, hasSource);
   }, [activePage, pageModes]);
 
@@ -58,7 +59,7 @@ export function usePageTabs({
   }, [activePageId]);
 
   const togglePageNoteMode = useCallback(() => {
-    setPageNoteMode(activePageNoteMode === "edit" ? "read" : "edit");
+    setPageNoteMode(activePageNoteMode === "source" ? "live" : "source");
   }, [activePageNoteMode, setPageNoteMode]);
 
   const patchPageViewMemory = useCallback((pageId: string, patch: Partial<PageViewMemory>) => {
@@ -238,7 +239,7 @@ export function usePageTabs({
         next = trimmed ? `${trimmed}\n\n${link}\n` : `${link}\n`;
       }
       setNoteDrafts((d) => ({ ...d, [fromId]: next }));
-      setPageModes((d) => ({ ...d, [fromId]: "edit" }));
+      setPageModes((d) => ({ ...d, [fromId]: "live" }));
       openPage(fromId);
       onOpened?.();
     },

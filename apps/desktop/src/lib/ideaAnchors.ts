@@ -81,3 +81,22 @@ export function rangeFromSelector(root: HTMLElement, selector: IdeaSelector): Ra
   range.setEnd(endNode, endOffset);
   return range;
 }
+
+/** Build an Idea selector from plain-text offsets (CodeMirror / live editor). */
+export function selectorFromOffsets(text: string, start: number, end: number): IdeaSelector | null {
+  const raw = text.slice(start, end);
+  const exact = raw.trim();
+  if (!exact) return null;
+  const leading = raw.length - raw.trimStart().length;
+  const trailing = raw.length - raw.trimEnd().length;
+  const from = start + leading;
+  const to = end - trailing;
+  return {
+    exact,
+    prefix: text.slice(Math.max(0, from - 96), from),
+    suffix: text.slice(to, to + 96),
+    start: from,
+    end: to,
+    revision: textRevision(text),
+  };
+}
