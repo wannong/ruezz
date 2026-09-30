@@ -128,7 +128,10 @@ export function RightSidebar({
   ruezzCelebrate = false,
 }: RightSidebarProps) {
   const aside = (
-    <aside className={`sidebar sidebar-right${overlay ? " overlay" : ""}`} style={{ width }}>
+    <aside
+      className={`sidebar sidebar-right workspace-panel${overlay ? " overlay" : ""}`}
+      style={{ width }}
+    >
       <div
         className="resize-handle resize-handle-left"
         onPointerDown={(e) => attachResizeX(e, (dx) => onResize(-dx))}

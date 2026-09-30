@@ -788,23 +788,33 @@ export function Workspace({
       } as CSSProperties}
     >
       <div className="workspace-body">
-        <Ribbon
-          leftView={leftView}
-          leftCollapsed={leftCollapsed}
-          agentOpen={agentOpen}
-          graphOpen={graphOpen}
-          busy={busy}
-          onFiles={() => toggleLeftView("files")}
-          onSearch={() => toggleLeftView("search")}
-          onFavorites={() => toggleLeftView("favorites")}
-          onLibrary={() => toggleLeftView("library")}
-          onAgent={openAgent}
-          onGraph={openGraph}
-          onIngest={() => { setIngestFolderId(null); setIngestOpen(true); }}
-          onSettings={() => setSettingsOpen(true)}
-        />
-        <LeftSidebar
-          view={leftView}
+        <div
+          className={[
+            "workspace-panel-left",
+            narrow
+              ? leftCollapsed
+                ? "narrow-left-collapsed"
+                : "workspace-panel left-overlay-panel"
+              : "workspace-panel",
+          ].join(" ")}
+        >
+          <Ribbon
+            leftView={leftView}
+            leftCollapsed={leftCollapsed}
+            agentOpen={agentOpen}
+            graphOpen={graphOpen}
+            busy={busy}
+            onFiles={() => toggleLeftView("files")}
+            onSearch={() => toggleLeftView("search")}
+            onFavorites={() => toggleLeftView("favorites")}
+            onLibrary={() => toggleLeftView("library")}
+            onAgent={openAgent}
+            onGraph={openGraph}
+            onIngest={() => { setIngestFolderId(null); setIngestOpen(true); }}
+            onSettings={() => setSettingsOpen(true)}
+          />
+          <LeftSidebar
+            view={leftView}
           pages={pages}
           folders={folders}
           activeId={activePageId}
@@ -840,9 +850,10 @@ export function Workspace({
           }}
           onCloseLinkPicker={() => setLinkPicker(null)}
           onError={onError}
-          onResize={(dx) => setLeftWidth((w) => clamp(w + dx, LEFT_MIN, LEFT_MAX))}
-        />
-        <section className="center-pane">
+            onResize={(dx) => setLeftWidth((w) => clamp(w + dx, LEFT_MIN, LEFT_MAX))}
+          />
+        </div>
+        <section className="center-pane workspace-panel">
           <div className="center-header">
             <div className="page-history-controls" aria-label="页面浏览历史">
               <button type="button" title="后退" aria-label="后退" disabled={pageHistoryIndex <= 0} onClick={() => navigatePageHistory(-1)}>

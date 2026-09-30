@@ -4,7 +4,6 @@ import type { PageSummary } from "../api";
 import { attachResizeX } from "../lib/pointerResize";
 import type { WikiClip } from "../lib/fileTree";
 import { FileTree } from "./FileTree";
-import { Presence } from "./Presence";
 import { SearchPane } from "./SearchPane";
 import { FavoritesPane } from "./FavoritesPane";
 import { LibraryPane } from "./LibraryPane";
@@ -126,7 +125,7 @@ export function LeftSidebar({
   const linking = linkPicker !== null;
   const aside = (
     <aside
-      className={`sidebar sidebar-left${overlay ? " overlay" : ""}`}
+      className="sidebar sidebar-left"
       style={{ width }}
     >
       <div className="sidebar-header">
@@ -204,7 +203,10 @@ export function LeftSidebar({
     </aside>
   );
 
-  if (overlay) return <Presence open={!collapsed}>{aside}</Presence>;
+  if (overlay) {
+    if (collapsed) return null;
+    return aside;
+  }
   if (collapsed) return null;
   return aside;
 }

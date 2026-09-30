@@ -28,6 +28,8 @@
   line-height: 1.45;
   font-size: 15px;
   --pane-header-height: 36px;
+  --workspace-panel-gap: 4px;
+  --workspace-panel-radius: 8px;
 
   /* Motion: keep daily navigation instant; animate overlays and agent feedback only.
      Durations must stay in sync with PRESENCE_MS in usePresence.ts. */
@@ -572,6 +574,40 @@ textarea:focus {
   position: relative;
 }
 
+.workspace:not(.narrow) .workspace-body {
+  gap: var(--workspace-panel-gap);
+  padding: var(--workspace-panel-gap);
+  background: var(--bg);
+}
+
+.workspace:not(.narrow) .workspace-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--workspace-panel-radius);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.workspace-panel-left {
+  display: flex;
+  flex-direction: row;
+  flex-shrink: 0;
+  align-items: stretch;
+  min-height: 0;
+  min-width: 0;
+}
+
+.workspace:not(.narrow) .workspace-panel-left {
+  background: var(--sidebar);
+}
+
+.workspace:not(.narrow) .workspace-panel-left:has(.sidebar) .ribbon {
+  border-right: 1px solid var(--line);
+}
+
+.workspace:not(.narrow) .workspace-panel-left:not(:has(.sidebar)) .ribbon {
+  border-right: none;
+}
+
 .ribbon {
   width: 48px;
   flex-shrink: 0;
@@ -759,28 +795,61 @@ textarea:focus {
   background: var(--sidebar);
 }
 
-.sidebar-left {
-  border-right: 1px solid var(--line);
-}
-
-.sidebar-right {
-  border-left: 1px solid var(--line);
-}
-
 .sidebar.overlay {
   position: absolute;
-  top: 0;
-  bottom: 0;
   z-index: 20;
   box-shadow: var(--shadow);
 }
 
-.sidebar-left.overlay {
-  left: 48px;
-}
-
 .sidebar-right.overlay {
   right: 0;
+}
+
+.workspace.narrow .workspace-body {
+  background: var(--bg);
+}
+
+.workspace.narrow .workspace-panel-left.narrow-left-collapsed {
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+.workspace.narrow .workspace-panel-left.narrow-left-collapsed .ribbon {
+  border-right: 1px solid var(--line);
+}
+
+.workspace.narrow .workspace-panel-left.left-overlay-panel {
+  position: absolute;
+  z-index: 20;
+  top: var(--workspace-panel-gap);
+  bottom: var(--workspace-panel-gap);
+  left: var(--workspace-panel-gap);
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: var(--workspace-panel-radius);
+  overflow: hidden;
+  background: var(--sidebar);
+  box-shadow: var(--shadow);
+  animation: wk-slide-left var(--dur-base) var(--ease-out) both;
+}
+
+.workspace.narrow .workspace-panel-left.left-overlay-panel:has(.sidebar) .ribbon {
+  border-right: 1px solid var(--line);
+}
+
+.workspace.narrow .sidebar.overlay {
+  top: var(--workspace-panel-gap);
+  bottom: var(--workspace-panel-gap);
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--workspace-panel-radius);
+  overflow: hidden;
+}
+
+.workspace.narrow .sidebar-right.overlay {
+  right: var(--workspace-panel-gap);
 }
 
 .sidebar-header,
@@ -888,6 +957,10 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   background: var(--panel);
+}
+
+.workspace:not(.narrow) .center-pane.workspace-panel {
+  flex: 1;
 }
 
 .center-header {
@@ -4015,9 +4088,7 @@ button.ghost {
 [data-presence="exit"] .toast-error { animation: wk-fade-down var(--dur-base) var(--ease-in) both; }
 
 /* Overlay drawers only. Inline sidebars stay instant. */
-.sidebar-left.overlay { animation: wk-slide-left var(--dur-base) var(--ease-out) both; }
 .sidebar-right.overlay { animation: wk-slide-right var(--dur-base) var(--ease-out) both; }
-[data-presence="exit"] .sidebar-left.overlay { animation: wk-slide-left-out var(--dur-base) var(--ease-in) both; }
 [data-presence="exit"] .sidebar-right.overlay { animation: wk-slide-right-out var(--dur-base) var(--ease-in) both; }
 
 .tree-twist svg { transition: transform var(--dur-fast) var(--ease-out); }
