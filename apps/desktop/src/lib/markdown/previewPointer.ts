@@ -169,6 +169,54 @@ function pointerOnRenderedPreview(clientX: number, clientY: number): boolean {
   return Boolean(target?.closest(".cm-live-preview-rendered"));
 }
 
+function scrollbarGutter(el: HTMLElement): { x: number; y: number } {
+  return {
+    x: Math.max(0, el.offsetWidth - el.clientWidth),
+    y: Math.max(0, el.offsetHeight - el.clientHeight),
+  };
+}
+
+const OVERLAY_SCROLLBAR_SLOP = 14;
+
+function pointerOnElementScrollbar(el: HTMLElement, clientX: number, clientY: number): boolean {
+  const rect = el.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  const canScrollX = el.scrollWidth > el.clientWidth;
+  const canScrollY = el.scrollHeight > el.clientHeight;
+  if (!canScrollX && !canScrollY) return false;
+
+  const gutter = scrollbarGutter(el);
+  const onHorizontalClassic = canScrollX && gutter.y > 0 && y >= el.clientHeight;
+  const onHorizontalOverlay =
+    canScrollX &&
+    gutter.y === 0 &&
+    y >= el.clientHeight - Math.min(OVERLAY_SCROLLBAR_SLOP, el.clientHeight);
+  const onVerticalClassic = canScrollY && gutter.x > 0 && x >= el.clientWidth;
+  const onVerticalOverlay =
+    canScrollY &&
+    gutter.x === 0 &&
+    x >= el.clientWidth - Math.min(OVERLAY_SCROLLBAR_SLOP, el.clientWidth);
+  return onHorizontalClassic || onHorizontalOverlay || onVerticalClassic || onVerticalOverlay;
+}
+
+/** Let native scrollbars inside preview blocks receive pointer events. */
+function pointerOnPreviewScrollbar(
+  target: HTMLElement | null,
+  rendered: HTMLElement,
+  clientX: number,
+  clientY: number,
+): boolean {
+  let el: HTMLElement | null = target;
+  while (el) {
+    if (pointerOnElementScrollbar(el, clientX, clientY)) return true;
+    if (el === rendered) break;
+    el = el.parentElement;
+    if (el && !rendered.contains(el)) break;
+  }
+  return false;
+}
+
 function resolveBlockPos(
   view: EditorView,
   rendered: HTMLElement,
@@ -467,6 +515,7 @@ export function handleRenderedPointer(event: MouseEvent, view: EditorView, selec
   if (target?.closest(".wikilink")) return false;
   const rendered = target?.closest(".cm-live-preview-rendered") as HTMLElement | null;
   if (!rendered) return false;
+  if (pointerOnPreviewScrollbar(target, rendered, event.clientX, event.clientY)) return false;
 
   event.preventDefault();
   event.stopPropagation();
