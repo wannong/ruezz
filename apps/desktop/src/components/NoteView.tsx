@@ -2,7 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Star } from "lucide-react";
 import type { Idea, IdeaSelector, PageContent, PageSummary } from "../api";
 import { splitFrontmatter, joinFrontmatter } from "../lib/frontmatter";
-import { MarkdownLiveEditor } from "./MarkdownLiveEditor";
+import { MarkdownLiveEditor, type MarkdownLiveEditorApi } from "./MarkdownLiveEditor";
+import { NoteFormatToolbar } from "./NoteFormatToolbar";
 import { MarkdownSourceEditor } from "./MarkdownSourceEditor";
 import type { PageViewMemory } from "../lib/pageViewMemory";
 
@@ -70,6 +71,7 @@ export function NoteView({
   onViewMemoryChange,
 }: NoteViewProps) {
   const readRef = useRef<HTMLDivElement>(null);
+  const liveEditorRef = useRef<MarkdownLiveEditorApi | null>(null);
   const readRestoredRef = useRef(false);
   const skipReadPersistRef = useRef(true);
   const savedReadMemoryRef = useRef(viewMemory?.readScrollTop ?? 0);
@@ -213,6 +215,9 @@ export function NoteView({
             )}
         </div>
       </div>
+      {!isLiterature && (
+        <NoteFormatToolbar disabled={mode !== "live"} editorRef={liveEditorRef} />
+      )}
       {isLiterature ? (
         hasSource ? (
           <Suspense fallback={documentPreviewFallback}>
@@ -262,6 +267,7 @@ export function NoteView({
       ) : (
         <div className="note-read" ref={readRef}>
           <MarkdownLiveEditor
+            ref={liveEditorRef}
             editorKey={page.id}
             body={liveBody}
             onBodyChange={setLiveBody}

@@ -4,6 +4,7 @@ import { attachResizeX } from "../lib/pointerResize";
 import type { OutlineItem } from "../lib/outline";
 import type { Theme } from "../theme";
 import type { GraphViewScope } from "../lib/graph";
+import type { RuezzWorkMode } from "../lib/centaur-character/activity";
 import { AgentPane } from "./AgentPane";
 import { LocalGraphPane } from "./LocalGraphPane";
 import { OutlinePane } from "./OutlinePane";
@@ -68,6 +69,7 @@ type RightSidebarProps = {
   onCreateAgentIdea: (messageId: string, selector: IdeaSelector, content: string) => Promise<boolean>;
   headerCentaurShown?: boolean;
   ruezzCelebrate?: boolean;
+  ruezzWorkMode?: RuezzWorkMode;
 };
 
 export function RightSidebar({
@@ -126,6 +128,7 @@ export function RightSidebar({
   onCreateAgentIdea,
   headerCentaurShown = true,
   ruezzCelebrate = false,
+  ruezzWorkMode = "idle",
 }: RightSidebarProps) {
   const aside = (
     <aside
@@ -205,6 +208,7 @@ export function RightSidebar({
           onSwitchModel={onSwitchModel}
           headerCentaurShown={headerCentaurShown}
           ruezzCelebrate={ruezzCelebrate}
+          ruezzWorkMode={ruezzWorkMode}
         />
       )}
       {view === "outline" && <OutlinePane items={outline} onJump={onJump} />}

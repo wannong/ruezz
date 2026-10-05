@@ -1,7 +1,7 @@
 import { Plus } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import type { AgentAttachment, AgentSessionMessage, AgentSessionSummary, Idea, IdeaSelector, PageSummary } from "../api";
-import { ruezzActivityFromAgent } from "../lib/centaur-character/activity";
+import { ruezzActivityFromAgent, type RuezzWorkMode } from "../lib/centaur-character/activity";
 import { AgentChatFeed, AgentComposer, appendSelectionToDraft } from "./agentChatCore";
 import { CentaurChromeSlot } from "./CentaurChromeSlot";
 import { Presence } from "./Presence";
@@ -49,6 +49,7 @@ type AgentPaneProps = {
   onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
   headerCentaurShown?: boolean;
   ruezzCelebrate?: boolean;
+  ruezzWorkMode?: RuezzWorkMode;
 };
 
 function formatSessionTime(iso: string): string {
@@ -100,6 +101,7 @@ export function AgentPane({
   onUpdateIdea,
   headerCentaurShown = true,
   ruezzCelebrate = false,
+  ruezzWorkMode = "idle",
 }: AgentPaneProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const followOutput = useRef(true);
@@ -121,8 +123,9 @@ export function AgentPane({
         streamingText,
         streamingTools,
         celebrate: ruezzCelebrate,
+        workMode: ruezzWorkMode,
       }),
-    [busy, pendingUser, streamingPhase, streamingText, streamingTools, ruezzCelebrate],
+    [busy, pendingUser, streamingPhase, streamingText, streamingTools, ruezzCelebrate, ruezzWorkMode],
   );
   const liveSessions = useMemo(() => sessions.filter((s) => !s.archived), [sessions]);
   const archivedSessions = useMemo(() => sessions.filter((s) => s.archived), [sessions]);
@@ -267,6 +270,7 @@ export function AgentPane({
           onAddToChat={(text) => onDraft(appendSelectionToDraft(draft, text))}
           onOpen={onOpen}
           ruezzCelebrate={ruezzCelebrate}
+          ruezzWorkMode={ruezzWorkMode}
         />
 
         <AgentComposer

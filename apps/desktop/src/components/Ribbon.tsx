@@ -1,5 +1,5 @@
 import { BookOpen, Search, Settings, Share2, Star } from "lucide-react";
-import { BotGlyph, FilePlusGlyph, FolderTreeGlyph, PasteGlyph } from "./iconGlyphs";
+import { BotGlyph, FilePlusGlyph, FolderTreeGlyph } from "./iconGlyphs";
 
 type RibbonProps = {
   leftView: "files" | "search" | "favorites" | "library";
@@ -90,21 +90,11 @@ export function Ribbon({
         type="button"
         className="icon-btn"
         data-icon="ingest"
-        title="入库"
+        title="导入资料"
         disabled={busy}
         onClick={onIngest}
       >
         <FilePlusGlyph />
-      </button>
-      <button
-        type="button"
-        className="icon-btn"
-        data-icon="paste"
-        title="粘贴入库"
-        disabled={busy}
-        onClick={onIngest}
-      >
-        <PasteGlyph />
       </button>
       <button type="button" className="icon-btn" data-icon="settings" title="设置" onClick={onSettings}>
         <Settings size={18} />

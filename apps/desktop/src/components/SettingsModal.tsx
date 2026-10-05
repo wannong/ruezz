@@ -9,17 +9,35 @@ type SettingsModalProps = {
   settings: VaultSettings;
   palette: ColorPalette;
   onPaletteChange: (palette: ColorPalette) => void;
+  developerMode: boolean;
+  onDeveloperModeChange: (next: boolean) => void;
   busy: boolean;
   onClose: () => void;
   onSave: (next: VaultSettings) => Promise<void>;
 };
 
-export function SettingsModal({ settings, palette, onPaletteChange, busy, onClose, onSave }: SettingsModalProps) {
+export function SettingsModal({
+  settings,
+  palette,
+  onPaletteChange,
+  developerMode,
+  onDeveloperModeChange,
+  busy,
+  onClose,
+  onSave,
+}: SettingsModalProps) {
   const [draft, setDraft] = useState(() => hydrateProviders(settings));
 
   return (
     <Modal title="设置" onClose={onClose} wide>
-      <SettingsFields settings={draft} onChange={setDraft} palette={palette} onPaletteChange={onPaletteChange} />
+      <SettingsFields
+        settings={draft}
+        onChange={setDraft}
+        palette={palette}
+        onPaletteChange={onPaletteChange}
+        developerMode={developerMode}
+        onDeveloperModeChange={onDeveloperModeChange}
+      />
       <div className="modal-actions">
         <button type="button" onClick={onClose}>
           取消

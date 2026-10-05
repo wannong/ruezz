@@ -498,6 +498,35 @@ updated: ${day}
     return copied;
   }
 
+  async deletePage(root: string, idOrPath: string): Promise<{ id: string }> {
+    const absRoot = await prepareVault(root);
+    const id = normalizePageId(idOrPath);
+    const page = await this.readPage(absRoot, id);
+    if (!page) throw new Error(`页面不存在：${id}`);
+
+    const absFile = path.resolve(absRoot, page.path);
+    await assertInsideWiki(absRoot, absFile);
+
+    const assetsDir = path.join(path.dirname(absFile), `${path.basename(absFile, path.extname(absFile))}_assets`);
+    if (await pathExists(assetsDir)) {
+      await fs.rm(assetsDir, { recursive: true, force: true });
+    }
+
+    if (page.type === "source") {
+      const parsed = parseFrontmatter(page.raw);
+      const sourceFile = await sourceFileForPage(absRoot, parsed.frontmatter?.sources);
+      if (sourceFile) await fs.unlink(sourceFile).catch(() => undefined);
+    }
+
+    await fs.unlink(absFile);
+    const parentDir = path.dirname(absFile);
+    const parentEntries = await fs.readdir(parentDir).catch(() => null);
+    if (parentEntries?.length === 0) await fs.rmdir(parentDir).catch(() => undefined);
+
+    await this.getWiki(absRoot).reindex();
+    return { id };
+  }
+
   async renamePage(root: string, fromId: string, toId: string): Promise<PageContent> {
     const absRoot = await prepareVault(root);
     const srcId = normalizePageId(fromId);

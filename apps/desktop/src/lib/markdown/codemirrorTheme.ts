@@ -28,10 +28,16 @@ export function createCodemirrorTheme(): Extension {
       backgroundColor: "transparent",
     },
     ".cm-selectionBackground": {
-      backgroundColor: "color-mix(in srgb, var(--accent) 22%, transparent) !important",
+      backgroundColor: "color-mix(in srgb, var(--accent) 28%, transparent) !important",
     },
     "&.cm-focused .cm-selectionBackground": {
-      backgroundColor: "color-mix(in srgb, var(--accent) 32%, transparent) !important",
+      backgroundColor: "color-mix(in srgb, var(--accent) 38%, transparent) !important",
+    },
+    "&:not(.cm-live-global-preview) .cm-selectionBackground": {
+      backgroundColor: "color-mix(in srgb, var(--accent) 52%, var(--panel) 6%) !important",
+    },
+    "&.cm-focused:not(.cm-live-global-preview) .cm-selectionBackground": {
+      backgroundColor: "color-mix(in srgb, var(--accent) 62%, var(--panel) 8%) !important",
     },
     ".cm-cursor, .cm-dropCursor": {
       borderLeftColor: "var(--ink)",

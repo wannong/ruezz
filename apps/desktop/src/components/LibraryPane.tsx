@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, FileText, FolderPlus, Plus, Star } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, FolderPlus, Plus, Star, Trash2 } from "lucide-react";
 import { useRef, useState, type CSSProperties, type MouseEvent, type RefObject, type UIEvent } from "react";
 import type { PageSummary } from "../api";
 import {
@@ -20,6 +20,7 @@ type LibraryPaneProps = {
   onCreateFolder: (parentId: string | null, name: string) => void;
   onRenameFolder: (folderId: string, name: string) => void;
   onRenamePage: (pageId: string, name: string) => void;
+  onDeletePage: (pageId: string) => void;
   onDeleteFolder: (folderId: string) => void;
   onMovePages: (pageIds: string[], folderId: string | null) => void;
   onAddToFolder: (folderId: string | null) => void;
@@ -89,6 +90,7 @@ export function LibraryPane({
   onCreateFolder,
   onRenameFolder,
   onRenamePage,
+  onDeletePage,
   onDeleteFolder,
   onMovePages,
   onAddToFolder,
@@ -221,6 +223,8 @@ export function LibraryPane({
       { type: "item", label: "重命名", onClick: () => startRenamePage(page.id) },
       { type: "sep" },
       ...moveItems(page.id, target.folderId),
+      { type: "sep" },
+      { type: "item", label: "删除文献", danger: true, onClick: () => onDeletePage(page.id) },
     ];
   };
 
@@ -257,6 +261,7 @@ export function LibraryPane({
               toggle={toggle}
               onOpen={onOpen}
               onFavorite={onFavorite}
+              onDeletePage={onDeletePage}
               onCreateChild={startCreate}
               onAddToFolder={onAddToFolder}
               onMenu={openMenu}
@@ -293,6 +298,7 @@ export function LibraryPane({
                       renameValue={editor?.mode === "rename-page" && editor.pageId === page.id ? editor.value : undefined}
                       onOpen={onOpen}
                       onFavorite={onFavorite}
+                      onDelete={() => onDeletePage(page.id)}
                       onMenu={(event) => openMenu(event, { type: "page", pageId: page.id, folderId: null })}
                       onRenameValue={(value) => editor?.mode === "rename-page" && setEditor({ ...editor, value })}
                       onCommitRename={commitEditor}
@@ -325,6 +331,7 @@ function FolderNode({
   toggle,
   onOpen,
   onFavorite,
+  onDeletePage,
   onCreateChild,
   onAddToFolder,
   onMenu,
@@ -340,6 +347,7 @@ function FolderNode({
   toggle: (id: string) => void;
   onOpen: (id: string) => void;
   onFavorite: (id: string) => void;
+  onDeletePage: (pageId: string) => void;
   onCreateChild: (parentId: string) => void;
   onAddToFolder: (folderId: string | null) => void;
   onMenu: (event: MouseEvent, target: MenuTarget) => void;
@@ -407,6 +415,7 @@ function FolderNode({
               toggle={toggle}
               onOpen={onOpen}
               onFavorite={onFavorite}
+              onDeletePage={onDeletePage}
               onCreateChild={onCreateChild}
               onAddToFolder={onAddToFolder}
               onMenu={onMenu}
@@ -425,6 +434,7 @@ function FolderNode({
               renameValue={editor?.mode === "rename-page" && editor.pageId === page.id ? editor.value : undefined}
               onOpen={onOpen}
               onFavorite={onFavorite}
+              onDelete={() => onDeletePage(page.id)}
               onMenu={(event) => onMenu(event, { type: "page", pageId: page.id, folderId: node.id })}
               onRenameValue={onEditorValue}
               onCommitRename={onCommitEditor}
@@ -448,6 +458,7 @@ export function LibraryRow({
   renameValue = "",
   onOpen,
   onFavorite,
+  onDelete,
   onMenu,
   onRenameValue,
   onCommitRename,
@@ -460,6 +471,7 @@ export function LibraryRow({
   renameValue?: string;
   onOpen: (id: string) => void;
   onFavorite: (id: string) => void;
+  onDelete?: () => void;
   onMenu?: (event: MouseEvent) => void;
   onRenameValue?: (value: string) => void;
   onCommitRename?: (value: string) => void;
@@ -503,6 +515,20 @@ export function LibraryRow({
       >
         <Star size={15} fill={favorite ? "currentColor" : "none"} />
       </button>
+      {onDelete && (
+        <button
+          type="button"
+          className="library-delete"
+          title="删除文献"
+          aria-label={`删除 ${page.title ?? page.id}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
+        >
+          <Trash2 size={15} />
+        </button>
+      )}
     </div>
   );
 }

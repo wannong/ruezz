@@ -26,6 +26,8 @@ type SettingsFieldsProps = {
   onChange: (next: VaultSettings) => void;
   palette: ColorPalette;
   onPaletteChange: (palette: ColorPalette) => void;
+  developerMode?: boolean;
+  onDeveloperModeChange?: (next: boolean) => void;
 };
 
 function hostLabel(url: string): string {
@@ -38,7 +40,14 @@ function hostLabel(url: string): string {
   }
 }
 
-export function SettingsFields({ settings, onChange, palette, onPaletteChange }: SettingsFieldsProps) {
+export function SettingsFields({
+  settings,
+  onChange,
+  palette,
+  onPaletteChange,
+  developerMode = false,
+  onDeveloperModeChange,
+}: SettingsFieldsProps) {
   const providers = providersOf(settings);
   const activeId = activeProviderIdOf(settings, providers);
   const [providerBusy, setProviderBusy] = useState<string | null>(null);
@@ -450,6 +459,21 @@ export function SettingsFields({ settings, onChange, palette, onPaletteChange }:
         <div className={status.kind === "err" ? "settings-status settings-status-err" : "settings-status"}>
           {status.text}
         </div>
+      )}
+
+      {onDeveloperModeChange && (
+        <>
+          <div className="settings-section-head"><span>开发者</span></div>
+          <label className="label settings-dev-toggle">
+            <span>开发者模式</span>
+            <input
+              type="checkbox"
+              checked={developerMode}
+              onChange={(event) => onDeveloperModeChange(event.target.checked)}
+            />
+          </label>
+          <p className="hint">开启后显示隐藏测试入口，例如导入界面的加载动画预览。</p>
+        </>
       )}
 
       <div className="settings-section-head"><span>关于与更新</span></div>

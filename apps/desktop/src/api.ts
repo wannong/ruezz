@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 
 export type LlmProvider = {
@@ -210,8 +210,7 @@ export type AgentProviderCatalog = {
   providers: Array<{ name: string; models: string[] }>;
 };
 
-export const isTauriRuntime = () =>
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+export const isTauriRuntime = () => typeof window !== "undefined" && isTauri();
 
 /** Dev fallback: talk to sidecar over HTTP if VITE_SIDECAR_HTTP is set. */
 async function httpRpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
@@ -397,6 +396,7 @@ export const api = {
     rpc<PageContent>("vault_create_page", title ? { id, title } : { id }),
   vaultCopyPage: (from: string, to: string) => rpc<PageContent>("vault_copy_page", { from, to }),
   vaultRenamePage: (from: string, to: string) => rpc<PageContent>("vault_rename_page", { from, to }),
+  vaultDeletePage: (id: string) => rpc<{ id: string }>("vault_delete_page", { id }),
   vaultListFolders: () => rpc<string[]>("vault_list_folders"),
   vaultCreateFolder: (id: string) => rpc<{ id: string }>("vault_create_folder", { id }),
   vaultCopyFolder: (from: string, to: string) => rpc<{ id: string }>("vault_copy_folder", { from, to }),

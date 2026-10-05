@@ -91,4 +91,4 @@ pnpm release:prepare
 
 **GitHub About 建议文案（可粘贴到仓库 Description）**
 
-> Ruezz（睿智）：科研文献本地知识库 Agent。LLM Wiki + 类 Zotero 原件管理；Idea 便签与检索。开源桌面壳，需自备 API。
+> Ruezz（瑞知）：科研文献本地知识库 Agent。LLM Wiki + 类 Zotero 原件管理；Idea 便签与检索。开源桌面壳，需自备 API。

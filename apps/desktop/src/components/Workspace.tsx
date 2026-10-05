@@ -26,6 +26,9 @@ import { PanelOpenGlyph } from "./iconGlyphs";
 import { appendSelectionToDraft } from "./agentChatCore";
 import { CommandPalette, type PaletteCommand, type PaletteMode } from "./CommandPalette";
 import { IngestModal } from "./IngestModal";
+import { IngestProgressHost, type IngestProgressRunner } from "./IngestProgressHost";
+import { INGEST_PROGRESS_PREVIEW_PATHS } from "../lib/ingestProgress";
+import { titleFromPaste } from "../lib/ingestTitle";
 import { LeftSidebar, type LeftView, type LinkPicker } from "./LeftSidebar";
 import { NewNoteModal } from "./NewNoteModal";
 import { NoteView } from "./NoteView";
@@ -35,6 +38,7 @@ import { Ribbon } from "./Ribbon";
 import { RightSidebar, type RightView } from "./RightSidebar";
 import { SettingsModal } from "./SettingsModal";
 import { AgentFloatingIsland } from "./AgentFloatingIsland";
+import { ruezzWorkModeFromNoteMode } from "../lib/centaur-character/activity";
 import { centaurTransferMs } from "./CentaurChromeSlot";
 import { StatusBar } from "./StatusBar";
 import { TabBar } from "./TabBar";
@@ -74,6 +78,10 @@ function clampHops(n: unknown): number {
   return Math.min(3, Math.max(0, Math.round(value)));
 }
 
+function ingestPause(ms: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+}
+
 export function Workspace({
   settings,
   onSettings,
@@ -109,8 +117,10 @@ export function Workspace({
   const [leftWidth, setLeftWidth] = useState(() => loadPref("leftWidth", 240));
   const [rightWidth, setRightWidth] = useState(() => loadPref("rightWidth", 320));
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [developerMode, setDeveloperMode] = useState(() => loadPref("developerMode", false));
   const [ingestOpen, setIngestOpen] = useState(false);
   const [ingestFolderId, setIngestFolderId] = useState<string | null>(null);
+  const ingestProgressRunnerRef = useRef<IngestProgressRunner | null>(null);
   const [newNoteOpen, setNewNoteOpen] = useState(false);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [graph, setGraph] = useState<GraphDto | null>(null);
@@ -267,6 +277,11 @@ export function Workspace({
     switchModel,
   } = agent;
 
+  const ruezzWorkMode = useMemo(
+    () => (activePageId ? ruezzWorkModeFromNoteMode(activePageNoteMode) : "idle"),
+    [activePageId, activePageNoteMode],
+  );
+
   const agentOpen = !rightCollapsed && rightView === "agent";
   const graphOpen = !rightCollapsed && rightView === "graph";
   const shouldHandoffCentaur =
@@ -324,6 +339,7 @@ export function Workspace({
         streamingText,
         streamingTools,
         celebrate: ruezzCelebrate,
+        workMode: ruezzWorkMode,
       },
     });
   }, [
@@ -337,6 +353,7 @@ export function Workspace({
     streamingText,
     streamingTools,
     ruezzCelebrate,
+    ruezzWorkMode,
   ]);
 
   useEffect(() => () => window.clearTimeout(centaurTransferTimer.current), []);
@@ -531,6 +548,50 @@ export function Workspace({
     }
   }
 
+  async function deleteLibraryPage(pageId: string) {
+    const page = pages.find((item) => item.id === pageId);
+    const title = page?.title ?? pageId.split("/").pop() ?? pageId;
+    if (!window.confirm(`确定删除文献「${title}」吗？此操作不可恢复。`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.vaultDeletePage(pageId);
+      closeTab(`page:${pageId}`);
+      setPageCache((cache) => {
+        if (!(pageId in cache)) return cache;
+        const next = { ...cache };
+        delete next[pageId];
+        return next;
+      });
+      setNoteDrafts((drafts) => {
+        if (!(pageId in drafts)) return drafts;
+        const next = { ...drafts };
+        delete next[pageId];
+        return next;
+      });
+      setFavoriteIds((ids) => {
+        if (!ids.includes(pageId)) return ids;
+        const next = ids.filter((id) => id !== pageId);
+        saveFavorites(settings.vaultPath, next);
+        return next;
+      });
+      await persistLibrary((org) => {
+        if (!(pageId in org.assignments)) return org;
+        const assignments = { ...org.assignments };
+        delete assignments[pageId];
+        return { ...org, assignments };
+      });
+      await loadPages();
+      await loadGraph();
+      await loadIdeas();
+      setNotice(`已删除文献「${title}」`);
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function renameEntry(kind: "page" | "folder", fromId: string, name: string) {
     const dest = joinWikiId(parentWikiId(fromId), name);
     if (dest === fromId) return;
@@ -580,22 +641,39 @@ export function Workspace({
     }
   }
 
+  async function previewIngestAnimation() {
+    setIngestOpen(false);
+    await ingestProgressRunnerRef.current?.run(
+      INGEST_PROGRESS_PREVIEW_PATHS,
+      async () => {
+        await ingestPause(900);
+      },
+    );
+  }
+
   async function ingestFiles(paths: string[]) {
     if (!paths.length) return;
+    setIngestOpen(false);
+    const folderTarget = ingestFolderId;
+
     setBusy(true);
     setError(null);
     let internalizationSessionId: string | null = null;
     try {
       const imported: Array<{ pageIds: string[]; sourcePath?: string }> = [];
-      for (const p of paths) imported.push(await api.vaultIngestPath(p) as { pageIds: string[]; sourcePath?: string });
+      await ingestProgressRunnerRef.current?.run(paths, async (path) => {
+        imported.push(
+          await api.vaultIngestPath(path) as { pageIds: string[]; sourcePath?: string },
+        );
+      });
+
       const importedIds = imported.flatMap((item) => item.pageIds ?? []);
-      if (ingestFolderId) {
-        await persistLibrary((org) => assignPagesToFolder(org, importedIds, ingestFolderId));
+      if (folderTarget) {
+        await persistLibrary((org) => assignPagesToFolder(org, importedIds, folderTarget));
       }
       await loadPages();
       await loadGraph();
       setNotice(`已整篇导入 ${paths.length} 个文件`);
-      setIngestOpen(false);
       setIngestFolderId(null);
       const created = await api.agentSessionCreate({ title: `内化：${paths.length} 个文件` });
       internalizationSessionId = created.session.id;
@@ -633,7 +711,8 @@ export function Workspace({
     }
   }
 
-  async function ingestPaste(title: string, body: string) {
+  async function ingestPaste(body: string) {
+    const title = titleFromPaste(body);
     setBusy(true);
     setError(null);
     try {
@@ -840,6 +919,7 @@ export function Workspace({
           onCreateLibraryFolder={createLibraryFolderIn}
           onRenameLibraryFolder={renameLibraryFolderIn}
           onRenameLibraryPage={(pageId, name) => void renameEntry("page", pageId, name)}
+          onDeleteLibraryPage={(pageId) => void deleteLibraryPage(pageId)}
           onDeleteLibraryFolder={deleteLibraryFolderIn}
           onMoveLibraryPages={moveLibraryPages}
           onAddToLibraryFolder={openLibraryImport}
@@ -965,6 +1045,7 @@ export function Workspace({
           onCollapse={() => setRightCollapsedAnimated(true)}
           headerCentaurShown={headerCentaurShown}
           ruezzCelebrate={ruezzCelebrate}
+          ruezzWorkMode={ruezzWorkMode}
           modelLabel={modelLabel}
           modelMissing={modelMissing}
           modelValue={modelValue}
@@ -1026,6 +1107,7 @@ export function Workspace({
         onAttachCurrent={() => void attachCurrentPage()}
         onDetach={(id) => void detachAttachment(id)}
         ruezzCelebrate={ruezzCelebrate}
+        ruezzWorkMode={ruezzWorkMode}
       />
       <StatusBar
         vaultPath={settings.vaultPath}
@@ -1074,6 +1156,11 @@ export function Workspace({
           settings={settings}
           palette={colorPalette}
           onPaletteChange={onColorPaletteChange}
+          developerMode={developerMode}
+          onDeveloperModeChange={(next) => {
+            setDeveloperMode(next);
+            savePref("developerMode", next);
+          }}
           busy={busy}
           onClose={() => setSettingsOpen(false)}
           onSave={saveSettings}
@@ -1083,15 +1170,18 @@ export function Workspace({
         <IngestModal
           busy={busy}
           canPickFiles={isTauriRuntime()}
+          developerMode={developerMode}
           destinationLabel={ingestFolderId ? libraryOrganization.folders.find((folder) => folder.id === ingestFolderId)?.name : undefined}
           onClose={() => { setIngestOpen(false); setIngestFolderId(null); }}
           onImportFiles={async () => {
             const files = await api.pickFiles();
-            await ingestFiles(files);
+            if (files.length > 0) await ingestFiles(files);
           }}
           onPaste={ingestPaste}
+          onPreviewProgress={previewIngestAnimation}
         />
       </Presence>
+      <IngestProgressHost runnerRef={ingestProgressRunnerRef} />
       <Presence open={newNoteOpen}>
         <NewNoteModal
           busy={busy}

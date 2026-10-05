@@ -10,6 +10,7 @@ import {
   type Point,
 } from "./math";
 import {
+  ACTIVITY_SET,
   BLINK_MS,
   CYCLE_ORDER,
   EYE_HOLD_MS,
@@ -17,11 +18,14 @@ import {
   POSE_TARGETS,
   SPRINGS,
   WINK_STATES,
+  type CentaurActivity,
+  type CentaurMood,
   type CentaurState,
 } from "./tables";
 import * as EY from "./eyes";
 import { EXPRESSIONS, EYE_BY_ID, GEO } from "./geometry";
 import { EmotionPunctuation } from "./fx";
+import { CentaurProps } from "./props";
 
 const NS = "http://www.w3.org/2000/svg";
 let instanceSeq = 0;
@@ -35,6 +39,7 @@ export type CentaurCharacterOptions = {
   sizePx?: number;
   punctuationFx?: boolean;
   emotionFx?: boolean;
+  propsFx?: boolean;
 };
 
 export class CentaurCharacter {
@@ -46,6 +51,7 @@ export class CentaurCharacter {
   onChange: (info: { state: CentaurState; eye: string }) => void;
   sizePx: number;
   punctuationFx: boolean;
+  propsFx: boolean;
 
   tilt: Spring;
   ty: Spring;
@@ -59,6 +65,7 @@ export class CentaurCharacter {
   eyeTo = 0;
   eyeIdx = 0;
   private _fromPolys: [Point[], Point[]] | null = null;
+  private _actEye: string | null = null;
 
   t0: number;
   stateAt: number;
@@ -82,6 +89,7 @@ export class CentaurCharacter {
   eyesG!: SVGGElement;
   eyeEls!: SVGPathElement[];
   hlEls!: SVGRectElement[];
+  props!: CentaurProps;
   fx!: EmotionPunctuation;
   private _raf = 0;
   private _onMove!: (e: PointerEvent) => void;
@@ -96,6 +104,7 @@ export class CentaurCharacter {
     this.onChange = opts.onChange ?? (() => {});
     this.sizePx = opts.sizePx ?? 160;
     this.punctuationFx = opts.punctuationFx !== false && opts.emotionFx !== false;
+    this.propsFx = opts.propsFx !== false;
 
     this.tilt = spring(0);
     this.ty = spring(0);
@@ -150,6 +159,12 @@ export class CentaurCharacter {
     this.autoCycle = !!v;
   }
 
+  setPropsFx(v: boolean) {
+    this.propsFx = !!v;
+    if (this.props) this.props.setEnabled(this.propsFx);
+    if (this.propsFx) this.props.setActivity(this.state);
+  }
+
   setPunctuationFx(v: boolean) {
     this.punctuationFx = !!v;
     if (this.fx) {
@@ -167,6 +182,8 @@ export class CentaurCharacter {
     this.state = name;
     this.stateAt = performance.now();
     if (this.fx) this.fx.setState(name, this.stateAt);
+    if (this.props) this.props.setActivity(name);
+    this._actEye = null;
     const pose = POSE_TARGETS[name];
     this.tilt.t = pose.tilt;
     this.ty.t = pose.ty;
@@ -195,10 +212,7 @@ export class CentaurCharacter {
     return EXPRESSIONS[this.eyeTo]?.id ?? "normal";
   }
 
-  private _advanceEye(immediate: boolean) {
-    const list = EYE_PLAYLIST[this.state] ?? EYE_PLAYLIST.happy;
-    this.eyeIdx = (this.eyeIdx + 1) % list.length;
-    const nextId = EYE_BY_ID[list[this.eyeIdx]] ?? 0;
+  private _morphEyeTo(nextId: number, immediate: boolean) {
     const cur = this._currentPolys();
     this._fromPolys = cur;
     this.eyeFrom = this.eyeTo;
@@ -207,6 +221,13 @@ export class CentaurCharacter {
     this.morph.v = 0;
     this.morph.t = 1;
     this.onChange({ state: this.state, eye: this._eyeName() });
+  }
+
+  private _advanceEye(immediate: boolean) {
+    const list = EYE_PLAYLIST[this.state] ?? EYE_PLAYLIST.happy;
+    this.eyeIdx = (this.eyeIdx + 1) % list.length;
+    const nextId = EYE_BY_ID[list[this.eyeIdx]] ?? 0;
+    this._morphEyeTo(nextId, immediate);
   }
 
   private _currentPolys(): [Point[], Point[]] {
@@ -274,6 +295,7 @@ export class CentaurCharacter {
       return r;
     });
 
+    this.props = new CentaurProps(this.poseG, this.propsFx);
     this.fx = new EmotionPunctuation(svg, { enabled: this.punctuationFx });
   }
 
@@ -320,9 +342,22 @@ export class CentaurCharacter {
 
     if (this.autoCycle && now >= this.cycleUntil) {
       this.cycleIdx = (this.cycleIdx + 1) % CYCLE_ORDER.length;
-      this.setState(CYCLE_ORDER[this.cycleIdx]);
-      this.cycleUntil = now + rand(7000, 13000);
+      const next = CYCLE_ORDER[this.cycleIdx];
+      this.setState(next);
+      const span: [number, number] = ACTIVITY_SET.has(next as CentaurActivity)
+        ? [12000, 18000]
+        : [7000, 13000];
+      this.cycleUntil = now + rand(...span);
     }
+
+    const act = this.props.update(now, dt);
+    if (act.eye) {
+      if (act.eye !== this._actEye) {
+        this._morphEyeTo(EYE_BY_ID[act.eye] ?? 0, false);
+      }
+      this.eyeUntil = now + 400;
+    }
+    this._actEye = act.eye;
 
     if (now >= this.eyeUntil) {
       this._advanceEye(false);
@@ -337,14 +372,17 @@ export class CentaurCharacter {
     const blinkKey = EY.consumeBlink(this.blinkQueue, now);
     if (blinkKey != null) this.blink.t = blinkKey;
 
-    if (WINK_STATES.has(this.state) && now >= this.winkUntil) {
+    if (WINK_STATES.has(this.state as CentaurMood) && now >= this.winkUntil) {
       this.winkAt = now;
       this.winkEye = Math.random() < 0.5 ? 0 : 1;
       this.winkUntil = now + rand(6000, 14000);
     }
 
     if (!this._updatePointerGaze()) {
-      if (now >= this.gazeUntil) {
+      if (act.gaze) {
+        this.gazeX.t = act.gaze.x;
+        this.gazeY.t = act.gaze.y;
+      } else if (now >= this.gazeUntil) {
         const amp = POSE_TARGETS[this.state]?.gazeAmp ?? 4;
         this.gazeX.t = rand(-amp, amp);
         this.gazeY.t = rand(-amp * 0.6, amp * 0.6);
@@ -363,8 +401,13 @@ export class CentaurCharacter {
       this.hopAt = -1;
     }
 
+    const pose = POSE_TARGETS[this.state];
+    this.tilt.t = pose.tilt + act.tilt;
+    this.ty.t = pose.ty + act.ty;
+    this.squash.t = pose.squash + act.squash;
+
     if (this.state === "idle") {
-      this.tilt.t = Math.sin(now * 0.0007) * 2.5;
+      this.tilt.t = Math.sin(now * 0.0007) * 2.5 + act.tilt;
     }
 
     const steps = springSteps(dt);
@@ -413,6 +456,7 @@ export class CentaurCharacter {
       clipEls: this.clipEls,
       pulse,
     });
+    this.props.paint();
     this.fx.paint(now);
   }
 }

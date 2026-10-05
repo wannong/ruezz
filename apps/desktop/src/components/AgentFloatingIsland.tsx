@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import type { AgentAttachment, AgentSessionMessage, Idea, IdeaSelector, PageSummary } from "../api";
+import type { RuezzWorkMode } from "../lib/centaur-character/activity";
 import { AgentChatFeed, AgentComposer, appendSelectionToDraft } from "./agentChatCore";
 import { Presence } from "./Presence";
 
@@ -37,6 +38,7 @@ export type AgentFloatingIslandProps = {
   onAttachCurrent: () => void;
   onDetach: (id: string) => void;
   ruezzCelebrate?: boolean;
+  ruezzWorkMode?: RuezzWorkMode;
 };
 
 const ISLAND_EXIT_MS = 320;
@@ -74,6 +76,7 @@ export function AgentFloatingIsland({
   onAttachCurrent,
   onDetach,
   ruezzCelebrate = false,
+  ruezzWorkMode = "idle",
 }: AgentFloatingIslandProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const followOutput = useRef(true);
@@ -147,6 +150,7 @@ export function AgentFloatingIsland({
             onOpen={onOpen}
             welcomeSizePx={48}
             ruezzCelebrate={ruezzCelebrate}
+            ruezzWorkMode={ruezzWorkMode}
             className="agent-chat-view agent-island-chat"
           />
           <AgentComposer

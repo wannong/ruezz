@@ -4,7 +4,7 @@ import type { AgentAttachment, AgentSessionMessage, Idea, IdeaSelector, PageSumm
 import { parseModelSwitchKey } from "../lib/llmProviders";
 import { loadPref, savePref } from "../lib/prefs";
 import { attachResizeY } from "../lib/pointerResize";
-import { ruezzActivityFromAgent } from "../lib/centaur-character/activity";
+import { ruezzActivityFromAgent, type RuezzWorkMode } from "../lib/centaur-character/activity";
 import { CentaurCharacterView } from "./CentaurCharacterView";
 import { MarkdownPreview } from "./MarkdownPreview";
 import { Presence } from "./Presence";
@@ -77,6 +77,7 @@ export type AgentChatFeedProps = {
   welcomeSizePx?: number;
   showWelcomeCharacter?: boolean;
   ruezzCelebrate?: boolean;
+  ruezzWorkMode?: RuezzWorkMode;
   className?: string;
 };
 
@@ -103,6 +104,7 @@ export function AgentChatFeed({
   welcomeSizePx = 64,
   showWelcomeCharacter = true,
   ruezzCelebrate = false,
+  ruezzWorkMode = "idle",
   className,
 }: AgentChatFeedProps) {
   const empty = messages.length === 0 && !pendingUser && !busy;
@@ -113,6 +115,7 @@ export function AgentChatFeed({
     streamingText,
     streamingTools,
     celebrate: ruezzCelebrate,
+    workMode: ruezzWorkMode,
   });
 
   useEffect(() => {

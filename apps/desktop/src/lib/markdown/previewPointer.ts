@@ -1,5 +1,11 @@
 import type { EditorView } from "@codemirror/view";
-import { POINTER_USER_EVENT, setLivePreviewActive } from "./livePreviewState";
+import {
+  livePreviewActiveField,
+  livePreviewFocusBlockField,
+  POINTER_USER_EVENT,
+  setLivePreviewActive,
+  setLivePreviewFocusBlock,
+} from "./livePreviewState";
 
 export { POINTER_USER_EVENT };
 
@@ -64,6 +70,254 @@ export function isHeadingBlock(blockName: string): boolean {
   return blockName.startsWith("ATXHeading") || blockName.startsWith("SetextHeading");
 }
 
+type RenderedBlockMeta = {
+  blockFrom: number;
+  blockTo: number;
+  blockName: string;
+  blockSource: string;
+};
+
+function readRenderedBlockMeta(rendered: HTMLElement, view: EditorView): RenderedBlockMeta | null {
+  const blockFrom = Number(rendered.dataset.blockFrom);
+  const blockTo = Number(rendered.dataset.blockTo);
+  if (!Number.isFinite(blockFrom) || !Number.isFinite(blockTo)) return null;
+  const blockName = rendered.dataset.blockName ?? "";
+  const blockSource = view.state.doc.sliceString(blockFrom, blockTo);
+  return { blockFrom, blockTo, blockName, blockSource };
+}
+
+function renderedTextLines(root: HTMLElement): string[] {
+  return root.innerText.replace(/\r\n/g, "\n").split("\n");
+}
+
+function flatRenderedOffsetToLineCol(lines: string[], flatOffset: number): { line: number; col: number } {
+  let remaining = Math.max(0, flatOffset);
+  for (let i = 0; i < lines.length; i++) {
+    const len = lines[i].length;
+    if (remaining <= len) return { line: i, col: remaining };
+    remaining -= len + 1;
+  }
+  const last = Math.max(0, lines.length - 1);
+  return { line: last, col: lines[last]?.length ?? 0 };
+}
+
+function sourceLineStartOffset(sourceLines: string[], lineIndex: number): number {
+  let offset = 0;
+  for (let i = 0; i < lineIndex; i++) offset += sourceLines[i].length + 1;
+  return offset;
+}
+
+/** Map a click inside a rendered preview block to a local offset in the markdown source block. */
+export function mapRenderedPointerToSource(
+  blockSource: string,
+  blockName: string,
+  rendered: HTMLElement,
+  clientX: number,
+  clientY: number,
+): number {
+  const trimmed = blockSource.replace(/\n+$/g, "");
+  const sourceLines = trimmed.length > 0 ? trimmed.split("\n") : [""];
+
+  if (isHeadingBlock(blockName) || sourceLines.length === 1) {
+    const renderedOffset = caretOffsetInElement(rendered, clientX, clientY) ?? 0;
+    return mapRenderedOffsetToSource(blockSource, blockName, renderedOffset);
+  }
+
+  const visualLines = renderedTextLines(rendered);
+  const visualLineCount = Math.max(visualLines.length, 1);
+  const rect = rendered.getBoundingClientRect();
+  const relY = Math.max(0, Math.min(clientY - rect.top, Math.max(rect.height - 1, 0)));
+  const flatOffset = caretOffsetInElement(rendered, clientX, clientY);
+
+  let visualLineIndex: number;
+  let col: number;
+  if (flatOffset != null && visualLineCount > 1) {
+    const lineCol = flatRenderedOffsetToLineCol(visualLines, flatOffset);
+    visualLineIndex = lineCol.line;
+    col = lineCol.col;
+  } else if (flatOffset != null) {
+    visualLineIndex = 0;
+    col = flatOffset;
+  } else {
+    visualLineIndex = Math.min(
+      visualLineCount - 1,
+      Math.max(0, Math.floor((relY / Math.max(rect.height, 1)) * visualLineCount)),
+    );
+    col = 0;
+  }
+
+  let sourceLineIndex: number;
+  if (sourceLines.length > 1 && visualLineCount === 1) {
+    sourceLineIndex = Math.min(
+      sourceLines.length - 1,
+      Math.max(0, Math.floor((relY / Math.max(rect.height, 1)) * sourceLines.length)),
+    );
+  } else {
+    sourceLineIndex = Math.min(
+      sourceLines.length - 1,
+      Math.round((visualLineIndex / Math.max(visualLineCount - 1, 1)) * (sourceLines.length - 1)),
+    );
+  }
+
+  const lineText = sourceLines[sourceLineIndex] ?? "";
+  col = Math.max(0, Math.min(col, lineText.length));
+  return Math.min(sourceLineStartOffset(sourceLines, sourceLineIndex) + col, trimmed.length);
+}
+
+function pointerOnRenderedPreview(clientX: number, clientY: number): boolean {
+  const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+  return Boolean(target?.closest(".cm-live-preview-rendered"));
+}
+
+function resolveBlockPos(
+  view: EditorView,
+  rendered: HTMLElement,
+  clientX: number,
+  clientY: number,
+): number | null {
+  const meta = readRenderedBlockMeta(rendered, view);
+  if (!meta) return null;
+  const { blockFrom, blockTo, blockName, blockSource } = meta;
+
+  // Preview widgets paint on top of hidden source lines — posAtCoords often lands one line off.
+  if (pointerOnRenderedPreview(clientX, clientY)) {
+    return blockFrom + mapRenderedPointerToSource(blockSource, blockName, rendered, clientX, clientY);
+  }
+
+  const hit = view.posAtCoords({ x: clientX, y: clientY }, false);
+  if (hit != null && hit >= blockFrom && hit <= blockTo) return hit;
+
+  return blockFrom + mapRenderedPointerToSource(blockSource, blockName, rendered, clientX, clientY);
+}
+
+type RenderedDragState = {
+  view: EditorView;
+  rendered: HTMLElement;
+  anchor: number;
+  blockFrom: number;
+  blockTo: number;
+  blockName: string;
+  blockSource: string;
+};
+
+let renderedDrag: RenderedDragState | null = null;
+
+function resolveDragHead(view: EditorView, drag: RenderedDragState, clientX: number, clientY: number): number {
+  const hit = view.posAtCoords({ x: clientX, y: clientY }, false);
+  if (hit != null) return hit;
+
+  const target = document.elementFromPoint(clientX, clientY);
+  const rendered = (target?.closest(".cm-live-preview-rendered") as HTMLElement | null) ?? drag.rendered;
+  const pos = resolveBlockPos(view, rendered, clientX, clientY);
+  if (pos != null) return pos;
+
+  return drag.anchor;
+}
+
+function focusBlockEffects(blockFrom: number, blockTo: number) {
+  return [setLivePreviewActive.of(true), setLivePreviewFocusBlock.of({ from: blockFrom, to: blockTo })];
+}
+
+function scheduleSourcePointerPlacement(
+  view: EditorView,
+  blockFrom: number,
+  blockTo: number,
+  blockSource: string,
+  clientX: number,
+  clientY: number,
+  selectWord: boolean,
+): void {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!view.state.field(livePreviewActiveField)) return;
+      const focus = view.state.field(livePreviewFocusBlockField);
+      if (!focus || focus.from !== blockFrom || focus.to !== blockTo) return;
+      const hit = view.posAtCoords({ x: clientX, y: clientY }, false);
+      if (hit == null || hit < blockFrom || hit > blockTo) return;
+      if (selectWord) {
+        const local = Math.max(0, Math.min(hit - blockFrom, blockSource.length));
+        const word = wordRangeAt(blockSource, local);
+        view.dispatch({
+          selection: { anchor: blockFrom + word.from, head: blockFrom + word.to },
+          scrollIntoView: true,
+          userEvent: POINTER_USER_EVENT,
+        });
+        return;
+      }
+      view.dispatch({
+        selection: { anchor: hit, head: hit },
+        scrollIntoView: true,
+        userEvent: POINTER_USER_EVENT,
+      });
+    });
+  });
+}
+
+function onRenderedDragMove(event: MouseEvent) {
+  if (!renderedDrag || event.buttons !== 1) return;
+  const { view, anchor } = renderedDrag;
+  const head = resolveDragHead(view, renderedDrag, event.clientX, event.clientY);
+  const sel = view.state.selection.main;
+  if (sel.anchor === anchor && sel.head === head) return;
+  view.dispatch({
+    effects: focusBlockEffects(renderedDrag.blockFrom, renderedDrag.blockTo),
+    selection: { anchor, head },
+    scrollIntoView: true,
+    userEvent: POINTER_USER_EVENT,
+  });
+}
+
+function endRenderedDrag() {
+  window.removeEventListener("mousemove", onRenderedDragMove);
+  window.removeEventListener("mouseup", onRenderedDragEnd);
+  renderedDrag = null;
+}
+
+function onRenderedDragEnd(event: MouseEvent) {
+  const drag = renderedDrag;
+  endRenderedDrag();
+  if (!drag) return;
+  if (!drag.view.state.field(livePreviewActiveField)) return;
+  const sel = drag.view.state.selection.main;
+  if (!sel.empty) return;
+  scheduleSourcePointerPlacement(
+    drag.view,
+    drag.blockFrom,
+    drag.blockTo,
+    drag.blockSource,
+    event.clientX,
+    event.clientY,
+    false,
+  );
+}
+
+/** Clear in-flight drag listeners when the editor is destroyed. */
+export function disposeRenderedDragSelect() {
+  endRenderedDrag();
+}
+
+function beginRenderedDragSelect(event: MouseEvent, view: EditorView, rendered: HTMLElement): void {
+  const meta = readRenderedBlockMeta(rendered, view);
+  if (!meta) return;
+
+  const { blockFrom, blockTo, blockName, blockSource } = meta;
+  const anchor = resolveBlockPos(view, rendered, event.clientX, event.clientY) ?? blockFrom;
+
+  endRenderedDrag();
+  renderedDrag = { view, rendered, anchor, blockFrom, blockTo, blockName, blockSource };
+
+  view.dispatch({
+    effects: focusBlockEffects(blockFrom, blockTo),
+    selection: { anchor, head: anchor },
+    scrollIntoView: true,
+    userEvent: POINTER_USER_EVENT,
+  });
+  view.focus();
+
+  window.addEventListener("mousemove", onRenderedDragMove);
+  window.addEventListener("mouseup", onRenderedDragEnd);
+}
+
 export function focusRenderedBlock(
   view: EditorView,
   rendered: HTMLElement,
@@ -71,13 +325,9 @@ export function focusRenderedBlock(
   clientY: number,
   selectWord: boolean,
 ): void {
-  const blockFrom = Number(rendered.dataset.blockFrom);
-  const blockTo = Number(rendered.dataset.blockTo);
-  if (!Number.isFinite(blockFrom) || !Number.isFinite(blockTo)) return;
-
-  const blockName = rendered.dataset.blockName ?? "";
-  const blockSource = view.state.doc.sliceString(blockFrom, blockTo);
-  const renderedOffset = caretOffsetInElement(rendered, clientX, clientY);
+  const meta = readRenderedBlockMeta(rendered, view);
+  if (!meta) return;
+  const { blockFrom, blockTo, blockSource } = meta;
 
   const applySelection = (pos: number) => {
     const clamped = Math.max(blockFrom, Math.min(pos, blockTo));
@@ -85,14 +335,14 @@ export function focusRenderedBlock(
       const local = Math.max(0, Math.min(clamped - blockFrom, blockSource.length));
       const word = wordRangeAt(blockSource, local);
       view.dispatch({
-        effects: setLivePreviewActive.of(true),
+        effects: focusBlockEffects(blockFrom, blockTo),
         selection: { anchor: blockFrom + word.from, head: blockFrom + word.to },
         scrollIntoView: true,
         userEvent: POINTER_USER_EVENT,
       });
     } else {
       view.dispatch({
-        effects: setLivePreviewActive.of(true),
+        effects: focusBlockEffects(blockFrom, blockTo),
         selection: { anchor: clamped, head: clamped },
         scrollIntoView: true,
         userEvent: POINTER_USER_EVENT,
@@ -101,32 +351,115 @@ export function focusRenderedBlock(
     view.focus();
   };
 
-  view.dispatch({
-    effects: setLivePreviewActive.of(true),
-    selection: { anchor: blockFrom, head: blockFrom },
-    scrollIntoView: false,
-    userEvent: POINTER_USER_EVENT,
-  });
+  const syncPos = resolveBlockPos(view, rendered, clientX, clientY);
+  applySelection(syncPos ?? blockFrom);
+  scheduleSourcePointerPlacement(view, blockFrom, blockTo, blockSource, clientX, clientY, selectWord);
+}
 
-  if (renderedOffset != null && isHeadingBlock(blockName)) {
-    applySelection(blockFrom + mapRenderedOffsetToSource(blockSource, blockName, renderedOffset));
-    return;
+type BlankEditTarget = {
+  pos: number;
+  blockFrom: number;
+  blockTo: number;
+  changes?: Array<{ from: number; insert: string }>;
+};
+
+function lineBlockCenterY(view: EditorView, lineFrom: number): number {
+  const block = view.lineBlockAt(lineFrom);
+  return (block.top + block.bottom) / 2;
+}
+
+/** Pick the blank line closest to a pointer, or create one near the click. */
+export function resolveNearestBlankEditTarget(view: EditorView, clientY: number): BlankEditTarget {
+  const doc = view.state.doc;
+
+  if (doc.toString().trim().length === 0) {
+    return { pos: 0, blockFrom: 0, blockTo: 0 };
   }
 
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      const hit = view.posAtCoords({ x: clientX, y: clientY }, false);
-      if (hit != null && hit >= blockFrom && hit <= blockTo) {
-        applySelection(hit);
-        return;
-      }
-      if (renderedOffset != null) {
-        applySelection(blockFrom + mapRenderedOffsetToSource(blockSource, blockName, renderedOffset));
-        return;
-      }
-      applySelection(blockFrom);
-    });
+  let bestBlankLine = 0;
+  let bestBlankDistance = Infinity;
+  for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber += 1) {
+    const line = doc.line(lineNumber);
+    if (line.text.trim().length > 0) continue;
+    const distance = Math.abs(clientY - lineBlockCenterY(view, line.from));
+    if (distance < bestBlankDistance) {
+      bestBlankDistance = distance;
+      bestBlankLine = lineNumber;
+    }
+  }
+
+  if (bestBlankLine > 0) {
+    const line = doc.line(bestBlankLine);
+    return { pos: line.from, blockFrom: line.from, blockTo: line.to };
+  }
+
+  const lastBlock = view.lineBlockAt(doc.length);
+  if (clientY > lastBlock.bottom + 2) {
+    const lastLine = doc.line(doc.lines);
+    if (lastLine.text.trim().length === 0) {
+      return { pos: lastLine.from, blockFrom: lastLine.from, blockTo: lastLine.to };
+    }
+    const suffix = doc.toString().endsWith("\n") ? "\n" : "\n\n";
+    const pos = doc.length + suffix.length;
+    return {
+      pos,
+      blockFrom: doc.length,
+      blockTo: pos,
+      changes: [{ from: doc.length, insert: suffix }],
+    };
+  }
+
+  let nearestLine = 1;
+  let nearestDistance = Infinity;
+  for (let lineNumber = 1; lineNumber <= doc.lines; lineNumber += 1) {
+    const line = doc.line(lineNumber);
+    const distance = Math.abs(clientY - lineBlockCenterY(view, line.from));
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestLine = lineNumber;
+    }
+  }
+
+  const line = doc.line(nearestLine);
+  const insertAfter = clientY >= lineBlockCenterY(view, line.from);
+  const insertAt = insertAfter ? line.to : line.from;
+  return {
+    pos: insertAt,
+    blockFrom: insertAt,
+    blockTo: insertAt,
+    changes: [{ from: insertAt, insert: "\n" }],
+  };
+}
+
+/** Double-click a blank area to edit the nearest blank line (no always-on tail widget). */
+export function handleBlankDoubleClick(event: MouseEvent, view: EditorView): boolean {
+  const target = event.target as HTMLElement | null;
+  if (!target || target.closest(".cm-live-preview-rendered") || target.closest(".wikilink")) return false;
+  if (target.closest(".cm-live-editing-line")) return false;
+  if (!view.dom.contains(target)) return false;
+
+  const doc = view.state.doc;
+  const lastBlock = view.lineBlockAt(doc.length);
+  const belowContent = event.clientY > lastBlock.bottom + 2;
+  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
+  const hitChrome = target === view.scrollDOM || target === view.contentDOM;
+
+  const emptyDoc = doc.toString().trim().length === 0;
+  if (!emptyDoc && pos != null && !belowContent && !hitChrome) return false;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const editTarget = resolveNearestBlankEditTarget(view, event.clientY);
+  view.dispatch({
+    effects: focusBlockEffects(editTarget.blockFrom, editTarget.blockTo),
+    changes: editTarget.changes,
+    selection: { anchor: editTarget.pos, head: editTarget.pos },
+    scrollIntoView: true,
+    userEvent: POINTER_USER_EVENT,
   });
+  view.focus();
+  return true;
 }
 
 export function handleRenderedPointer(event: MouseEvent, view: EditorView, selectWord: boolean): boolean {
@@ -137,71 +470,10 @@ export function handleRenderedPointer(event: MouseEvent, view: EditorView, selec
 
   event.preventDefault();
   event.stopPropagation();
-  focusRenderedBlock(view, rendered, event.clientX, event.clientY, selectWord);
-  return true;
-}
-
-export function focusBlankArea(view: EditorView): void {
-  const { state } = view;
-  const doc = state.doc;
-  let pos = doc.length;
-  const changes: Array<{ from: number; insert: string }> = [];
-
-  if (doc.length === 0) {
-    pos = 0;
+  if (selectWord) {
+    focusRenderedBlock(view, rendered, event.clientX, event.clientY, true);
   } else {
-    const lastLine = doc.line(doc.lines);
-    if (lastLine.text.trim().length === 0) {
-      pos = lastLine.from;
-    } else {
-      const suffix = doc.toString().endsWith("\n") ? "\n" : "\n\n";
-      changes.push({ from: doc.length, insert: suffix });
-      pos = doc.length + suffix.length;
-    }
+    beginRenderedDragSelect(event, view, rendered);
   }
-
-  view.dispatch({
-    effects: setLivePreviewActive.of(true),
-    changes: changes.length > 0 ? changes : undefined,
-    selection: { anchor: pos, head: pos },
-    scrollIntoView: true,
-    userEvent: POINTER_USER_EVENT,
-  });
-  view.focus();
-}
-
-export function handleBlankPointer(event: MouseEvent, view: EditorView): boolean {
-  const target = event.target as HTMLElement | null;
-  if (!target || target.closest(".cm-live-preview-rendered") || target.closest(".wikilink")) return false;
-  if (!view.dom.contains(target)) return false;
-
-  if (target.closest(".cm-live-tail-placeholder")) {
-    event.preventDefault();
-    event.stopPropagation();
-    focusBlankArea(view);
-    return true;
-  }
-
-  if (view.state.doc.toString().trim().length === 0) {
-    if (target.closest(".cm-content") || target.closest(".cm-scroller") || target.closest(".cm-editor")) {
-      event.preventDefault();
-      event.stopPropagation();
-      focusBlankArea(view);
-      return true;
-    }
-  }
-
-  const content = view.contentDOM;
-  const lastBlock = view.lineBlockAt(view.state.doc.length);
-  const belowContent = event.clientY > lastBlock.bottom + 2;
-  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
-  const hitChrome = target === view.scrollDOM || target === content;
-
-  if (pos != null && !belowContent) return false;
-  if (!belowContent && !hitChrome) return false;
-
-  event.preventDefault();
-  event.stopPropagation();
-  focusBlankArea(view);
   return true;
 }

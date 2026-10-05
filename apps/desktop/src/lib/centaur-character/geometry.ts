@@ -15,6 +15,9 @@ export const COLORS = {
   head: "#D6D3D1",
   eye: "#1C1917",
   highlight: "#F6F3EE",
+  accent: "#E8D7A4",
+  line: "#1C1917",
+  paper: "#F6F3EE",
 };
 
 export const VIEW = { minX: 0, minY: 0, width: 256, height: 256 };
@@ -136,6 +139,9 @@ export const EXPRESSIONS: Expression[] = [
   { id: "proud", pair: [proud(baseL), proud(baseR)] },
   { id: "confused", pair: [confusedTilt(baseL, 1), confusedTilt(baseR, -1)] },
   { id: "playful", pair: [playfulWink(baseL, true), playfulWink(baseR, false)] },
+  { id: "reading", pair: [offsetPoly(scalePoly(baseL, 1.0, 0.78), 0, 4), offsetPoly(scalePoly(baseR, 1.0, 0.78), 0, 4)] },
+  { id: "focus", pair: [offsetPoly(scalePoly(baseL, 1.02, 0.66), 0, 1), offsetPoly(scalePoly(baseR, 1.02, 0.66), 0, 1)] },
+  { id: "yawn", pair: [scalePoly(thinLid(baseL, 0.1, 0), 1.12, 1), scalePoly(thinLid(baseR, 0.1, 0), 1.12, 1)] },
 ];
 
 for (const e of EXPRESSIONS) {

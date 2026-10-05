@@ -2,6 +2,8 @@ import type { CentaurState } from "./tables";
 
 export const RUEZZ_CELEBRATE_MS = 3200;
 
+export type RuezzWorkMode = "idle" | "reading" | "writing";
+
 export type RuezzActivity = {
   busy: boolean;
   pendingUser?: string | null;
@@ -9,7 +11,18 @@ export type RuezzActivity = {
   streamingText?: string;
   streamingTools?: Array<{ status: "running" | "done" | "error" }>;
   celebrate?: boolean;
+  workMode?: RuezzWorkMode;
 };
+
+export function ruezzWorkModeFromNoteMode(mode?: "live" | "source" | "file" | null): RuezzWorkMode {
+  if (mode === "file") return "reading";
+  if (mode === "live" || mode === "source") return "writing";
+  return "idle";
+}
+
+export function ruezzWorkModeIsActive(workMode?: RuezzWorkMode): boolean {
+  return workMode === "reading" || workMode === "writing";
+}
 
 export function ruezzStateForActivity(
   activity: RuezzActivity,
@@ -21,6 +34,8 @@ export function ruezzStateForActivity(
 
   if (!activity.busy && !activity.pendingUser) {
     if (activity.celebrate) return "proud";
+    if (activity.workMode === "writing") return "writing";
+    if (activity.workMode === "reading") return "reading";
     return idleState;
   }
 
@@ -41,7 +56,12 @@ export function ruezzStateForActivity(
 
 export function ruezzActivityIsDriven(activity?: RuezzActivity | null): boolean {
   if (!activity) return false;
-  return activity.busy || Boolean(activity.pendingUser) || Boolean(activity.celebrate);
+  return (
+    activity.busy ||
+    Boolean(activity.pendingUser) ||
+    Boolean(activity.celebrate) ||
+    ruezzWorkModeIsActive(activity.workMode)
+  );
 }
 
 export function ruezzActivityFromAgent(props: {
@@ -51,6 +71,7 @@ export function ruezzActivityFromAgent(props: {
   streamingText: string;
   streamingTools: RuezzActivity["streamingTools"];
   celebrate?: boolean;
+  workMode?: RuezzWorkMode;
 }): RuezzActivity {
   return {
     busy: props.busy,
@@ -59,5 +80,6 @@ export function ruezzActivityFromAgent(props: {
     streamingText: props.streamingText,
     streamingTools: props.streamingTools,
     celebrate: props.celebrate,
+    workMode: props.workMode ?? "idle",
   };
 }

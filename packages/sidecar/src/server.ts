@@ -376,6 +376,18 @@ export class SidecarSession {
         await (await this.getIdeaStorage()).remapPage(from, to);
         return page;
       }
+      case "vault_delete_page": {
+        const root = this.requireVault();
+        const id = String(params.id ?? params.path ?? "");
+        const result = await this.engine.deletePage(root, id);
+        const ideas = await (await this.getIdeaStorage()).list();
+        for (const idea of ideas) {
+          if (idea.target.kind === "page" && idea.target.pageId === id) {
+            await (await this.getIdeaStorage()).delete(idea.id);
+          }
+        }
+        return result;
+      }
       case "vault_list_folders":
         return this.engine.listFolders(this.requireVault());
       case "vault_create_folder":

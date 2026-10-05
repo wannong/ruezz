@@ -17,6 +17,12 @@ const TEAR_ANCHORS = [
   { x: 160, y: 162, r: -6 },
 ];
 
+const NOTE_ANCHORS = [
+  { x: 226, y: 96, r: -8 },
+  { x: 30, y: 96, r: 8 },
+  { x: 220, y: 86, r: 10 },
+];
+
 type PunctEntry = string | { kind?: string; text?: string; x?: number; y?: number; rotate?: number };
 
 function tearPath(s: number) {
@@ -71,10 +77,7 @@ function makeText(text: string, size: number) {
   el.setAttribute("y", "0");
   el.setAttribute("text-anchor", "middle");
   el.setAttribute("dominant-baseline", "middle");
-  el.setAttribute(
-    "font-family",
-    'Inter, "LXGW WenKai", sans-serif',
-  );
+  el.setAttribute("font-family", 'Inter, "LXGW WenKai", sans-serif');
   const fs = text === "z" ? size * 0.72 : size;
   el.setAttribute("font-size", String(fs));
   el.setAttribute("font-weight", "700");
@@ -85,6 +88,7 @@ function makeText(text: string, size: number) {
 type GlyphItem = {
   el: SVGElement;
   kind: string;
+  index: number;
   baseX: number;
   baseY: number;
   rotate: number;
@@ -125,13 +129,20 @@ export class EmotionPunctuation {
     this.glyphs = [];
     const chars = PUNCT_FX[name] || PUNCT_FX.idle || [];
     let tearI = 0;
+    let noteI = 0;
     chars.forEach((entry, i) => {
       const punct = entry as PunctEntry;
       const kind = typeof punct === "string" ? "text" : punct.kind || "text";
       const text = typeof punct === "string" ? punct : punct.text || "";
       let el: SVGElement;
       let anchor: { x: number; y: number; r: number };
-      if (kind === "spinner") {
+      let index = 0;
+      if (kind === "note") {
+        el = makeText(text, EYE_SIZE * 0.62);
+        index = noteI;
+        anchor = NOTE_ANCHORS[noteI % NOTE_ANCHORS.length];
+        noteI += 1;
+      } else if (kind === "spinner") {
         el = makeSpinner(EYE_SIZE);
         anchor = ANCHORS[0];
       } else if (kind === "tear") {
@@ -151,6 +162,7 @@ export class EmotionPunctuation {
       this.glyphs.push({
         el,
         kind,
+        index,
         baseX: anchor.x + (typeof punct === "string" ? 0 : punct.x || 0),
         baseY: anchor.y + (typeof punct === "string" ? 0 : punct.y || 0),
         rotate: anchor.r + (typeof punct === "string" ? 0 : punct.rotate || 0),
@@ -183,7 +195,7 @@ export class EmotionPunctuation {
     const steps = springSteps(dt);
     const h = dt / steps;
     for (const item of this.glyphs) {
-      if (item.kind !== "spinner") {
+      if (item.kind !== "spinner" && item.kind !== "note") {
         if (now >= item.repopAt) this.repop(item, now);
         if (!item.faded && now >= item.fadeAt) {
           item.opacity.t = 0.7;
@@ -209,14 +221,22 @@ export class EmotionPunctuation {
         (item.kind === "tear" ? (now * 0.018 + item.phase * 8) % 14 : 0);
       const scale = clamp(item.scale.x, 0, 1.25);
       let rot = item.rotate;
+      let fade = 1;
       if (item.kind === "spinner") {
         rot = ((now - item.spin0) * 0.36) % 360;
+      } else if (item.kind === "note") {
+        const q = (((now - item.spin0) / 2400 + item.index / 3) % 1 + 1) % 1;
+        const wave = Math.sin(q * 2 * Math.PI);
+        driftY = -q * 56;
+        driftX = wave * 6;
+        rot = item.rotate + wave * 10;
+        fade = Math.sin(Math.PI * q);
       }
       item.el.setAttribute(
         "transform",
         `translate(${(item.baseX + driftX).toFixed(2)} ${(item.baseY + driftY).toFixed(2)}) rotate(${rot.toFixed(2)}) scale(${scale.toFixed(4)})`,
       );
-      item.el.style.opacity = String(clamp(item.opacity.x, 0, 1));
+      item.el.style.opacity = String(clamp(item.opacity.x, 0, 1) * fade);
     }
   }
 }

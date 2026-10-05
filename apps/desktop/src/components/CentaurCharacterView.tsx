@@ -7,6 +7,8 @@ import {
 } from "../lib/centaur-character/activity";
 import type { CentaurState } from "../lib/centaur-character/tables";
 
+const PROPS_FX_MIN_PX = 40;
+
 type CentaurCharacterViewProps = {
   sizePx?: number;
   state?: CentaurState;
@@ -14,6 +16,7 @@ type CentaurCharacterViewProps = {
   followPointer?: boolean;
   autoCycle?: boolean;
   punctuationFx?: boolean;
+  propsFx?: boolean;
   className?: string;
 };
 
@@ -24,10 +27,12 @@ export function CentaurCharacterView({
   followPointer = true,
   autoCycle = true,
   punctuationFx = true,
+  propsFx,
   className,
 }: CentaurCharacterViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const characterRef = useRef<CentaurCharacter | null>(null);
+  const resolvedPropsFx = propsFx ?? sizePx >= PROPS_FX_MIN_PX;
 
   const driven = ruezzActivityIsDriven(activity);
   const mood = useMemo(
@@ -45,6 +50,7 @@ export function CentaurCharacterView({
       followPointer,
       autoCycle: driven ? false : autoCycle,
       punctuationFx,
+      propsFx: resolvedPropsFx,
     });
     characterRef.current = character;
 
@@ -52,16 +58,17 @@ export function CentaurCharacterView({
       character.destroy();
       characterRef.current = null;
     };
-  }, [sizePx, followPointer, punctuationFx, autoCycle]);
+  }, [sizePx, followPointer, punctuationFx, autoCycle, resolvedPropsFx]);
 
   useEffect(() => {
     const character = characterRef.current;
     if (!character) return;
     character.setFollowPointer(followPointer);
     character.setPunctuationFx(punctuationFx);
+    character.setPropsFx(resolvedPropsFx);
     character.setAutoCycle(driven ? false : autoCycle);
     if (character.state !== mood) character.setState(mood);
-  }, [mood, driven, autoCycle, followPointer, punctuationFx]);
+  }, [mood, driven, autoCycle, followPointer, punctuationFx, resolvedPropsFx]);
 
   return (
     <svg

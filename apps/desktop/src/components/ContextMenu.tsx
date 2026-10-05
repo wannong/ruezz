@@ -61,12 +61,12 @@ function ContextMenuSurface({ x, y, items, onClose }: SurfaceProps) {
       if (e.key === "Escape") onClose();
     };
     const onBlur = () => onClose();
-    window.addEventListener("mousedown", onDown);
+    window.addEventListener("mousedown", onDown, true);
     window.addEventListener("keydown", onKey);
     window.addEventListener("resize", onBlur);
     window.addEventListener("scroll", onBlur, true);
     return () => {
-      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("mousedown", onDown, true);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onBlur);
       window.removeEventListener("scroll", onBlur, true);

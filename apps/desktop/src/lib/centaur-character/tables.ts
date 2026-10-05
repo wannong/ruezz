@@ -2,7 +2,8 @@ import { EYE_BY_ID, GEO } from "./geometry";
 
 const id = (name: string) => EYE_BY_ID[name];
 
-export const STATES = [
+/** Mood-only states (UI grouping). */
+export const MOODS = [
   "idle",
   "curious",
   "happy",
@@ -18,7 +19,27 @@ export const STATES = [
   "listening",
 ] as const;
 
-export type CentaurState = (typeof STATES)[number];
+export type CentaurMood = (typeof MOODS)[number];
+
+/** Everyday activity loops with prop layers. */
+export const ACTIVITIES = ["reading", "music", "writing", "tea", "stretch"] as const;
+
+export type CentaurActivity = (typeof ACTIVITIES)[number];
+
+export type CentaurState = CentaurMood | CentaurActivity;
+
+/** @deprecated Use MOODS — kept for existing imports. */
+export const STATES = MOODS;
+
+export const ACTIVITY_LABELS: Record<CentaurActivity, string> = {
+  reading: "看书",
+  music: "听音乐",
+  writing: "写作",
+  tea: "喝茶",
+  stretch: "伸懒腰",
+};
+
+export const ACTIVITY_SET = new Set<CentaurActivity>(ACTIVITIES);
 
 export const EYE_PLAYLIST: Record<CentaurState, string[]> = {
   idle: ["normal", "soft", "lookLeft", "lookRight", "normal"],
@@ -34,6 +55,11 @@ export const EYE_PLAYLIST: Record<CentaurState, string[]> = {
   confused: ["confused", "lookLeft", "lookRight", "confused"],
   bored: ["bored", "sleepy", "lookRight", "bored"],
   listening: ["normal", "wide", "lookLeft", "soft", "normal"],
+  reading: ["reading", "soft", "reading"],
+  music: ["happy", "soft", "happy", "winkL", "soft"],
+  writing: ["focus", "thinking", "focus"],
+  tea: ["normal", "soft", "lookLeft", "soft"],
+  stretch: ["soft", "normal"],
 };
 
 export const PUNCT_FX: Record<CentaurState, Array<string | Record<string, unknown>>> = {
@@ -53,6 +79,15 @@ export const PUNCT_FX: Record<CentaurState, Array<string | Record<string, unknow
   confused: ["?", "?"],
   bored: ["…"],
   listening: ["…"],
+  reading: [],
+  music: [
+    { kind: "note", text: "♪" },
+    { kind: "note", text: "♫" },
+    { kind: "note", text: "♪" },
+  ],
+  writing: [],
+  tea: [],
+  stretch: ["~"],
 };
 
 export const EYE_HOLD_MS: Record<CentaurState, [number, number]> = {
@@ -69,6 +104,11 @@ export const EYE_HOLD_MS: Record<CentaurState, [number, number]> = {
   confused: [2000, 3600],
   bored: [3500, 6000],
   listening: [2500, 4500],
+  reading: [3000, 5000],
+  music: [1200, 2400],
+  writing: [3000, 5000],
+  tea: [2000, 3600],
+  stretch: [2500, 4500],
 };
 
 export const BLINK_MS: Record<CentaurState, [number, number] | null> = {
@@ -85,6 +125,11 @@ export const BLINK_MS: Record<CentaurState, [number, number] | null> = {
   confused: [2800, 5500],
   bored: [4000, 8000],
   listening: [3000, 6500],
+  reading: [4000, 8000],
+  music: [3000, 6000],
+  writing: [3500, 7000],
+  tea: [3500, 7000],
+  stretch: [4000, 8000],
 };
 
 export const POSE_TARGETS: Record<
@@ -104,6 +149,11 @@ export const POSE_TARGETS: Record<
   confused: { tilt: 12, ty: 0, squash: 1.0, gazeAmp: 6 },
   bored: { tilt: 6, ty: 2, squash: 1.02, gazeAmp: 2 },
   listening: { tilt: -5, ty: -1, squash: 1.0, gazeAmp: 5 },
+  reading: { tilt: 3, ty: 4, squash: 1, gazeAmp: 1 },
+  music: { tilt: 0, ty: 0, squash: 1, gazeAmp: 2 },
+  writing: { tilt: 4, ty: 3, squash: 1, gazeAmp: 1 },
+  tea: { tilt: -2, ty: 2, squash: 1, gazeAmp: 2 },
+  stretch: { tilt: 0, ty: 0, squash: 1, gazeAmp: 2 },
 };
 
 export const SPRINGS = {
@@ -115,28 +165,35 @@ export const SPRINGS = {
   gazeY: [12, 1],
   morph: [8, 0.9],
   spin: [5, 0.9],
+  prop: [7, 0.9],
 } as const;
 
-export const WINK_STATES = new Set<CentaurState>(["idle", "happy", "playful", "curious", "proud"]);
+export const WINK_STATES = new Set<CentaurMood>(["idle", "happy", "playful", "curious", "proud"]);
 
 export const CYCLE_ORDER: CentaurState[] = [
-  "happy",
+  "idle",
   "curious",
-  "playful",
+  "reading",
+  "happy",
   "thinking",
+  "writing",
+  "surprised",
+  "playful",
+  "music",
   "listening",
   "proud",
-  "idle",
-  "surprised",
+  "tea",
   "confused",
   "sleepy",
-  "sad",
-  "bored",
-  "angry",
+  "stretch",
 ];
 
 export const TABLES = {
+  MOODS,
   STATES,
+  ACTIVITIES,
+  ACTIVITY_LABELS,
+  ACTIVITY_SET,
   EYE_PLAYLIST,
   EYE_HOLD_MS,
   BLINK_MS,

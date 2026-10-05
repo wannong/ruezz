@@ -7,12 +7,15 @@ import { renderMarkdownToHtmlSync } from "./renderMarkdown";
 import { injectIdeaMarksIntoRenderedBlock } from "./ideaMarksInPreview";
 import {
   EMPTY_EDITABLE_RANGE,
+  exitLivePreviewEdit,
   livePreviewActiveChanged,
   livePreviewActiveField,
+  livePreviewFocusBlockChanged,
+  livePreviewFocusBlockField,
   POINTER_USER_EVENT,
   setLivePreviewActive,
 } from "./livePreviewState";
-import { focusBlankArea, handleBlankPointer, handleRenderedPointer } from "./previewPointer";
+import { disposeRenderedDragSelect, handleBlankDoubleClick, handleRenderedPointer } from "./previewPointer";
 
 export type LivePreviewContext = MarkdownRenderContext & {
   ideas?: Idea[];
@@ -221,6 +224,8 @@ function blocksForRange(state: EditorState, span: Span): BlockSpan[] {
  */
 export function editableSourceRange(state: EditorState, expandLines = true): Span {
   if (!state.field(livePreviewActiveField)) return EMPTY_EDITABLE_RANGE;
+  const focusBlock = state.field(livePreviewFocusBlockField);
+  if (!expandLines && focusBlock) return ensureRangeIncludesHead(state, focusBlock);
   if (!expandLines) return ensureRangeIncludesHead(state, blockAtHead(state));
   return expandedSourceRange(state);
 }
@@ -261,7 +266,11 @@ export function livePreviewMoveVertically(view: EditorView, forward: boolean): b
 }
 
 function shouldExpandLines(tr: EditorTransaction): boolean {
-  if (tr.isUserEvent(POINTER_USER_EVENT)) return false;
+  if (tr.isUserEvent(POINTER_USER_EVENT)) {
+    const start = tr.startState.selection.main;
+    const end = tr.state.selection.main;
+    return !start.empty || !end.empty;
+  }
   if (tr.isUserEvent("select.correction")) return false;
   if (tr.docChanged && isDeleteUserEvent(tr)) return false;
   if (tr.docChanged) return true;
@@ -269,10 +278,11 @@ function shouldExpandLines(tr: EditorTransaction): boolean {
 }
 
 function shouldKeepSource(state: EditorState, node: Span, expandLines: boolean): boolean {
-  const head = state.selection.main.head;
-  if (head >= node.from && head <= node.to) return true;
-  const headLine = state.doc.lineAt(head);
-  if (rangesOverlap({ from: headLine.from, to: headLine.to }, node)) return true;
+  if (!state.field(livePreviewActiveField)) return false;
+  const { from, to } = state.selection.main;
+  const selFrom = Math.min(from, to);
+  const selTo = Math.max(from, to);
+  if (rangesOverlap(node, { from: selFrom, to: selTo })) return true;
   return rangesOverlap(node, editableSourceRange(state, expandLines));
 }
 
@@ -330,6 +340,25 @@ function pruneAdjacentAbandonedBlankLines(view: EditorView): void {
   });
 }
 
+function buildSelectionHighlight(state: EditorState): DecorationSet {
+  if (!state.field(livePreviewActiveField)) return Decoration.none;
+  const { from, to } = state.selection.main;
+  if (from === to) return Decoration.none;
+  const editRange = editableSourceRange(state, shouldExpandLinesForState(state));
+  if (editRange.from > editRange.to) return Decoration.none;
+  const selFrom = Math.max(Math.min(from, to), editRange.from);
+  const selTo = Math.min(Math.max(from, to), editRange.to);
+  if (selFrom >= selTo) return Decoration.none;
+  const builder = new RangeSetBuilder<Decoration>();
+  builder.add(selFrom, selTo, Decoration.mark({ class: "cm-live-selection-highlight" }));
+  return builder.finish();
+}
+
+function shouldExpandLinesForState(state: EditorState): boolean {
+  const { from, to } = state.selection.main;
+  return from !== to;
+}
+
 function correctCursorIfHidden(view: EditorView): void {
   if (!view.state.field(livePreviewActiveField)) return;
   const head = view.state.selection.main.head;
@@ -347,29 +376,27 @@ function buildDecorations(
   state: EditorState,
   ctx: LivePreviewContext,
   expandLines: boolean,
-  previous?: DecorationSet,
 ): DecorationSet {
-  ensureSyntaxTree(state, state.doc.length, 100);
-  if (!syntaxTreeAvailable(state, state.doc.length) && previous) {
-    return previous;
+  ensureSyntaxTree(state, state.doc.length, 200);
+  if (!syntaxTreeAvailable(state, state.doc.length)) {
+    ensureSyntaxTree(state, state.doc.length, 1000);
   }
+
   const builder = new RangeSetBuilder<Decoration>();
-  const tree = syntaxTree(state);
-  if (!tree.length) return Decoration.none;
-
-  const blocks: BlockSpan[] = [];
-  tree.iterate({
-    enter: (node) => {
-      if (!BLOCK_NODES.has(node.name) || node.name === "ListItem") return;
-      blocks.push({ from: node.from, to: node.to, name: node.name });
-    },
-  });
-
   const docText = state.doc.toString();
   const ideas = ctx.ideas ?? [];
   const ideasKey = ideas.map((idea) => `${idea.id}:${idea.status}:${idea.updatedAt}`).join("|");
 
-  try {
+  if (syntaxTreeAvailable(state, state.doc.length)) {
+    const tree = syntaxTree(state);
+    const blocks: BlockSpan[] = [];
+    tree.iterate({
+      enter: (node) => {
+        if (!BLOCK_NODES.has(node.name) || node.name === "ListItem") return;
+        blocks.push({ from: node.from, to: node.to, name: node.name });
+      },
+    });
+
     for (const node of blocks) {
       if (!isInnermostBlock(node, blocks)) continue;
       if (shouldKeepSource(state, node, expandLines)) continue;
@@ -393,10 +420,9 @@ function buildDecorations(
         }),
       );
     }
-    return builder.finish();
-  } catch {
-    return Decoration.none;
   }
+
+  return builder.finish();
 }
 
 function buildEditingLineDecorations(state: EditorState, expandLines: boolean): DecorationSet {
@@ -415,31 +441,6 @@ function buildEditingLineDecorations(state: EditorState, expandLines: boolean): 
   return builder.finish();
 }
 
-class TailPlaceholderWidget extends WidgetType {
-  ignoreEvent() {
-    return true;
-  }
-
-  toDOM() {
-    const el = document.createElement("div");
-    el.className = "cm-live-tail-placeholder";
-    el.textContent = "点击输入…";
-    return el;
-  }
-}
-
-function buildTailPlaceholder(state: EditorState): DecorationSet {
-  if (state.doc.toString().trim().length === 0) return Decoration.none;
-  const widget = new TailPlaceholderWidget();
-  return Decoration.set([
-    Decoration.widget({
-      widget,
-      block: true,
-      side: 1,
-    }).range(state.doc.length),
-  ]);
-}
-
 /** Highlight only the current editable block (source lines). */
 export function liveEditingZoneHighlight(): Extension {
   return StateField.define<DecorationSet>({
@@ -451,24 +452,12 @@ export function liveEditingZoneHighlight(): Extension {
         tr.docChanged ||
         !tr.startState.selection.eq(tr.state.selection) ||
         livePreviewActiveChanged(tr) ||
-        tr.startState.field(livePreviewActiveField) !== tr.state.field(livePreviewActiveField)
+        livePreviewFocusBlockChanged(tr) ||
+        tr.startState.field(livePreviewActiveField) !== tr.state.field(livePreviewActiveField) ||
+        tr.startState.field(livePreviewFocusBlockField) !== tr.state.field(livePreviewFocusBlockField)
       ) {
         return buildEditingLineDecorations(tr.state, shouldExpandLines(tr));
       }
-      return deco;
-    },
-    provide: (field) => EditorView.decorations.from(field),
-  });
-}
-
-/** Placeholder below existing content for click-to-continue writing. */
-export function livePreviewTailPlaceholder(): Extension {
-  return StateField.define<DecorationSet>({
-    create(state) {
-      return buildTailPlaceholder(state);
-    },
-    update(deco, tr) {
-      if (tr.docChanged) return buildTailPlaceholder(tr.state);
       return deco;
     },
     provide: (field) => EditorView.decorations.from(field),
@@ -479,6 +468,7 @@ export function livePreviewTailPlaceholder(): Extension {
 export function livePreviewInteractionMode(): Extension {
   return [
     livePreviewActiveField,
+    livePreviewFocusBlockField,
     ViewPlugin.fromClass(
       class {
         constructor(view: EditorView) {
@@ -487,6 +477,8 @@ export function livePreviewInteractionMode(): Extension {
 
         update(update: ViewUpdate) {
           if (
+            update.docChanged ||
+            update.focusChanged ||
             update.startState.field(livePreviewActiveField) !== update.state.field(livePreviewActiveField)
           ) {
             this.sync(update.view);
@@ -502,49 +494,27 @@ export function livePreviewInteractionMode(): Extension {
   ];
 }
 
-/** Capture clicks on tail placeholder widgets before CM swallows them. */
-export function livePreviewSurfaceCapture(): Extension {
-  return ViewPlugin.fromClass(
-    class {
-      private readonly onMouseDown: (event: MouseEvent) => void;
-
-      constructor(private readonly view: EditorView) {
-        this.onMouseDown = (event: MouseEvent) => {
-          if (event.button !== 0) return;
-          const target = event.target as HTMLElement | null;
-          if (!target?.closest(".cm-live-tail-placeholder")) return;
-          event.preventDefault();
-          event.stopPropagation();
-          focusBlankArea(this.view);
-        };
-        this.view.scrollDOM.addEventListener("mousedown", this.onMouseDown, true);
-      }
-
-      destroy() {
-        this.view.scrollDOM.removeEventListener("mousedown", this.onMouseDown, true);
-      }
+/** Visible selection tint on source lines in block-edit mode (CM selection layer is easy to miss). */
+export function livePreviewSelectionHighlight(): Extension {
+  return StateField.define<DecorationSet>({
+    create(state) {
+      return buildSelectionHighlight(state);
     },
-  );
-}
-
-/** Empty-document hint via editor root class. */
-export function livePreviewEmptyDocHint(): Extension {
-  return ViewPlugin.fromClass(
-    class {
-      constructor(view: EditorView) {
-        this.sync(view);
+    update(deco, tr) {
+      if (!tr.state.field(livePreviewActiveField)) return Decoration.none;
+      if (
+        !tr.startState.selection.eq(tr.state.selection) ||
+        tr.docChanged ||
+        livePreviewActiveChanged(tr) ||
+        livePreviewFocusBlockChanged(tr) ||
+        tr.startState.field(livePreviewFocusBlockField) !== tr.state.field(livePreviewFocusBlockField)
+      ) {
+        return buildSelectionHighlight(tr.state);
       }
-
-      update(update: ViewUpdate) {
-        if (update.docChanged) this.sync(update.view);
-      }
-
-      private sync(view: EditorView) {
-        const empty = view.state.doc.toString().trim().length === 0;
-        view.dom.classList.toggle("cm-live-empty-doc", empty);
-      }
+      return deco;
     },
-  );
+    provide: (field) => EditorView.decorations.from(field),
+  });
 }
 
 /** Block replace decorations must use StateField — ViewPlugin cannot provide them. */
@@ -558,12 +528,11 @@ export function livePreviewPlugin(ctx: LivePreviewContext) {
         tr.docChanged ||
         !tr.startState.selection.eq(tr.state.selection) ||
         livePreviewActiveChanged(tr) ||
-        tr.startState.field(livePreviewActiveField) !== tr.state.field(livePreviewActiveField)
+        livePreviewFocusBlockChanged(tr) ||
+        tr.startState.field(livePreviewActiveField) !== tr.state.field(livePreviewActiveField) ||
+        tr.startState.field(livePreviewFocusBlockField) !== tr.state.field(livePreviewFocusBlockField)
       ) {
-        if (tr.docChanged && !syntaxTreeAvailable(tr.state, tr.state.doc.length)) {
-          return deco.map(tr.changes);
-        }
-        return buildDecorations(tr.state, ctx, shouldExpandLines(tr), deco);
+        return buildDecorations(tr.state, ctx, shouldExpandLines(tr));
       }
       return deco;
     },
@@ -617,11 +586,20 @@ export function livePreviewRestoreOnBlur(): Extension {
         requestAnimationFrame(() => {
           this.pending = false;
           if (view.hasFocus || !view.state.field(livePreviewActiveField)) return;
-          view.dispatch({ effects: setLivePreviewActive.of(false) });
+          exitLivePreviewEdit(view);
         });
       }
     },
   );
+}
+
+/** Tear down preview-block drag listeners when the editor unmounts. */
+export function livePreviewDragSelectCleanup(): Extension {
+  return ViewPlugin.define(() => ({
+    destroy() {
+      disposeRenderedDragSelect();
+    },
+  }));
 }
 
 /** Click / double-click a rendered preview block to edit that block. */
@@ -630,17 +608,18 @@ export function livePreviewPointerHandler(): Extension {
     mousedown(event, view) {
       if (event.button !== 0 || event.detail >= 2) return false;
       if (handleRenderedPointer(event, view, false)) return true;
-      if (handleBlankPointer(event, view)) return true;
 
       // Editor may keep focus but caret is gone — collapse when click is not on the source block.
       if (!view.state.field(livePreviewActiveField)) return false;
       const target = event.target as HTMLElement | null;
       if (target?.closest(".cm-live-editing-line")) return false;
-      view.dispatch({ effects: setLivePreviewActive.of(false) });
+      const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
+      exitLivePreviewEdit(view, pos ?? undefined);
       return false;
     },
     dblclick(event, view) {
-      return handleRenderedPointer(event, view, true);
+      if (handleRenderedPointer(event, view, true)) return true;
+      return handleBlankDoubleClick(event, view);
     },
   });
 }
