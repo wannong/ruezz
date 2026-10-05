@@ -28,6 +28,7 @@ type SettingsFieldsProps = {
   onPaletteChange: (palette: ColorPalette) => void;
   developerMode?: boolean;
   onDeveloperModeChange?: (next: boolean) => void;
+  onPreviewBootSplash?: () => void;
 };
 
 function hostLabel(url: string): string {
@@ -47,6 +48,7 @@ export function SettingsFields({
   onPaletteChange,
   developerMode = false,
   onDeveloperModeChange,
+  onPreviewBootSplash,
 }: SettingsFieldsProps) {
   const providers = providersOf(settings);
   const activeId = activeProviderIdOf(settings, providers);
@@ -472,7 +474,16 @@ export function SettingsFields({
               onChange={(event) => onDeveloperModeChange(event.target.checked)}
             />
           </label>
-          <p className="hint">开启后显示隐藏测试入口，例如导入界面的加载动画预览。</p>
+          <p className="hint">开启后显示隐藏测试入口，例如启动页与导入过场动画预览。</p>
+          {developerMode && onPreviewBootSplash && (
+            <button
+              className="ghost ingest-dev-action"
+              type="button"
+              onClick={onPreviewBootSplash}
+            >
+              预览启动动画
+            </button>
+          )}
         </>
       )}
 

@@ -11,6 +11,7 @@ type SettingsModalProps = {
   onPaletteChange: (palette: ColorPalette) => void;
   developerMode: boolean;
   onDeveloperModeChange: (next: boolean) => void;
+  onPreviewBootSplash?: () => void;
   busy: boolean;
   onClose: () => void;
   onSave: (next: VaultSettings) => Promise<void>;
@@ -22,6 +23,7 @@ export function SettingsModal({
   onPaletteChange,
   developerMode,
   onDeveloperModeChange,
+  onPreviewBootSplash,
   busy,
   onClose,
   onSave,
@@ -37,6 +39,7 @@ export function SettingsModal({
         onPaletteChange={onPaletteChange}
         developerMode={developerMode}
         onDeveloperModeChange={onDeveloperModeChange}
+        onPreviewBootSplash={onPreviewBootSplash}
       />
       <div className="modal-actions">
         <button type="button" onClick={onClose}>

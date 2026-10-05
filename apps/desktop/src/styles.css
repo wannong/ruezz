@@ -376,10 +376,34 @@ textarea:focus {
 }
 
 .app-shell-body {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.boot-splash {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: var(--bg);
+}
+
+.boot-splash-card {
+  width: min(360px, 100%);
+}
+
+.boot-splash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(12, 14, 18, 0.55);
+  contain: layout style paint;
 }
 
 .titlebar {

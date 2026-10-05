@@ -14,7 +14,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "node --test dist/*.test.js",
     "dev": "node --watch dist/cli.js",
-    "dev:http": "node dist/http-main.js",
+    "dev:http": "pnpm build && node dist/http-main.js",
     "smoke": "node dist/smoke.js"
   },
   "dependencies": {

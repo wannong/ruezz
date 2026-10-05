@@ -15,7 +15,7 @@ import { loadFavorites, remapFavoriteFolder, remapFavoritePage, saveFavorites } 
 import { assignPagesToFolder } from "../lib/libraryFolders";
 import { parseOutline } from "../lib/outline";
 import { markdownBody } from "../lib/noteId";
-import { joinWikiId, parentWikiId, pasteDest, type WikiClip } from "../lib/fileTree";
+import { joinWikiId, parentWikiId, pasteDest, vaultName, type WikiClip } from "../lib/fileTree";
 import { useMediaQuery } from "../lib/useMediaQuery";
 import { useAgentSession } from "../lib/workspace/useAgentSession";
 import { useLibraryOrganization } from "../lib/workspace/useLibraryOrganization";
@@ -26,6 +26,7 @@ import { PanelOpenGlyph } from "./iconGlyphs";
 import { appendSelectionToDraft } from "./agentChatCore";
 import { CommandPalette, type PaletteCommand, type PaletteMode } from "./CommandPalette";
 import { IngestModal } from "./IngestModal";
+import { BootSplash } from "./BootSplash";
 import { IngestProgressHost, type IngestProgressRunner } from "./IngestProgressHost";
 import { INGEST_PROGRESS_PREVIEW_PATHS } from "../lib/ingestProgress";
 import { titleFromPaste } from "../lib/ingestTitle";
@@ -118,6 +119,7 @@ export function Workspace({
   const [rightWidth, setRightWidth] = useState(() => loadPref("rightWidth", 320));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [developerMode, setDeveloperMode] = useState(() => loadPref("developerMode", false));
+  const [bootPreviewOpen, setBootPreviewOpen] = useState(false);
   const [ingestOpen, setIngestOpen] = useState(false);
   const [ingestFolderId, setIngestFolderId] = useState<string | null>(null);
   const ingestProgressRunnerRef = useRef<IngestProgressRunner | null>(null);
@@ -638,6 +640,16 @@ export function Workspace({
       onError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function previewBootSplash() {
+    setSettingsOpen(false);
+    setBootPreviewOpen(true);
+    try {
+      await ingestPause(2400);
+    } finally {
+      setBootPreviewOpen(false);
     }
   }
 
@@ -1164,8 +1176,17 @@ export function Workspace({
           busy={busy}
           onClose={() => setSettingsOpen(false)}
           onSave={saveSettings}
+          onPreviewBootSplash={() => void previewBootSplash()}
         />
       </Presence>
+      {bootPreviewOpen && (
+        <BootSplash
+          overlay
+          animate
+          caption="Ruezz 正在启动…"
+          subtitle={settings.vaultPath ? vaultName(settings.vaultPath) : undefined}
+        />
+      )}
       <Presence open={ingestOpen}>
         <IngestModal
           busy={busy}

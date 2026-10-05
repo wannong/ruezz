@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type VaultSettings } from "./api";
+import { BootSplash } from "./components/BootSplash";
 import { Onboarding } from "./components/Onboarding";
+import { vaultName } from "./lib/fileTree";
 import { TitleBar, type TitleBarCentaurProps } from "./components/TitleBar";
 import { Workspace } from "./components/Workspace";
-import { vaultName } from "./lib/fileTree";
 import { hydrateProviders } from "./lib/llmProviders";
 import {
   applyPalette,
@@ -28,7 +29,7 @@ const defaultSettings: VaultSettings = {
 export default function App() {
   const [palette, setPalette] = useState<ColorPalette>(() => loadPalette());
   const graphTheme = paletteGraphTheme(palette);
-  const [screen, setScreen] = useState<"onboarding" | "main">("onboarding");
+  const [screen, setScreen] = useState<"booting" | "onboarding" | "main">("booting");
   const [settings, setSettings] = useState<VaultSettings>(defaultSettings);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,7 +47,10 @@ export default function App() {
         const s = await api.settingsGet();
         if (cancelled) return;
         setSettings(hydrateProviders(s));
-        if (!s.vaultPath) return;
+        if (!s.vaultPath) {
+          setScreen("onboarding");
+          return;
+        }
         await api.vaultInit(s.vaultPath);
         if (!cancelled) setScreen("main");
       } catch (e) {
@@ -76,6 +80,7 @@ export default function App() {
   async function openVaultAt(root: string) {
     setBusy(true);
     setError(null);
+    setScreen("booting");
     try {
       const next = await api.settingsSet({ ...settings, vaultPath: root, mock: false });
       await api.vaultInit(root);
@@ -150,6 +155,14 @@ export default function App() {
           />
         )}
       </div>
+      {screen === "booting" && (
+        <BootSplash
+          overlay
+          animate
+          caption="Ruezz 正在启动…"
+          subtitle={settings.vaultPath ? vaultName(settings.vaultPath) : undefined}
+        />
+      )}
     </div>
   );
 }
