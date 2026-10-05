@@ -9,6 +9,11 @@ import {
   selectSkillsForMessage,
   type AgentSkill,
 } from "./skills.js";
+import {
+  formatWikiSchemaForPrompt,
+  loadBundledWikiSchema,
+  loadVaultPurpose,
+} from "./wiki-schema.js";
 import { createWikiTools } from "./tools/index.js";
 import type {
   AgentPromptResult,
@@ -244,7 +249,9 @@ export class AgentRunner {
     const pageContext = attachedFiles.length > 0
       ? `用户已明确提供以下资料作为本轮上下文：\n${attachedFiles.join("\n")}\n这些资料不是待用户补充的信息。请先使用对应工具读取资料正文，再回答或执行任务；不要反问用户资料位置。${neighborLine}`
       : "";
-    const fullSystemPrompt = [SYSTEM_PROMPT, skillBlock, pageContext].filter(Boolean).join("\n\n");
+    const vaultPurpose = await loadVaultPurpose(this.vaultRoot);
+    const wikiSchemaBlock = formatWikiSchemaForPrompt(loadBundledWikiSchema(), vaultPurpose);
+    const fullSystemPrompt = [SYSTEM_PROMPT, wikiSchemaBlock, skillBlock, pageContext].filter(Boolean).join("\n\n");
 
     // Create tools
     const tools = createWikiTools(this.engine, this.vaultRoot);
