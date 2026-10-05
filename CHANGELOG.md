@@ -12,6 +12,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Microsoft Store / MSIX packaging scaffold (`store/msix`, `pnpm release:msix`, `docs/MICROSOFT_STORE.md`).
 - Public privacy policy (`PRIVACY.md`) for Partner Center.
 
+## [1.2.9] - 2026-10-06
+
+### Added
+
+- Obsidian-style Live Preview markdown editing (block preview, click-to-edit).
+- Boot splash while opening a vault, with a developer preview of the animation.
+- VS Code-style inset workspace panels and unified tab bars with a sliding indicator.
+- Ingest progress overlay, simpler import UI, and literature page delete.
+
+### Changed
+
+- Auto-hide overlay scrollbars with fade animation.
+- Agent system prompt includes the bundled Ruezz wiki schema.
+
+### Fixed
+
+- Preview/code-block scrollbars no longer switch the block into edit mode.
+- Vertical scrolling restored in the live markdown editor.
+
 ## [1.2.4] - 2026-09-28
 
 ### Added
