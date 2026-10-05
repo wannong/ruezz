@@ -177,6 +177,106 @@ html[data-palette="blue-tone"] {
   --shadow-chrome-edge: 0 1px 2px rgba(6, 20, 27, 0.12), 0 0 0 1px rgba(6, 20, 27, 0.05);
 }
 
+html {
+  --scrollbar-size: 8px;
+  --scrollbar-thumb: color-mix(in srgb, var(--muted) 88%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--muted) 100%, transparent);
+  --scrollbar-thumb-idle: transparent;
+  --scrollbar-thumb-active: color-mix(in srgb, var(--muted) 72%, transparent);
+  --scrollbar-fade-in-duration: var(--dur-base);
+  --scrollbar-fade-out-duration: var(--dur-slow);
+}
+
+/* Auto-hide overlay scrollbars: idle thumb is invisible; hover or .is-scrolling reveals it. */
+.tab-bar,
+.note-format-bar,
+.note-live-editor .cm-scroller,
+.note-source-editor .cm-scroller,
+.cm-live-preview-rendered,
+.note-edit-preview,
+.pdf-scroll,
+.docx-preview,
+.idea-sticky textarea,
+.md-body .katex-display,
+.md-body pre,
+.file-tree-wrap,
+.library-pane,
+.favorites-pane,
+.search-pane .search-hits,
+.search-pane .file-tree,
+.agent-chat-view,
+.agent-session-list,
+.agent-model-menu,
+.agent-attachment-list,
+.model-list,
+.message-list,
+.agent-tool-result pre,
+.outline-list,
+.idea-list,
+.modal-body,
+.palette [cmdk-list] {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-idle) transparent;
+
+  &:hover,
+  &.is-scrolling {
+    scrollbar-color: var(--scrollbar-thumb-active) transparent;
+  }
+
+  &::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    opacity: 0;
+    border: 2px solid transparent;
+    border-radius: var(--radius-pill);
+    background-clip: padding-box;
+    transition:
+      opacity var(--scrollbar-fade-out-duration) var(--ease-out),
+      background-color var(--scrollbar-fade-out-duration) var(--ease-out);
+  }
+
+  &:hover::-webkit-scrollbar-thumb,
+  &.is-scrolling::-webkit-scrollbar-thumb {
+    opacity: 1;
+    background-color: var(--scrollbar-thumb);
+    transition:
+      opacity var(--scrollbar-fade-in-duration) var(--ease-out),
+      background-color var(--scrollbar-fade-in-duration) var(--ease-out);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    opacity: 1;
+    background-color: var(--scrollbar-thumb-hover);
+    transition:
+      opacity var(--scrollbar-fade-in-duration) var(--ease-out),
+      background-color var(--scrollbar-fade-in-duration) var(--ease-out);
+  }
+}
+
+.tab-bar,
+.note-format-bar,
+.cm-live-preview-rendered,
+.md-body .katex-display {
+  &::-webkit-scrollbar {
+    height: 6px;
+  }
+}
+
+.tab-bar,
+.note-format-bar {
+  &::-webkit-scrollbar {
+    width: 0;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -1006,8 +1106,6 @@ textarea:focus {
   background: transparent;
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: var(--line-strong) transparent;
 }
 
 .tab-slide-indicator {
@@ -1037,16 +1135,6 @@ textarea:focus {
   bottom: -1px;
   height: 1px;
   background: var(--panel);
-}
-
-.tab-bar::-webkit-scrollbar {
-  height: 4px;
-  width: 0;
-}
-
-.tab-bar::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
-  border-radius: 4px;
 }
 
 .sidebar-expand {
@@ -1562,7 +1650,6 @@ textarea:focus {
   background: var(--bg-elevated);
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: thin;
 }
 
 .note-format-bar.is-disabled {
