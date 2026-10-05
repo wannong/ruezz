@@ -1183,17 +1183,32 @@ textarea:focus {
   color: var(--ink);
 }
 
+.note-live-editor .cm-markdown-live,
+.note-source-editor .cm-markdown-source {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .note-live-editor .cm-editor,
 .note-source-editor .cm-editor {
   flex: 1;
   min-height: 0;
-  height: 100% !important;
+  display: flex;
+  flex-direction: column;
+  height: auto !important;
+  max-height: 100%;
+  overflow: hidden;
   outline: none;
   background: transparent;
 }
 
 .note-live-editor .cm-scroller,
 .note-source-editor .cm-scroller {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   background: transparent;
 }
@@ -1235,7 +1250,7 @@ textarea:focus {
   cursor: text;
   max-width: 100%;
   overflow-x: auto;
-  scrollbar-gutter: stable;
+  overflow-y: clip;
 }
 
 .cm-live-preview-rendered .wikilink {
