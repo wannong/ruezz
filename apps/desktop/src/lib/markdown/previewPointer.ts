@@ -6,6 +6,7 @@ import {
   setLivePreviewActive,
   setLivePreviewFocusBlock,
 } from "./livePreviewState";
+import { scrollablesUnderPointer, shouldYieldToPreviewScroll } from "./previewScrollbar";
 
 export { POINTER_USER_EVENT };
 
@@ -169,53 +170,7 @@ function pointerOnRenderedPreview(clientX: number, clientY: number): boolean {
   return Boolean(target?.closest(".cm-live-preview-rendered"));
 }
 
-function scrollbarGutter(el: HTMLElement): { x: number; y: number } {
-  return {
-    x: Math.max(0, el.offsetWidth - el.clientWidth),
-    y: Math.max(0, el.offsetHeight - el.clientHeight),
-  };
-}
-
-const OVERLAY_SCROLLBAR_SLOP = 14;
-
-function pointerOnElementScrollbar(el: HTMLElement, clientX: number, clientY: number): boolean {
-  const rect = el.getBoundingClientRect();
-  const x = clientX - rect.left;
-  const y = clientY - rect.top;
-  const canScrollX = el.scrollWidth > el.clientWidth;
-  const canScrollY = el.scrollHeight > el.clientHeight;
-  if (!canScrollX && !canScrollY) return false;
-
-  const gutter = scrollbarGutter(el);
-  const onHorizontalClassic = canScrollX && gutter.y > 0 && y >= el.clientHeight;
-  const onHorizontalOverlay =
-    canScrollX &&
-    gutter.y === 0 &&
-    y >= el.clientHeight - Math.min(OVERLAY_SCROLLBAR_SLOP, el.clientHeight);
-  const onVerticalClassic = canScrollY && gutter.x > 0 && x >= el.clientWidth;
-  const onVerticalOverlay =
-    canScrollY &&
-    gutter.x === 0 &&
-    x >= el.clientWidth - Math.min(OVERLAY_SCROLLBAR_SLOP, el.clientWidth);
-  return onHorizontalClassic || onHorizontalOverlay || onVerticalClassic || onVerticalOverlay;
-}
-
-/** Let native scrollbars inside preview blocks receive pointer events. */
-function pointerOnPreviewScrollbar(
-  target: HTMLElement | null,
-  rendered: HTMLElement,
-  clientX: number,
-  clientY: number,
-): boolean {
-  let el: HTMLElement | null = target;
-  while (el) {
-    if (pointerOnElementScrollbar(el, clientX, clientY)) return true;
-    if (el === rendered) break;
-    el = el.parentElement;
-    if (el && !rendered.contains(el)) break;
-  }
-  return false;
-}
+const RENDERED_DRAG_THRESHOLD_SQ = 16;
 
 function resolveBlockPos(
   view: EditorView,
@@ -238,6 +193,16 @@ function resolveBlockPos(
   return blockFrom + mapRenderedPointerToSource(blockSource, blockName, rendered, clientX, clientY);
 }
 
+type ScrollSnapshot = { el: HTMLElement; left: number; top: number };
+
+type RenderedPointerPending = {
+  view: EditorView;
+  rendered: HTMLElement;
+  startX: number;
+  startY: number;
+  scrollSnapshot: ScrollSnapshot[];
+};
+
 type RenderedDragState = {
   view: EditorView;
   rendered: HTMLElement;
@@ -248,7 +213,79 @@ type RenderedDragState = {
   blockSource: string;
 };
 
+let renderedPointerPending: RenderedPointerPending | null = null;
 let renderedDrag: RenderedDragState | null = null;
+
+function scrollSnapshotFor(scrollables: HTMLElement[]): ScrollSnapshot[] {
+  return scrollables.map((el) => ({ el, left: el.scrollLeft, top: el.scrollTop }));
+}
+
+function scrollSnapshotChanged(snapshot: ScrollSnapshot[]): boolean {
+  return snapshot.some(({ el, left, top }) => el.scrollLeft !== left || el.scrollTop !== top);
+}
+
+function endRenderedPointerPending() {
+  window.removeEventListener("mousemove", onRenderedPointerPendingMove);
+  window.removeEventListener("mouseup", onRenderedPointerPendingUp);
+  renderedPointerPending = null;
+}
+
+function onRenderedPointerPendingMove(event: MouseEvent) {
+  const pending = renderedPointerPending;
+  if (!pending || event.buttons !== 1) return;
+  if (scrollSnapshotChanged(pending.scrollSnapshot)) {
+    endRenderedPointerPending();
+    return;
+  }
+  if (shouldYieldToPreviewScroll(event.target as HTMLElement | null, pending.rendered, event.clientX, event.clientY)) {
+    endRenderedPointerPending();
+    return;
+  }
+
+  const dx = event.clientX - pending.startX;
+  const dy = event.clientY - pending.startY;
+  if (dx * dx + dy * dy < RENDERED_DRAG_THRESHOLD_SQ) return;
+
+  const { view, rendered } = pending;
+  endRenderedPointerPending();
+  beginRenderedDragSelect(view, rendered, event.clientX, event.clientY);
+}
+
+function onRenderedPointerPendingUp(event: MouseEvent) {
+  const pending = renderedPointerPending;
+  if (!pending) return;
+  endRenderedPointerPending();
+  if (scrollSnapshotChanged(pending.scrollSnapshot)) return;
+  if (shouldYieldToPreviewScroll(event.target as HTMLElement | null, pending.rendered, event.clientX, event.clientY)) {
+    return;
+  }
+
+  const dx = event.clientX - pending.startX;
+  const dy = event.clientY - pending.startY;
+  if (dx * dx + dy * dy >= RENDERED_DRAG_THRESHOLD_SQ) return;
+
+  focusRenderedBlock(pending.view, pending.rendered, event.clientX, event.clientY, false);
+}
+
+function beginRenderedPointerPending(
+  event: MouseEvent,
+  view: EditorView,
+  rendered: HTMLElement,
+  target: HTMLElement | null,
+): void {
+  endRenderedPointerPending();
+  endRenderedDrag();
+  const scrollables = scrollablesUnderPointer(target, rendered, event.clientX, event.clientY);
+  renderedPointerPending = {
+    view,
+    rendered,
+    startX: event.clientX,
+    startY: event.clientY,
+    scrollSnapshot: scrollSnapshotFor(scrollables),
+  };
+  window.addEventListener("mousemove", onRenderedPointerPendingMove);
+  window.addEventListener("mouseup", onRenderedPointerPendingUp);
+}
 
 function resolveDragHead(view: EditorView, drag: RenderedDragState, clientX: number, clientY: number): number {
   const hit = view.posAtCoords({ x: clientX, y: clientY }, false);
@@ -341,15 +378,21 @@ function onRenderedDragEnd(event: MouseEvent) {
 
 /** Clear in-flight drag listeners when the editor is destroyed. */
 export function disposeRenderedDragSelect() {
+  endRenderedPointerPending();
   endRenderedDrag();
 }
 
-function beginRenderedDragSelect(event: MouseEvent, view: EditorView, rendered: HTMLElement): void {
+function beginRenderedDragSelect(
+  view: EditorView,
+  rendered: HTMLElement,
+  clientX: number,
+  clientY: number,
+): void {
   const meta = readRenderedBlockMeta(rendered, view);
   if (!meta) return;
 
   const { blockFrom, blockTo, blockName, blockSource } = meta;
-  const anchor = resolveBlockPos(view, rendered, event.clientX, event.clientY) ?? blockFrom;
+  const anchor = resolveBlockPos(view, rendered, clientX, clientY) ?? blockFrom;
 
   endRenderedDrag();
   renderedDrag = { view, rendered, anchor, blockFrom, blockTo, blockName, blockSource };
@@ -515,14 +558,16 @@ export function handleRenderedPointer(event: MouseEvent, view: EditorView, selec
   if (target?.closest(".wikilink")) return false;
   const rendered = target?.closest(".cm-live-preview-rendered") as HTMLElement | null;
   if (!rendered) return false;
-  if (pointerOnPreviewScrollbar(target, rendered, event.clientX, event.clientY)) return false;
+  if (shouldYieldToPreviewScroll(target, rendered, event.clientX, event.clientY)) return false;
 
-  event.preventDefault();
-  event.stopPropagation();
   if (selectWord) {
+    event.preventDefault();
+    event.stopPropagation();
     focusRenderedBlock(view, rendered, event.clientX, event.clientY, true);
-  } else {
-    beginRenderedDragSelect(event, view, rendered);
+    return true;
   }
-  return true;
+
+  // Defer entering edit mode until click/drag intent is clear so native scrollbars keep working.
+  beginRenderedPointerPending(event, view, rendered, target);
+  return false;
 }

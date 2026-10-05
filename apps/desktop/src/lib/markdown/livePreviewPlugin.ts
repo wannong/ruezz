@@ -16,6 +16,7 @@ import {
   setLivePreviewActive,
 } from "./livePreviewState";
 import { disposeRenderedDragSelect, handleBlankDoubleClick, handleRenderedPointer } from "./previewPointer";
+import { shouldYieldToPreviewScroll, stopPreviewScrollEventPropagation } from "./previewScrollbar";
 
 export type LivePreviewContext = MarkdownRenderContext & {
   ideas?: Idea[];
@@ -76,12 +77,24 @@ class RenderedBlockWidget extends WidgetType {
     if (this.ideas.length > 0) {
       injectIdeaMarksIntoRenderedBlock(wrap, this.ideas, this.blockFrom, this.blockTo, this.docText);
     }
+    const shieldScrollPointer = (event: MouseEvent) => {
+      stopPreviewScrollEventPropagation(wrap, event);
+    };
+    wrap.addEventListener("mousedown", shieldScrollPointer, true);
+    wrap.addEventListener("click", shieldScrollPointer, true);
+    wrap.addEventListener("dblclick", shieldScrollPointer, true);
     return wrap;
   }
 
   ignoreEvent(event: Event) {
     const target = event.target as HTMLElement | null;
     if (target?.closest(".wikilink")) return false;
+    if (event instanceof MouseEvent) {
+      const rendered = target?.closest(".cm-live-preview-rendered") as HTMLElement | null;
+      if (rendered && shouldYieldToPreviewScroll(target, rendered, event.clientX, event.clientY)) {
+        return true;
+      }
+    }
     if (event.type === "mousedown" || event.type === "click" || event.type === "dblclick") return false;
     return true;
   }
@@ -613,6 +626,7 @@ export function livePreviewPointerHandler(): Extension {
       if (!view.state.field(livePreviewActiveField)) return false;
       const target = event.target as HTMLElement | null;
       if (target?.closest(".cm-live-editing-line")) return false;
+      if (target?.closest(".cm-live-preview-rendered")) return false;
       const pos = view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
       exitLivePreviewEdit(view, pos ?? undefined);
       return false;

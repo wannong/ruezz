@@ -1235,6 +1235,7 @@ textarea:focus {
   cursor: text;
   max-width: 100%;
   overflow-x: auto;
+  scrollbar-gutter: stable;
 }
 
 .cm-live-preview-rendered .wikilink {
