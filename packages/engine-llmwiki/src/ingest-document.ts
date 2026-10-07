@@ -88,7 +88,7 @@ export async function ingestWholeDocument(opts: {
   }
   const realRoot = await fs.realpath(absRoot);
   const realFile = await fs.realpath(absFile);
-  if (!isUnderDir(realRoot, realFile) && !opts.allowExternalSource) {
+  if (!isInsideOrEqualDir(realRoot, realFile) && !opts.allowExternalSource) {
     throw new Error("读取知识库外文件需要用户审核");
   }
 
@@ -98,7 +98,7 @@ export async function ingestWholeDocument(opts: {
   await fs.mkdir(wikiSourcesDir, { recursive: true });
   const realRawDir = await fs.realpath(rawDir);
   const realWikiSourcesDir = await fs.realpath(wikiSourcesDir);
-  if (!isUnderDir(realRoot, realRawDir) || !isUnderDir(realRoot, realWikiSourcesDir)) {
+  if (!isInsideOrEqualDir(realRoot, realRawDir) || !isInsideOrEqualDir(realRoot, realWikiSourcesDir)) {
     throw new Error("知识库目录通过链接越出了 vault");
   }
 
