@@ -697,7 +697,7 @@ export function Workspace({
           applySession(attached.session);
         }
       }
-      const prompt = `请立即内化刚刚导入并附加的资料，不要向用户索要资料位置。资料页面 ID：${importedIds.join(", ")}。请先逐个调用 read_page 读取这些页面的正文，提炼重要概念、事实和关系；然后创建必要的新 Markdown 页面，并将新页面中的概念与已有知识库页面用 [[page-id]] 链接起来；已有相关页面请更新。请先完整分析资料，再执行写入。`;
+      const prompt = `请立即内化刚刚导入并附加的资料，不要向用户索要资料位置。资料页面 ID：${importedIds.join(", ")}。请先逐个调用 read_page 读取这些页面的正文，提炼重要概念、事实和关系；然后创建必要的新 Markdown 页面，并将新页面中的概念与已有知识库页面用 [[page-id]] 链接起来；已有相关页面请更新。每个新建页面都必须通过 create_page 的 sources 参数（或 write_page 的 frontmatter sources）引用 read_page 输出中的「来源文件」raw/ 路径，保证图谱能连到 PDF 原件。请先完整分析资料，再执行写入。`;
       updateAgentState(created.session.id, { busy: true, pendingUser: prompt, streamingText: "", streamingTools: [], streamingPhase: "thinking" });
       const internalized = await api.agentPromptStream({ sessionId: created.session.id, message: prompt, graphDepth: 0 }, (event) => {
         if (event.type === "text") updateAgentState(created.session.id, { streamingText: event.text });
@@ -785,6 +785,9 @@ export function Workspace({
       setSettingsOpen(false);
     } catch (e) {
       onError(e instanceof Error ? e.message : String(e));
+      // Rethrow so SettingsModal knows the save failed and keeps the confirm
+      // dialog (if closing with unsaved changes) from dismissing prematurely.
+      throw e;
     } finally {
       setBusy(false);
     }

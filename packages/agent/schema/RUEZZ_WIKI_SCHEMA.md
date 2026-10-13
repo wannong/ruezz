@@ -43,6 +43,8 @@ confidence: EXTRACTED | INFERRED | AMBIGUOUS | UNVERIFIED
 - **INFERRED**：合理推断
 - **AMBIGUOUS / UNVERIFIED**：待核实，须在文中说明
 
+**引用原件（必做）：** 凡内容派生自某个资料，页面 frontmatter 必须写 `sources`，值为 `read_page` 输出里的「来源文件」路径（即 `raw/` 下的原件，如 `raw/sources/xxx.pdf`）。`create_page` 直接传 `sources` 参数；`write_page` 手写 frontmatter 时也要带上。这样知识图谱才会把你的页面连到 PDF/原件节点；只写 `[[来源页]]` 正文链接不够。
+
 ## 工作流程
 
 ### 查询（Query）
@@ -59,7 +61,7 @@ confidence: EXTRACTED | INFERRED | AMBIGUOUS | UNVERIFIED
 
 1. `read_page` 读完每个来源页。
 2. 提炼实体、概念、主张、关系、与现有知识的冲突。
-3. `create_page` / `write_page` 更新 `concepts/`、`entities/` 等；**优先更新已有相关页**，再补缺口。
+3. `create_page` / `write_page` 更新 `concepts/`、`entities/` 等；**优先更新已有相关页**，再补缺口。新页必须在 frontmatter/参数里带 `sources`（原件路径），图谱才能连到 PDF 原件。
 4. 在来源页或概念页的 `related` / 正文中用 `[[wikilink]]` 织网。
 5. 更新 `wiki/index.md`（新页一行摘要）并在 `wiki/log.md` **追加**一条（格式：`## [YYYY-MM-DD] ingest \| 简述`）。
 

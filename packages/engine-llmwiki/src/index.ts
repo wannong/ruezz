@@ -448,7 +448,7 @@ export class LlmWikiEngine implements WikiEngine {
     };
   }
 
-  async createPage(root: string, idOrPath: string, title?: string): Promise<PageContent> {
+  async createPage(root: string, idOrPath: string, title?: string, sources?: string[]): Promise<PageContent> {
     const absRoot = await prepareVault(root);
     const id = normalizePageId(idOrPath);
     const absFile = pageFile(absRoot, id);
@@ -463,9 +463,10 @@ export class LlmWikiEngine implements WikiEngine {
 
     const heading = title?.trim() || id.split("/").pop() || id;
     const day = new Date().toISOString().slice(0, 10);
+    const citedSources = (sources ?? []).map((s) => s.trim()).filter(Boolean);
     const stub = `---
 type: concept
-title: ${JSON.stringify(heading)}
+title: ${JSON.stringify(heading)}${citedSources.length ? `\nsources:\n${citedSources.map((s) => `  - ${JSON.stringify(s)}`).join("\n")}` : ""}
 created: ${day}
 updated: ${day}
 ---
@@ -545,6 +546,22 @@ updated: ${day}
     if (await pathExists(destFile)) throw new Error(`页面已存在：${destId}`);
     await fs.mkdir(path.dirname(destFile), { recursive: true });
     await fs.rename(srcFile, destFile);
+    // Keep the displayed title in lockstep with the new name: the UI rename flow
+    // edits the visible title, and list/note views render frontmatter `title`.
+    if (src.title !== undefined && src.title !== destId.split("/").pop()) {
+      const parsed = parseFrontmatter(src.raw);
+      if (parsed.rawBlock) {
+        const yamlText = parsed.rawBlock.replace(/^---\s*\r?\n/u, "").replace(/\r?\n---\s*\r?\n?$/u, "");
+        const loaded = yaml.load(yamlText);
+        if (loaded && typeof loaded === "object" && !Array.isArray(loaded)) {
+          const fields = { ...(loaded as Record<string, unknown>) };
+          fields.title = destId.split("/").pop() ?? destId;
+          const front = `---\n${yaml.dump(fields, { noRefs: true, lineWidth: -1 }).trimEnd()}\n---\n`;
+          const body = parsed.body.replace(/^\r?\n/u, "");
+          await fs.writeFile(destFile, `${front}\n${body}${body.endsWith("\n") ? "" : "\n"}`, "utf8");
+        }
+      }
+    }
     await this.getWiki(absRoot).reindex();
     const renamed = await this.readPage(absRoot, destId);
     if (!renamed) throw new Error("重命名后无法读取页面");

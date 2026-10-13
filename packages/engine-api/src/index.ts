@@ -248,7 +248,7 @@ export interface WikiEngine {
   writePage(root: string, idOrPath: string, raw: string): Promise<PageContent>;
   updatePageTags(root: string, idOrPath: string, tags: string[]): Promise<PageContent>;
   readSource(root: string, pageId: string): Promise<{ path: string; name: string; type: string; bytes: string } | null>;
-  createPage(root: string, id: string, title?: string): Promise<PageContent>;
+  createPage(root: string, id: string, title?: string, sources?: string[]): Promise<PageContent>;
   copyPage(root: string, fromId: string, toId: string): Promise<PageContent>;
   renamePage(root: string, fromId: string, toId: string): Promise<PageContent>;
   deletePage(root: string, idOrPath: string): Promise<{ id: string }>;

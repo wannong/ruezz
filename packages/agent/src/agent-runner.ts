@@ -38,8 +38,8 @@ const SYSTEM_PROMPT = `你是 Ruezz（瑞知）本地知识库助手。对话里
 
 - search_pages：搜索页面
 - read_page：读取页面内容
-- write_page：写入或更新页面
-- create_page：创建新页面
+- write_page：写入或更新页面（frontmatter 里写 sources 才能在图谱连到 raw/ 原件）
+- create_page：创建新页面；内容派生自资料时传 sources 参数（raw/ 原件路径）
 - list_pages：列出所有页面
 - get_graph：获取知识图谱
 - get_backlinks：获取反向链接

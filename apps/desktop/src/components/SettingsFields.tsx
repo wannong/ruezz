@@ -21,14 +21,9 @@ import {
 } from "../lib/llmProviders";
 import { PALETTE_META, PALETTE_ORDER, type ColorPalette } from "../theme";
 
-type SettingsFieldsProps = {
+type SettingsBaseProps = {
   settings: VaultSettings;
   onChange: (next: VaultSettings) => void;
-  palette: ColorPalette;
-  onPaletteChange: (palette: ColorPalette) => void;
-  developerMode?: boolean;
-  onDeveloperModeChange?: (next: boolean) => void;
-  onPreviewBootSplash?: () => void;
 };
 
 function hostLabel(url: string): string {
@@ -41,15 +36,97 @@ function hostLabel(url: string): string {
   }
 }
 
-export function SettingsFields({
+export function VaultSection({ settings, onChange }: SettingsBaseProps) {
+  return (
+    <label className="label">
+      知识库文件夹
+      <div className="row">
+        <input
+          value={settings.vaultPath}
+          onChange={(e) => onChange({ ...settings, vaultPath: e.target.value })}
+          placeholder="例如 D:\MyVault"
+        />
+        <button
+          type="button"
+          onClick={async () => {
+            const folder = await api.pickFolder();
+            if (folder) onChange({ ...settings, vaultPath: folder });
+          }}
+        >
+          浏览…
+        </button>
+      </div>
+    </label>
+  );
+}
+
+export function AppearanceSection({
   settings,
   onChange,
   palette,
   onPaletteChange,
-  developerMode = false,
-  onDeveloperModeChange,
-  onPreviewBootSplash,
-}: SettingsFieldsProps) {
+}: SettingsBaseProps & { palette: ColorPalette; onPaletteChange: (palette: ColorPalette) => void }) {
+  return (
+    <>
+      <div className="settings-section-head"><span>界面配色</span></div>
+      <p className="hint">暗色 / 明亮为经典深浅色；米白、蓝调为定制浅色阅读区 + 深色文字。</p>
+      <div className="palette-picker" role="radiogroup" aria-label="界面配色">
+        {PALETTE_ORDER.map((id) => {
+          const meta = PALETTE_META[id];
+          const active = palette === id;
+          const { chrome, sidebar, panel, border } = meta.preview;
+          return (
+            <button
+              key={id}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              className={`palette-card${active ? " active" : ""}`}
+              onClick={() => onPaletteChange(id)}
+            >
+              <span className="palette-card-preview" aria-hidden="true">
+                <span className="palette-layer palette-layer-chrome" style={{ background: chrome }} />
+                <span className="palette-layer palette-layer-sidebar" style={{ background: sidebar, borderRight: `2px solid ${border}` }} />
+                <span className="palette-layer palette-layer-panel" style={{ background: panel }} />
+                <span className="palette-layer palette-layer-accent" style={{ background: border }} />
+              </span>
+              <span className="palette-card-copy">
+                <strong>{meta.label}</strong>
+                <span>{meta.description}</span>
+              </span>
+              <span className="palette-swatches" aria-hidden="true">
+                {meta.swatches.map((color) => (
+                  <span key={color} className="palette-swatch" style={{ background: color }} />
+                ))}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="settings-section-head"><span>便签外观</span></div>
+      <div className="idea-appearance-settings">
+        <label className="label">
+          颜色
+          <select value={settings.ideaColor} onChange={(event) => onChange({ ...settings, ideaColor: event.target.value as VaultSettings["ideaColor"] })}>
+            <option value="white">白色</option>
+            <option value="yellow">黄色</option>
+            <option value="blue">蓝色</option>
+            <option value="green">绿色</option>
+            <option value="pink">粉色</option>
+          </select>
+        </label>
+        <label className="label">
+          透明度 {Math.round(settings.ideaOpacity * 100)}%
+          <input type="range" min="40" max="100" step="5" value={Math.round(settings.ideaOpacity * 100)} onChange={(event) => onChange({ ...settings, ideaOpacity: Number(event.target.value) / 100 })} />
+        </label>
+        <span className="idea-appearance-preview" data-color={settings.ideaColor} style={{ opacity: settings.ideaOpacity }}>便签预览</span>
+      </div>
+    </>
+  );
+}
+
+export function ProvidersSection({ settings, onChange }: SettingsBaseProps) {
   const providers = providersOf(settings);
   const activeId = activeProviderIdOf(settings, providers);
   const [providerBusy, setProviderBusy] = useState<string | null>(null);
@@ -57,60 +134,6 @@ export function SettingsFields({
   const [draftModel, setDraftModel] = useState<Record<string, string>>({});
   const [openId, setOpenId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [appVersion, setAppVersion] = useState("…");
-  const [updateBusy, setUpdateBusy] = useState(false);
-  const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
-  const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
-  const [updateStatus, setUpdateStatus] = useState<{ kind: "ok" | "err" | "info"; text: string } | null>(
-    null,
-  );
-  const [showSupportQr, setShowSupportQr] = useState(false);
-
-  useEffect(() => {
-    void currentAppVersion().then(setAppVersion);
-  }, []);
-
-  async function onCheckUpdate() {
-    setUpdateBusy(true);
-    setUpdateStatus(null);
-    setPendingUpdate(null);
-    setUpdateProgress(null);
-    try {
-      const result = await checkForAppUpdate();
-      setAppVersion(result.currentVersion);
-      if (result.status === "up-to-date") {
-        setUpdateStatus({ kind: "ok", text: `已是最新版本（${result.currentVersion}）。` });
-      } else if (result.status === "available") {
-        setPendingUpdate(result.update);
-        setUpdateStatus({
-          kind: "info",
-          text: `发现新版本 ${result.update.version}（当前 ${result.currentVersion}）。下载约 150MB，安装后会重启。`,
-        });
-      } else {
-        setUpdateStatus({
-          kind: "err",
-          text: `暂时无法检查更新：${result.message}`,
-        });
-      }
-    } finally {
-      setUpdateBusy(false);
-    }
-  }
-
-  async function onInstallUpdate() {
-    if (!pendingUpdate) return;
-    setUpdateBusy(true);
-    setUpdateStatus({ kind: "info", text: "正在下载并安装更新…" });
-    try {
-      await downloadAndInstallUpdate(pendingUpdate, setUpdateProgress);
-      setUpdateStatus({ kind: "ok", text: "更新已安装，即将重启…" });
-      await relaunchApp();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setUpdateStatus({ kind: "err", text: `更新失败：${message}` });
-      setUpdateBusy(false);
-    }
-  }
 
   function commit(nextProviders: LlmProvider[], nextActiveId = activeId, model = settings.model) {
     onChange(syncSettings(settings, nextProviders, nextActiveId, model));
@@ -221,82 +244,7 @@ export function SettingsFields({
   }
 
   return (
-    <div className="grid-form">
-      <label className="label">
-        知识库文件夹
-        <div className="row">
-          <input
-            value={settings.vaultPath}
-            onChange={(e) => onChange({ ...settings, vaultPath: e.target.value })}
-            placeholder="例如 D:\MyVault"
-          />
-          <button
-            type="button"
-            onClick={async () => {
-              const folder = await api.pickFolder();
-              if (folder) onChange({ ...settings, vaultPath: folder });
-            }}
-          >
-            浏览…
-          </button>
-        </div>
-      </label>
-
-      <div className="settings-section-head"><span>界面配色</span></div>
-      <p className="hint">暗色 / 明亮为经典深浅色；米白、蓝调为定制浅色阅读区 + 深色文字。</p>
-      <div className="palette-picker" role="radiogroup" aria-label="界面配色">
-        {PALETTE_ORDER.map((id) => {
-          const meta = PALETTE_META[id];
-          const active = palette === id;
-          const { chrome, sidebar, panel, border } = meta.preview;
-          return (
-            <button
-              key={id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              className={`palette-card${active ? " active" : ""}`}
-              onClick={() => onPaletteChange(id)}
-            >
-              <span className="palette-card-preview" aria-hidden="true">
-                <span className="palette-layer palette-layer-chrome" style={{ background: chrome }} />
-                <span className="palette-layer palette-layer-sidebar" style={{ background: sidebar, borderRight: `2px solid ${border}` }} />
-                <span className="palette-layer palette-layer-panel" style={{ background: panel }} />
-                <span className="palette-layer palette-layer-accent" style={{ background: border }} />
-              </span>
-              <span className="palette-card-copy">
-                <strong>{meta.label}</strong>
-                <span>{meta.description}</span>
-              </span>
-              <span className="palette-swatches" aria-hidden="true">
-                {meta.swatches.map((color) => (
-                  <span key={color} className="palette-swatch" style={{ background: color }} />
-                ))}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="settings-section-head"><span>便签外观</span></div>
-      <div className="idea-appearance-settings">
-        <label className="label">
-          颜色
-          <select value={settings.ideaColor} onChange={(event) => onChange({ ...settings, ideaColor: event.target.value as VaultSettings["ideaColor"] })}>
-            <option value="white">白色</option>
-            <option value="yellow">黄色</option>
-            <option value="blue">蓝色</option>
-            <option value="green">绿色</option>
-            <option value="pink">粉色</option>
-          </select>
-        </label>
-        <label className="label">
-          透明度 {Math.round(settings.ideaOpacity * 100)}%
-          <input type="range" min="40" max="100" step="5" value={Math.round(settings.ideaOpacity * 100)} onChange={(event) => onChange({ ...settings, ideaOpacity: Number(event.target.value) / 100 })} />
-        </label>
-        <span className="idea-appearance-preview" data-color={settings.ideaColor} style={{ opacity: settings.ideaOpacity }}>便签预览</span>
-      </div>
-
+    <>
       <div className="settings-section-head">
         <span>模型服务商</span>
         <button type="button" aria-expanded={pickerOpen} onClick={() => setPickerOpen((open) => !open)}>
@@ -462,31 +410,102 @@ export function SettingsFields({
           {status.text}
         </div>
       )}
+    </>
+  );
+}
 
-      {onDeveloperModeChange && (
-        <>
-          <div className="settings-section-head"><span>开发者</span></div>
-          <label className="label settings-dev-toggle">
-            <span>开发者模式</span>
-            <input
-              type="checkbox"
-              checked={developerMode}
-              onChange={(event) => onDeveloperModeChange(event.target.checked)}
-            />
-          </label>
-          <p className="hint">开启后显示隐藏测试入口，例如启动页与导入过场动画预览。</p>
-          {developerMode && onPreviewBootSplash && (
-            <button
-              className="ghost ingest-dev-action"
-              type="button"
-              onClick={onPreviewBootSplash}
-            >
-              预览启动动画
-            </button>
-          )}
-        </>
+export function DeveloperSection({
+  developerMode,
+  onDeveloperModeChange,
+  onPreviewBootSplash,
+}: {
+  developerMode: boolean;
+  onDeveloperModeChange: (next: boolean) => void;
+  onPreviewBootSplash?: () => void;
+}) {
+  return (
+    <>
+      <div className="settings-section-head"><span>开发者</span></div>
+      <label className="label settings-dev-toggle">
+        <span>开发者模式</span>
+        <input
+          type="checkbox"
+          checked={developerMode}
+          onChange={(event) => onDeveloperModeChange(event.target.checked)}
+        />
+      </label>
+      <p className="hint">开启后显示隐藏测试入口，例如启动页与导入过场动画预览。</p>
+      {developerMode && onPreviewBootSplash && (
+        <button
+          className="ghost ingest-dev-action"
+          type="button"
+          onClick={onPreviewBootSplash}
+        >
+          预览启动动画
+        </button>
       )}
+    </>
+  );
+}
 
+export function AboutSection() {
+  const [appVersion, setAppVersion] = useState("…");
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
+  const [updateProgress, setUpdateProgress] = useState<UpdateProgress | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<{ kind: "ok" | "err" | "info"; text: string } | null>(
+    null,
+  );
+  const [showSupportQr, setShowSupportQr] = useState(false);
+
+  useEffect(() => {
+    void currentAppVersion().then(setAppVersion);
+  }, []);
+
+  async function onCheckUpdate() {
+    setUpdateBusy(true);
+    setUpdateStatus(null);
+    setPendingUpdate(null);
+    setUpdateProgress(null);
+    try {
+      const result = await checkForAppUpdate();
+      setAppVersion(result.currentVersion);
+      if (result.status === "up-to-date") {
+        setUpdateStatus({ kind: "ok", text: `已是最新版本（${result.currentVersion}）。` });
+      } else if (result.status === "available") {
+        setPendingUpdate(result.update);
+        setUpdateStatus({
+          kind: "info",
+          text: `发现新版本 ${result.update.version}（当前 ${result.currentVersion}）。下载约 150MB，安装后会重启。`,
+        });
+      } else {
+        setUpdateStatus({
+          kind: "err",
+          text: `暂时无法检查更新：${result.message}`,
+        });
+      }
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
+
+  async function onInstallUpdate() {
+    if (!pendingUpdate) return;
+    setUpdateBusy(true);
+    setUpdateStatus({ kind: "info", text: "正在下载并安装更新…" });
+    try {
+      await downloadAndInstallUpdate(pendingUpdate, setUpdateProgress);
+      setUpdateStatus({ kind: "ok", text: "更新已安装，即将重启…" });
+      await relaunchApp();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setUpdateStatus({ kind: "err", text: `更新失败：${message}` });
+      setUpdateBusy(false);
+    }
+  }
+
+  return (
+    <>
       <div className="settings-section-head"><span>关于与更新</span></div>
       <div className="settings-about">
         <p className="hint">
@@ -563,6 +582,41 @@ export function SettingsFields({
           )}
         </div>
       </div>
+    </>
+  );
+}
+
+/** Stacked full form, used by onboarding where a nav sidebar would be overkill. */
+export function SettingsFields({
+  settings,
+  onChange,
+  palette,
+  onPaletteChange,
+  developerMode = false,
+  onDeveloperModeChange,
+  onPreviewBootSplash,
+}: {
+  settings: VaultSettings;
+  onChange: (next: VaultSettings) => void;
+  palette: ColorPalette;
+  onPaletteChange: (palette: ColorPalette) => void;
+  developerMode?: boolean;
+  onDeveloperModeChange?: (next: boolean) => void;
+  onPreviewBootSplash?: () => void;
+}) {
+  return (
+    <div className="grid-form">
+      <VaultSection settings={settings} onChange={onChange} />
+      <AppearanceSection settings={settings} onChange={onChange} palette={palette} onPaletteChange={onPaletteChange} />
+      <ProvidersSection settings={settings} onChange={onChange} />
+      {onDeveloperModeChange && (
+        <DeveloperSection
+          developerMode={developerMode}
+          onDeveloperModeChange={onDeveloperModeChange}
+          onPreviewBootSplash={onPreviewBootSplash}
+        />
+      )}
+      <AboutSection />
     </div>
   );
 }
