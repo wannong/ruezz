@@ -299,7 +299,16 @@ function shouldKeepSource(state: EditorState, node: Span, expandLines: boolean):
   return rangesOverlap(node, editableSourceRange(state, expandLines));
 }
 
+/**
+ * CodeMirror forbids layout reads while a transaction is being applied, so any
+ * measurement must run from a microtask/rAF instead of inside `update()`.
+ */
+function canMeasure(view: EditorView): boolean {
+  return !view.composing && view.state.doc.length >= 0;
+}
+
 function isHeadInPreviewWidget(view: EditorView, head = view.state.selection.main.head): boolean {
+  if (!canMeasure(view)) return false;
   const coords = view.coordsAtPos(head);
   if (!coords) return true;
   const dom = view.domAtPos(head);
@@ -308,6 +317,7 @@ function isHeadInPreviewWidget(view: EditorView, head = view.state.selection.mai
 }
 
 function isHeadOnVisibleSourceLine(view: EditorView, head = view.state.selection.main.head): boolean {
+  if (!canMeasure(view)) return false;
   if (isHeadInPreviewWidget(view, head)) return false;
   const coords = view.coordsAtPos(head);
   if (!coords) return false;
@@ -661,28 +671,34 @@ export function stabilizePreviewScroll(): Extension {
       private anchorY = 0;
 
       update(update: ViewUpdate) {
+        // Layout may not be read during an update, so the measurement is queued
+        // for the next frame. Reading it inline throws in older CodeMirror and
+        // produces "Reading the editor layout isn't allowed during an update".
+        if (!update.docChanged && !update.selectionSet) return;
         const view = update.view;
         const deleteChange = update.transactions.some((tr) => tr.docChanged && isDeleteUserEvent(tr));
         const head = update.state.selection.main.head;
-        if (!isHeadOnVisibleSourceLine(view, head)) {
+        if (deleteChange) {
           this.anchorPos = -1;
-        } else if (update.docChanged && !deleteChange) {
-          const coords = view.coordsAtPos(head);
-          if (coords) {
-            this.anchorPos = head;
-            this.anchorY = coords.top;
-          }
+          return;
         }
-
-        if (!update.docChanged || !update.geometryChanged || deleteChange) return;
-        if (this.anchorPos < 0) return;
-
         requestAnimationFrame(() => {
-          const coords = view.coordsAtPos(this.anchorPos);
+          if (!view.dom.isConnected) return;
+          if (!isHeadOnVisibleSourceLine(view, head)) {
+            this.anchorPos = -1;
+            return;
+          }
+          if (!update.docChanged) return;
+          const coords = view.coordsAtPos(head);
           if (!coords) return;
-          const delta = coords.top - this.anchorY;
-          if (Math.abs(delta) < 1) return;
-          view.scrollDOM.scrollTop += delta;
+          if (this.anchorPos >= 0) {
+            const before = view.coordsAtPos(this.anchorPos);
+            if (before) {
+              const delta = before.top - this.anchorY;
+              if (Math.abs(delta) >= 1) view.scrollDOM.scrollTop += delta;
+            }
+          }
+          this.anchorPos = head;
           this.anchorY = coords.top;
         });
       }

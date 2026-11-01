@@ -42,14 +42,14 @@ import { SettingsModal } from "./SettingsModal";
 import { ruezzWorkModeFromNoteMode } from "../lib/centaur-character/activity";
 import { centaurTransferMs } from "./CentaurChromeSlot";
 import { StatusBar } from "./StatusBar";
+import { TabBar } from "./TabBar";
+import type { TitleBarCentaurProps } from "./TitleBar";
 
 // Floating agent chat reuses the chat bundle (react-markdown/KaTeX); load it only
 // when the island is actually opened.
 const AgentFloatingIsland = lazy(() =>
   import("./AgentFloatingIsland").then((mod) => ({ default: mod.AgentFloatingIsland })),
 );
-import { TabBar } from "./TabBar";
-import type { TitleBarCentaurProps } from "./TitleBar";
 
 type WorkspaceProps = {
   settings: VaultSettings;
