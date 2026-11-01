@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Literature library accepts more than PDF/DOCX: Markdown, plain text, CSV/JSON/YAML, HTML,
+  EPUB, OpenDocument and RTF originals are archived and filed as one page.
+- Literature pages whose original cannot be rendered natively now show their converted Markdown.
+
+### Changed
+
+- Startup JS payload reduced from 1,603 kB to 609 kB (519 kB to 193 kB gzipped). CodeMirror
+  and the agent chat bundle load on demand, and KaTeX/pdf.js/docx-preview/force-graph are
+  emitted as async chunks.
+
+### Fixed
+
+- CodeMirror logged "Reading the editor layout isn't allowed during an update" on every note
+  open and keystroke; layout measurement now happens outside the update cycle.
+- HTML literature no longer fails to import when the bundled MarkItDown runtime is missing.
+
+### Added
+
 - Microsoft Store / MSIX packaging scaffold (`store/msix`, `pnpm release:msix`, `docs/MICROSOFT_STORE.md`).
 - Public privacy policy (`PRIVACY.md`) for Partner Center.
 

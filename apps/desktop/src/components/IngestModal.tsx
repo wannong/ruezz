@@ -30,7 +30,10 @@ export function IngestModal({
       {canPickFiles ? (
         <section className="ingest-section">
           <h3>导入文件</h3>
-          <p className="hint">PDF / Office 会先转成 Markdown，整篇写入文献库，不自动拆概念页。</p>
+          <p className="hint">
+            支持 Markdown / 纯文本 / PDF / Word / PPT / Excel / HTML / EPUB 等格式。
+            非纯文本会先转成一篇 Markdown，整篇写入文献库，不自动拆概念页。
+          </p>
           <button
             className="primary"
             type="button"
