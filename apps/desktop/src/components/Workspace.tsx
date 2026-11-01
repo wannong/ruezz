@@ -20,6 +20,7 @@ import { useMediaQuery } from "../lib/useMediaQuery";
 import { useAgentSession } from "../lib/workspace/useAgentSession";
 import { useLibraryOrganization } from "../lib/workspace/useLibraryOrganization";
 import { usePageTabs } from "../lib/workspace/usePageTabs";
+import type { WysiwygEditorApi } from "../lib/markdown/editorApi";
 import type { ColorPalette, Theme } from "../theme";
 import { PALETTE_META } from "../theme";
 import { PanelOpenGlyph } from "./iconGlyphs";
@@ -481,6 +482,23 @@ export function Workspace({
   const startLinkPicker = useCallback((fromId: string, range?: { start: number; end: number }) => {
     setLinkPicker({ fromId, range });
     setLeftCollapsed(false);
+  }, []);
+
+  /**
+   * The mounted note editor, when the note is in live mode. Inserting a wikilink
+   * through it keeps the caret and undo history, whereas splicing the draft string
+   * would be overwritten by the editor's next serialisation.
+   */
+  const activeEditorRef = useRef<WysiwygEditorApi | null>(null);
+  const handleEditorApi = useCallback((api: WysiwygEditorApi | null) => {
+    activeEditorRef.current = api;
+  }, []);
+  const insertLinkIntoActiveNote = useCallback((toId: string) => {
+    const api = activeEditorRef.current;
+    if (!api?.isReady()) return false;
+    api.focus();
+    api.insertWikilink(toId);
+    return true;
   }, []);
 
   const openAgent = useCallback(() => {
@@ -946,7 +964,9 @@ export function Workspace({
           onAddToLibraryFolder={openLibraryImport}
           onPickLink={(toId) => {
             if (!linkPicker) return;
-            void insertWikilink(linkPicker.fromId, toId, linkPicker.range);
+            if (!insertLinkIntoActiveNote(toId)) {
+              void insertWikilink(linkPicker.fromId, toId, linkPicker.range);
+            }
             setLinkPicker(null);
           }}
           onCloseLinkPicker={() => setLinkPicker(null)}
@@ -1017,6 +1037,7 @@ export function Workspace({
                 onSave={() => void saveNote(activePage.id)}
                 onOpen={openPage}
                 onLink={(range) => startLinkPicker(activePage.id, range)}
+                onEditorApi={handleEditorApi}
                 assetRoot={settings.vaultPath}
                 onUpdateTags={(tags) => updatePageTags(activePage.id, tags)}
                 tagError={tagError}

@@ -34,6 +34,7 @@ export type RpcContext = {
 
 const MAX_AGENT_MESSAGE_CHARS = 32_000;
 const MAX_INGEST_TEXT_CHARS = 2_000_000;
+const MAX_ASSET_BASE64_CHARS = 34_000_000;
 
 export class SidecarSession {
   private settings: VaultSettings;
@@ -356,6 +357,17 @@ export class SidecarSession {
           this.requireVault(),
           String(params.id ?? params.pageId ?? ""),
         );
+      case "vault_save_asset": {
+        const base64 = String(params.base64 ?? "");
+        if (!base64) throw new Error("附件内容为空");
+        if (base64.length > MAX_ASSET_BASE64_CHARS) throw new Error("附件超过 25 MiB 限制");
+        return this.engine.saveAsset(
+          this.requireVault(),
+          String(params.pageId ?? params.id ?? ""),
+          String(params.fileName ?? params.filename ?? "image.png"),
+          base64,
+        );
+      }
       case "vault_create_page":
         return this.engine.createPage(
           this.requireVault(),

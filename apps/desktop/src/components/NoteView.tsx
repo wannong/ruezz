@@ -2,8 +2,8 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Star } from "lucide-react";
 import type { Idea, IdeaSelector, PageContent, PageSummary } from "../api";
 import { splitFrontmatter, joinFrontmatter } from "../lib/frontmatter";
-import type { MarkdownLiveEditorApi } from "./MarkdownLiveEditor";
 import { NoteFormatToolbar } from "./NoteFormatToolbar";
+import type { WysiwygEditorApi } from "../lib/markdown/editorApi";
 import { MarkdownPreview } from "./MarkdownPreview";
 
 import type { PageViewMemory } from "../lib/pageViewMemory";
@@ -13,10 +13,9 @@ const DocumentPreview = lazy(() =>
   import("./DocumentPreview").then((mod) => ({ default: mod.DocumentPreview })),
 );
 
-// CodeMirror is ~900 kB and only matters once a note is open, so keep it off the
-// startup path.
-const MarkdownLiveEditor = lazy(() =>
-  import("./MarkdownLiveEditor").then((mod) => ({ default: mod.MarkdownLiveEditor })),
+// The WYSIWYG editor pulls in ProseMirror/TipTap. Keep it off the startup path.
+const MarkdownWysiwygEditor = lazy(() =>
+  import("./MarkdownWysiwygEditor").then((mod) => ({ default: mod.MarkdownWysiwygEditor })),
 );
 const MarkdownSourceEditor = lazy(() =>
   import("./MarkdownSourceEditor").then((mod) => ({ default: mod.MarkdownSourceEditor })),
@@ -50,6 +49,8 @@ type NoteViewProps = {
   onUpdateIdea: (id: string, patch: Partial<Pick<Idea, "content" | "status">>) => Promise<void>;
   onAddToChat?: (text: string) => void;
   onRename?: (name: string) => void;
+  /** Exposes the live editor so the wikilink picker can insert into it. */
+  onEditorApi?: (api: WysiwygEditorApi | null) => void;
   viewMemory?: PageViewMemory;
   onViewMemoryChange?: (patch: Partial<PageViewMemory>) => void;
 };
@@ -78,11 +79,15 @@ export function NoteView({
   onUpdateIdea,
   onAddToChat,
   onRename,
+  onEditorApi,
   viewMemory,
   onViewMemoryChange,
 }: NoteViewProps) {
   const readRef = useRef<HTMLDivElement>(null);
-  const liveEditorRef = useRef<MarkdownLiveEditorApi | null>(null);
+  const liveEditorRef = useRef<WysiwygEditorApi | null>(null);
+  const [editorApi, setEditorApi] = useState<WysiwygEditorApi | null>(null);
+  const [editorVersion, setEditorVersion] = useState(0);
+  const [pasteError, setPasteError] = useState<string | null>(null);
   const readRestoredRef = useRef(false);
   const skipReadPersistRef = useRef(true);
   const savedReadMemoryRef = useRef(viewMemory?.readScrollTop ?? 0);
@@ -105,10 +110,44 @@ export function NoteView({
     onDraft(joinFrontmatter(frontmatterRef.current, body));
   }, [onDraft]);
 
-  const linkRangeInDraft = (range: { start: number; end: number }) => {
-    const fmLen = (frontmatterParts.frontmatter?.length ?? 0);
-    onLink({ start: range.start + fmLen, end: range.end + fmLen });
-  };
+  /** Map an editor selection to absolute offsets in the draft (frontmatter included). */
+  const selectionToDraftRange = useCallback(() => {
+    const fmLen = frontmatterParts.frontmatter?.length ?? 0;
+    const selection = liveEditorRef.current?.selectionOffsets();
+    if (!selection) return null;
+    return { start: selection.start + fmLen, end: selection.end + fmLen };
+  }, [frontmatterParts.frontmatter]);
+
+  const openLinkPicker = useCallback(() => {
+    const range = selectionToDraftRange();
+    if (!range) {
+      window.alert("请先选中要加链接的文字");
+      return;
+    }
+    onLink(range);
+  }, [onLink, selectionToDraftRange]);
+
+  const openWikilinkPicker = useCallback(() => {
+    const range = selectionToDraftRange();
+    if (range) onLink(range);
+    else onLink({ start: 0, end: 0 });
+  }, [onLink, selectionToDraftRange]);
+
+  const attachEditorApi = useCallback(
+    (api: WysiwygEditorApi | null) => {
+      liveEditorRef.current = api;
+      setEditorApi(api);
+      onEditorApi?.(api);
+    },
+    [onEditorApi],
+  );
+
+  useEffect(() => {
+    if (mode === "live") return;
+    liveEditorRef.current = null;
+    setEditorApi(null);
+    onEditorApi?.(null);
+  }, [mode, onEditorApi]);
 
   useEffect(() => setTags(page.tags ?? []), [page.id, page.tags]);
   useEffect(() => {
@@ -228,8 +267,22 @@ export function NoteView({
             )}
         </div>
       </div>
-      {!isLiterature && (
-        <NoteFormatToolbar disabled={mode !== "live"} editorRef={liveEditorRef} />
+      {!isLiterature && mode === "live" && (
+        <NoteFormatToolbar
+          api={editorApi}
+          disabled={false}
+          version={editorVersion}
+          onInsertLink={openLinkPicker}
+          onInsertWikilink={openWikilinkPicker}
+        />
+      )}
+      {pasteError && (
+        <div className="error note-paste-error" role="alert">
+          {pasteError}
+          <button type="button" aria-label="关闭提示" onClick={() => setPasteError(null)}>
+            ×
+          </button>
+        </div>
       )}
       {isLiterature ? (
         hasSource ? (
@@ -297,24 +350,19 @@ export function NoteView({
       ) : (
         <div className="note-read" ref={readRef}>
           <Suspense fallback={<div className="empty-center loading-breathe">正在加载编辑器…</div>}>
-            <MarkdownLiveEditor
-              ref={liveEditorRef}
-              editorKey={page.id}
+            <MarkdownWysiwygEditor
+              key={page.id}
               body={liveBody}
               onBodyChange={setLiveBody}
               onSave={onSave}
-              pages={pages}
               onOpen={onOpen}
-              assetRoot={assetRoot}
-              basePath={page.path}
-              ideaTarget={{ kind: "page", pageId: page.id }}
+              pagePath={page.path}
+              pages={pages}
               ideas={ideas}
-              ideasVisible={ideasVisible}
-              onIdeasVisible={onIdeasVisible}
-              onCreateIdea={onCreateIdea}
-              onUpdateIdea={onUpdateIdea}
-              onAddToChat={onAddToChat}
-              onLink={linkRangeInDraft}
+              placeholder="开始输入…"
+              apiRef={attachEditorApi}
+              onError={(message) => setPasteError(message)}
+              onSelectionChange={() => setEditorVersion((value) => value + 1)}
             />
           </Suspense>
         </div>

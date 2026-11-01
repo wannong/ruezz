@@ -7,28 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-01
+
 ### Added
 
+- Word-style WYSIWYG note editor (TipTap / ProseMirror), replacing Obsidian-style Live Preview.
+  Headings, bold/italic/underline/strikethrough, sub/superscript, inline code, colours,
+  highlight, font size, alignment, indent, quotes, code blocks, tables, images, math and task lists.
+- Pasting from Word or a web page keeps structure and inline styling; Word's `mso-*` noise,
+  conditional comments, empty paragraphs and `<font>` wrappers are stripped, `pt` sizes are
+  normalised to `px`, Word's repeated body font size is dropped, paragraph alignment is kept,
+  and Word's background highlight becomes `<mark>`.
+- Pasted screenshots and embedded Word images are written beside the note inside the vault and
+  linked as `![](...)` (new `vault_save_asset` RPC).
+- `Ctrl/Cmd+Shift+V` pastes plain text.
+- `[[` page completion menu in the editor, and the sidebar link picker now inserts through the
+  live editor.
+- Open Ideas are tinted inline while editing.
 - Literature library accepts more than PDF/DOCX: Markdown, plain text, CSV/JSON/YAML, HTML,
   EPUB, OpenDocument and RTF originals are archived and filed as one page.
 - Literature pages whose original cannot be rendered natively now show their converted Markdown.
+- Microsoft Store / MSIX packaging scaffold (`store/msix`, `pnpm release:msix`, `docs/MICROSOFT_STORE.md`).
+- Public privacy policy (`PRIVACY.md`) for Partner Center.
 
 ### Changed
 
-- Startup JS payload reduced from 1,603 kB to 609 kB (519 kB to 193 kB gzipped). CodeMirror
-  and the agent chat bundle load on demand, and KaTeX/pdf.js/docx-preview/force-graph are
-  emitted as async chunks.
+- Markdown stays the only on-disk format. Untouched blocks are written back byte-identically, so
+  opening and saving a note never reformats it.
+- Read-mode / literature Markdown preview renders the inline HTML the editor writes (colour,
+  highlight, underline, sub/sup).
+- Startup JS payload reduced from 1,603 kB to 780 kB (519 kB to 244 kB gzipped). The WYSIWYG editor,
+  CodeMirror source editor, and the agent chat bundle load on demand, and KaTeX/pdf.js/docx-preview/force-graph
+  are emitted as async chunks.
+- Desktop test script also picks up tests in `src/lib` subdirectories.
 
 ### Fixed
 
-- CodeMirror logged "Reading the editor layout isn't allowed during an update" on every note
-  open and keystroke; layout measurement now happens outside the update cycle.
 - HTML literature no longer fails to import when the bundled MarkItDown runtime is missing.
-
-### Added
-
-- Microsoft Store / MSIX packaging scaffold (`store/msix`, `pnpm release:msix`, `docs/MICROSOFT_STORE.md`).
-- Public privacy policy (`PRIVACY.md`) for Partner Center.
 
 ## [1.2.9] - 2026-10-06
 

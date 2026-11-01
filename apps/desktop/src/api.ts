@@ -389,6 +389,8 @@ export const api = {
   vaultListPages: () => rpc<PageSummary[]>("vault_list_pages"),
   vaultReadPage: (id: string) => rpc<PageContent | null>("vault_read_page", { id }),
   vaultReadSource: (id: string) => rpc<VaultSource | null>("vault_read_source", { id }),
+  vaultSaveAsset: (pageId: string, fileName: string, base64: string) =>
+    rpc<{ name: string; path: string }>("vault_save_asset", { pageId, fileName, base64 }),
   vaultWritePage: (id: string, raw: string) => rpc<PageContent>("vault_write_page", { id, raw }),
   vaultUpdatePageTags: (id: string, tags: string[]) =>
     rpc<PageContent>("vault_update_page_tags", { id, tags }),

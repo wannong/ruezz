@@ -4,16 +4,14 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import remarkParse from "remark-parse";
-import remarkRehype from "remark-rehype";
-import rehypeStringify from "rehype-stringify";
-import { unified } from "unified";
+import rehypeRaw from "rehype-raw";
 import type { PageSummary } from "../../api";
 import { isTauriRuntime } from "../../api";
-import { resolvePageId, rewriteWikilinks, slugHeading, WIKI_HREF_PREFIX } from "../wikilinks";
+import { resolvePageId, slugHeading, WIKI_HREF_PREFIX } from "../wikilinks";
 
 export const remarkPlugins = [remarkGfm, remarkMath];
-export const rehypePlugins = [rehypeKatex];
+/** `rehype-raw` keeps colour / highlight / underline HTML the WYSIWYG editor writes. */
+export const rehypePlugins = [rehypeRaw, rehypeKatex];
 
 export type MarkdownRenderContext = {
   pages: PageSummary[];
@@ -171,64 +169,4 @@ export function createMarkdownComponents(ctx: MarkdownRenderContext) {
     h5: ({ children }: { children?: ReactNode }) => <h5 id={slugHeading(headingText(children))}>{children}</h5>,
     h6: ({ children }: { children?: ReactNode }) => <h6 id={slugHeading(headingText(children))}>{children}</h6>,
   };
-}
-
-const htmlProcessor = unified()
-  .use(remarkParse)
-  .use(remarkGfm)
-  .use(remarkMath)
-  .use(remarkRehype, { allowDangerousHtml: true })
-  .use(rehypeKatex)
-  .use(rehypeStringify);
-
-const htmlCache = new Map<string, string>();
-
-function rewriteWikilinksForHtml(markdown: string, ctx: MarkdownRenderContext): string {
-  let html = rewriteWikilinks(markdown);
-  return html.replace(
-    /\[([^\]]+)\]\(#wiki\/([^)]+)\)/g,
-    (_full, label: string, encoded: string) => {
-      const target = decodeURIComponent(encoded);
-      const id = internalTarget(`wiki/${target}`, ctx.basePath, ctx.pages) ?? target;
-      return `<button type="button" class="wikilink" data-wikilink="${encodeURIComponent(id)}">${label}</button>`;
-    },
-  );
-}
-
-export async function renderMarkdownToHtml(markdown: string, ctx: MarkdownRenderContext): Promise<string> {
-  const key = `${markdown}\0${ctx.basePath ?? ""}`;
-  const cached = htmlCache.get(key);
-  if (cached != null) return cached;
-  const source = rewriteWikilinksForHtml(markdown, ctx);
-  const file = await htmlProcessor.process(source);
-  let html = String(file);
-  if (ctx.assetRoot && isTauriRuntime()) {
-    const imageSrc = createImageSrcResolver(ctx.assetRoot, ctx.basePath);
-    html = html.replace(/<img([^>]*?)src="([^"]+)"([^>]*)>/g, (_m, pre, src, post) => {
-      const resolved = imageSrc(src);
-      return `<img${pre}src="${resolved}"${post}>`;
-    });
-  }
-  if (htmlCache.size > 500) htmlCache.clear();
-  htmlCache.set(key, html);
-  return html;
-}
-
-export function renderMarkdownToHtmlSync(markdown: string, ctx: MarkdownRenderContext): string {
-  const key = `sync:${markdown}\0${ctx.basePath ?? ""}`;
-  const cached = htmlCache.get(key);
-  if (cached != null) return cached;
-  const source = rewriteWikilinksForHtml(markdown, ctx);
-  const file = htmlProcessor.processSync(source);
-  let html = String(file);
-  if (ctx.assetRoot && isTauriRuntime()) {
-    const imageSrc = createImageSrcResolver(ctx.assetRoot, ctx.basePath);
-    html = html.replace(/<img([^>]*?)src="([^"]+)"([^>]*)>/g, (_m, pre, src, post) => {
-      const resolved = imageSrc(src);
-      return `<img${pre}src="${resolved}"${post}>`;
-    });
-  }
-  if (htmlCache.size > 500) htmlCache.clear();
-  htmlCache.set(key, html);
-  return html;
 }

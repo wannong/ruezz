@@ -54,6 +54,29 @@ function pageFile(root: string, id: string): string {
   return path.join(wikiDir(root), ...parts.slice(0, -1), file);
 }
 
+const MAX_ASSET_BYTES = 25 * 1024 * 1024;
+
+/** Assets stay beside the note, so keep names to a safe portable set. */
+function sanitizeAssetName(raw: string): string {
+  const base = path.basename(String(raw ?? "").replace(/\\/g, "/"));
+  const cleaned = base
+    .replace(/[<>:"|?*\u0000-\u001f]/g, "-")
+    .replace(/^\.+/, "")
+    .trim();
+  if (!cleaned) throw new Error("附件文件名无效");
+  if (cleaned.length > 120) {
+    const ext = path.extname(cleaned).slice(0, 12);
+    return `${cleaned.slice(0, 120 - ext.length)}${ext}`;
+  }
+  return cleaned;
+}
+
+function uniqueAssetName(base: string, attempt: number): string {
+  const ext = path.extname(base);
+  const stem = ext ? base.slice(0, -ext.length) : base;
+  return `${stem}-${attempt}${ext}`;
+}
+
 function folderDir(root: string, id: string): string {
   return path.join(wikiDir(root), ...id.split("/"));
 }
@@ -456,6 +479,43 @@ export class LlmWikiEngine implements WikiEngine {
       type: sourceTypeForFile(sourcePath),
       bytes: (await fs.readFile(sourcePath)).toString("base64"),
     };
+  }
+
+  async saveAsset(
+    root: string,
+    pageId: string,
+    fileName: string,
+    base64: string,
+  ): Promise<{ name: string; path: string }> {
+    const absRoot = await prepareVault(root);
+    const id = normalizePageId(pageId);
+    const page = await this.readPage(absRoot, id);
+    if (!page) throw new Error(`页面不存在：${id}`);
+    const pageAbs = path.resolve(absRoot, page.path);
+    await assertInsideWiki(absRoot, pageAbs);
+
+    const safeName = sanitizeAssetName(fileName);
+    const dir = path.dirname(pageAbs);
+    await assertInsideWiki(absRoot, path.join(dir, safeName));
+    await fs.mkdir(dir, { recursive: true });
+
+    const bytes = Buffer.from(base64, "base64");
+    if (bytes.byteLength === 0) throw new Error("附件内容为空");
+    if (bytes.byteLength > MAX_ASSET_BYTES) throw new Error("附件超过 25 MiB 限制");
+
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const name = attempt === 0 ? safeName : uniqueAssetName(safeName, attempt);
+      const target = path.join(dir, name);
+      await assertInsideWiki(absRoot, target);
+      try {
+        await fs.writeFile(target, bytes, { flag: "wx" });
+        return { name, path: path.relative(absRoot, target).split(path.sep).join("/") };
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === "EEXIST") continue;
+        throw err;
+      }
+    }
+    throw new Error("无法为附件分配文件名");
   }
 
   async createPage(root: string, idOrPath: string, title?: string, sources?: string[]): Promise<PageContent> {

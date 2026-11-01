@@ -248,6 +248,11 @@ export interface WikiEngine {
   writePage(root: string, idOrPath: string, raw: string): Promise<PageContent>;
   updatePageTags(root: string, idOrPath: string, tags: string[]): Promise<PageContent>;
   readSource(root: string, pageId: string): Promise<{ path: string; name: string; type: string; bytes: string } | null>;
+  /**
+   * Write a binary attachment beside a page (pasted screenshots, copied images)
+   * and return the file name the note should reference.
+   */
+  saveAsset(root: string, pageId: string, fileName: string, base64: string): Promise<{ name: string; path: string }>;
   createPage(root: string, id: string, title?: string, sources?: string[]): Promise<PageContent>;
   copyPage(root: string, fromId: string, toId: string): Promise<PageContent>;
   renamePage(root: string, fromId: string, toId: string): Promise<PageContent>;
