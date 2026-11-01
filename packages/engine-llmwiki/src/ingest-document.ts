@@ -12,7 +12,20 @@ import {
 } from "./pdf2md-layout.js";
 import { isInsideOrEqualDir, isStrictlyInsideDir } from "./path-helpers.js";
 
-export const TEXT_EXTENSIONS = new Set([".md", ".markdown", ".txt", ".text"]);
+export const TEXT_EXTENSIONS = new Set([
+  ".md",
+  ".markdown",
+  ".txt",
+  ".text",
+  ".csv",
+  ".json",
+  ".xml",
+  ".yaml",
+  ".yml",
+  ".org",
+  ".rst",
+  ".log",
+]);
 
 export function slugify(title: string): string {
   return (
@@ -180,10 +193,43 @@ type LoadedDocument = {
   cleanupDir?: string;
 };
 
+/** Strip tags so an HTML original can be filed as readable text without Python. */
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 async function loadDocumentContent(archivedAbs: string): Promise<LoadedDocument> {
   const ext = path.extname(archivedAbs).toLowerCase();
   if (TEXT_EXTENSIONS.has(ext)) {
     return { markdown: await fs.readFile(archivedAbs, "utf8") };
+  }
+  if (ext === ".html" || ext === ".htm") {
+    // Prefer MarkItDown's structure, but never fail an import just because the
+    // bundled Python runtime is missing.
+    try {
+      const tmp = path.join(os.tmpdir(), `wikihome-md-${process.pid}-${Date.now()}.md`);
+      try {
+        await convertFileToMarkdown(archivedAbs, tmp);
+        const markdown = await fs.readFile(tmp, "utf8");
+        if (markdown.trim()) return { markdown };
+      } finally {
+        await fs.unlink(tmp).catch(() => undefined);
+      }
+    } catch {
+      // fall through to the text extraction below
+    }
+    return { markdown: htmlToPlainText(await fs.readFile(archivedAbs, "utf8")) };
   }
   if (isPdfExtension(ext)) {
     const result = await convertPdfToTemp(archivedAbs);
@@ -212,7 +258,7 @@ async function loadDocumentContent(archivedAbs: string): Promise<LoadedDocument>
     return { markdown: buf.toString("utf8") };
   }
   throw new Error(
-    `无法直接入库「${path.basename(archivedAbs)}」。请导入 Markdown / 文本，或 PDF / Word / PPT / Excel（会先转成一篇 Markdown，不拆页）。`,
+    `无法直接入库「${path.basename(archivedAbs)}」。支持的格式：Markdown / 纯文本、PDF、Word、PPT、Excel、HTML、EPUB（后几类会先转成一篇 Markdown，不拆页）。`,
   );
 }
 

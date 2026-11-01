@@ -7,6 +7,7 @@ import {
   remapRecordIds,
   type PageViewMemory,
 } from "../pageViewMemory";
+import { isRenderableSourceType } from "../sourceFormats";
 import { tabKey, type Tab } from "../tabs";
 import type { NoteMode } from "../../components/NoteView";
 
@@ -46,7 +47,7 @@ export function usePageTabs({
   const activePageNoteMode = useMemo((): NoteMode => {
     if (!activePage) return "live";
     const sourceType = activePage.sourceType?.toLowerCase();
-    const hasSource = sourceType === "pdf" || sourceType === "docx";
+    const hasSource = isRenderableSourceType(sourceType);
     const savedMode = pageModes[activePage.id] ?? pageViewMemoryRef.current[activePage.id]?.mode;
     if (savedMode) return normalizeNoteMode(savedMode, hasSource);
     return defaultPageMode(activePage.type, hasSource);

@@ -4,8 +4,10 @@ import type { Idea, IdeaSelector, PageContent, PageSummary } from "../api";
 import { splitFrontmatter, joinFrontmatter } from "../lib/frontmatter";
 import { MarkdownLiveEditor, type MarkdownLiveEditorApi } from "./MarkdownLiveEditor";
 import { NoteFormatToolbar } from "./NoteFormatToolbar";
+import { MarkdownPreview } from "./MarkdownPreview";
 import { MarkdownSourceEditor } from "./MarkdownSourceEditor";
 import type { PageViewMemory } from "../lib/pageViewMemory";
+import { isRenderableSourceType } from "../lib/sourceFormats";
 
 const DocumentPreview = lazy(() =>
   import("./DocumentPreview").then((mod) => ({ default: mod.DocumentPreview })),
@@ -77,7 +79,9 @@ export function NoteView({
   const savedReadMemoryRef = useRef(viewMemory?.readScrollTop ?? 0);
   savedReadMemoryRef.current = viewMemory?.readScrollTop ?? 0;
   const sourceType = page.sourceType?.toLowerCase();
-  const hasSource = sourceType === "pdf" || sourceType === "docx";
+  // Only PDF/DOCX render as an original. Other literature formats were converted
+  // to one Markdown page on ingest, so that converted text is what we show.
+  const hasSource = isRenderableSourceType(sourceType);
   const isLiterature = page.type === "source";
   const [tags, setTags] = useState<string[]>(page.tags ?? []);
   const [tagInput, setTagInput] = useState("");
@@ -236,7 +240,22 @@ export function NoteView({
             />
           </Suspense>
         ) : (
-          <div className="empty-center">此文献暂无可浏览的原件</div>
+          <div className="note-read" ref={readRef}>
+            <MarkdownPreview
+              markdown={liveBody}
+              pages={pages}
+              onOpen={onOpen}
+              assetRoot={assetRoot}
+              basePath={page.path}
+              ideaTarget={{ kind: "page", pageId: page.id }}
+              ideas={ideas}
+              ideasVisible={ideasVisible}
+              onIdeasVisible={onIdeasVisible}
+              onCreateIdea={onCreateIdea}
+              onUpdateIdea={onUpdateIdea}
+              onAddToChat={onAddToChat}
+            />
+          </div>
         )
       ) : mode === "file" && hasSource ? (
         <Suspense fallback={documentPreviewFallback}>

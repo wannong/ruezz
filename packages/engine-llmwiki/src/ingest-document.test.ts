@@ -73,3 +73,49 @@ test("readSource resolves source identity only inside raw/sources", async () => 
     await fs.rm(root, { recursive: true, force: true });
   }
 });
+
+test("markdown files are ingested into the literature library", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "wikihome-md-"));
+  try {
+    const source = path.join(root, "notes.md");
+    await fs.writeFile(source, "# 我的笔记\n\n正文第一段。\n\n## 小节\n\n更多内容。\n");
+    const engine = createEngine({ apiBaseUrl: "", apiKey: "", model: "", mock: true });
+    const result = await engine.ingestFile(root, source);
+    assert.equal(result.pageIds.length, 1, "one literature page per document");
+    const page = await engine.readPage(root, result.pageIds[0]);
+    assert.ok(page, "page should be readable");
+    assert.equal(page.type, "source");
+    // The original is archived, and the page keeps the full document unsplit.
+    assert.ok(result.sourcePath?.endsWith(".md"), `sourcePath: ${result.sourcePath}`);
+    assert.match(page.body, /正文第一段/);
+    assert.match(page.body, /## 小节/);
+    // A Markdown original is renderable metadata we can report to the UI.
+    assert.equal(page.sourceType, "md");
+    engine.close?.(root);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("plain text, csv and html originals are accepted as literature", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "wikihome-formats-"));
+  try {
+    const engine = createEngine({ apiBaseUrl: "", apiKey: "", model: "", mock: true });
+    const cases: Array<[string, string]> = [
+      ["note.txt", "纯文本正文\n"],
+      ["table.csv", "a,b\n1,2\n"],
+      ["page.html", "<h1>标题</h1><p>正文</p>\n"],
+    ];
+    for (const [name, content] of cases) {
+      const file = path.join(root, name);
+      await fs.writeFile(file, content);
+      const result = await engine.ingestFile(root, file);
+      assert.equal(result.pageIds.length, 1, `${name} should import`);
+      const page = await engine.readPage(root, result.pageIds[0]);
+      assert.equal(page?.type, "source", `${name} should be a literature page`);
+    }
+    engine.close?.(root);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

@@ -422,12 +422,18 @@ export const api = {
       multiple: true,
       filters: [
         {
-          name: "Documents",
-          extensions: ["md", "markdown", "txt", "pdf", "docx", "doc", "pptx", "xlsx", "html", "htm"],
+          name: "文献（全部支持格式）",
+          extensions: [
+            "md", "markdown", "txt", "text", "csv", "json", "xml", "yaml", "yml", "org", "rst",
+            "pdf", "docx", "doc", "pptx", "ppt", "xlsx", "xls", "odt", "ods", "odp", "rtf", "epub",
+            "html", "htm",
+          ],
         },
-        { name: "Markdown", extensions: ["md", "markdown", "txt"] },
+        { name: "Markdown / 纯文本", extensions: ["md", "markdown", "txt", "text", "org", "rst"] },
         { name: "PDF", extensions: ["pdf"] },
-        { name: "Office", extensions: ["docx", "doc", "pptx", "xlsx"] },
+        { name: "Word", extensions: ["docx", "doc", "odt", "rtf"] },
+        { name: "演示 / 表格", extensions: ["pptx", "ppt", "xlsx", "xls", "ods", "odp", "csv"] },
+        { name: "网页 / 电子书", extensions: ["html", "htm", "epub"] },
       ],
     });
     if (!selected) return [];

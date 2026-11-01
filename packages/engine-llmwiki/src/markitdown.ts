@@ -123,7 +123,9 @@ export async function convertFileToMarkdown(
   }
   if (sawMissingModule) {
     throw new Error(
-      "未找到带 MarkItDown 的 Python。请关掉 WikiHome 后用带 resources\\runtime\\python 的绿色包或安装包打开，不要只拷贝 WikiHome.exe。",
+      "这份 Word/PPT/Excel 文献需要 MarkItDown 才能转成 Markdown，但没找到带 MarkItDown 的 Python。" +
+        "请使用带 resources\\runtime\\python 的完整安装包（不要只拷贝 exe），或在系统里安装 python 并执行 " +
+        'python -m pip install "markitdown[docx,pptx,xlsx]"。Markdown / 纯文本 / HTML 不需要这一步。',
     );
   }
   throw new Error(`MarkItDown 转换失败：${lastError || "未找到 Python"}`);

@@ -68,7 +68,17 @@ async function pathExists(target: string): Promise<boolean> {
 }
 
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
-const SOURCE_EXTENSIONS = new Set([".pdf", ".docx"]);
+/**
+ * Formats a literature page may keep an archived original for. Each is either
+ * read as text directly or converted to one Markdown document on ingest.
+ */
+const SOURCE_FORMATS = [
+  ".pdf", ".docx",
+  ".doc", ".pptx", ".ppt", ".xlsx", ".xls", ".odt", ".ods", ".odp", ".rtf", ".epub",
+  ".html", ".htm",
+  ".md", ".markdown", ".txt", ".text", ".csv", ".json", ".xml", ".yaml", ".yml", ".org", ".rst", ".log",
+];
+const SOURCE_EXTENSIONS = new Set(SOURCE_FORMATS);
 
 function normalizeTags(tags: unknown): string[] {
   const values = Array.isArray(tags) ? tags : [tags];
