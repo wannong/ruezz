@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   api,
@@ -23,7 +23,7 @@ import { usePageTabs } from "../lib/workspace/usePageTabs";
 import type { ColorPalette, Theme } from "../theme";
 import { PALETTE_META } from "../theme";
 import { PanelOpenGlyph } from "./iconGlyphs";
-import { appendSelectionToDraft } from "./agentChatCore";
+import { appendSelectionToDraft } from "../lib/agentDraft";
 import { CommandPalette, type PaletteCommand, type PaletteMode } from "./CommandPalette";
 import { IngestModal } from "./IngestModal";
 import { BootSplash } from "./BootSplash";
@@ -38,10 +38,16 @@ import { Presence } from "./Presence";
 import { Ribbon } from "./Ribbon";
 import { RightSidebar, type RightView } from "./RightSidebar";
 import { SettingsModal } from "./SettingsModal";
-import { AgentFloatingIsland } from "./AgentFloatingIsland";
+
 import { ruezzWorkModeFromNoteMode } from "../lib/centaur-character/activity";
 import { centaurTransferMs } from "./CentaurChromeSlot";
 import { StatusBar } from "./StatusBar";
+
+// Floating agent chat reuses the chat bundle (react-markdown/KaTeX); load it only
+// when the island is actually opened.
+const AgentFloatingIsland = lazy(() =>
+  import("./AgentFloatingIsland").then((mod) => ({ default: mod.AgentFloatingIsland })),
+);
 import { TabBar } from "./TabBar";
 import type { TitleBarCentaurProps } from "./TitleBar";
 
@@ -1087,6 +1093,7 @@ export function Workspace({
            onCreateAgentIdea={createAgentIdea}
           />
       </div>
+      <Suspense fallback={null}>
       <AgentFloatingIsland
         open={rightCollapsed && agentIslandOpen}
         onClose={() => setAgentIslandOpen(false)}
@@ -1124,6 +1131,7 @@ export function Workspace({
         ruezzCelebrate={ruezzCelebrate}
         ruezzWorkMode={ruezzWorkMode}
       />
+      </Suspense>
       <StatusBar
         vaultPath={settings.vaultPath}
         pageCount={pages.length}

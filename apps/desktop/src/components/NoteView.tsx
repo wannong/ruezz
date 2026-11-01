@@ -2,15 +2,24 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Star } from "lucide-react";
 import type { Idea, IdeaSelector, PageContent, PageSummary } from "../api";
 import { splitFrontmatter, joinFrontmatter } from "../lib/frontmatter";
-import { MarkdownLiveEditor, type MarkdownLiveEditorApi } from "./MarkdownLiveEditor";
+import type { MarkdownLiveEditorApi } from "./MarkdownLiveEditor";
 import { NoteFormatToolbar } from "./NoteFormatToolbar";
 import { MarkdownPreview } from "./MarkdownPreview";
-import { MarkdownSourceEditor } from "./MarkdownSourceEditor";
+
 import type { PageViewMemory } from "../lib/pageViewMemory";
 import { isRenderableSourceType } from "../lib/sourceFormats";
 
 const DocumentPreview = lazy(() =>
   import("./DocumentPreview").then((mod) => ({ default: mod.DocumentPreview })),
+);
+
+// CodeMirror is ~900 kB and only matters once a note is open, so keep it off the
+// startup path.
+const MarkdownLiveEditor = lazy(() =>
+  import("./MarkdownLiveEditor").then((mod) => ({ default: mod.MarkdownLiveEditor })),
+);
+const MarkdownSourceEditor = lazy(() =>
+  import("./MarkdownSourceEditor").then((mod) => ({ default: mod.MarkdownSourceEditor })),
 );
 
 export type NoteMode = "live" | "source" | "file";
@@ -275,35 +284,39 @@ export function NoteView({
         </Suspense>
       ) : mode === "source" ? (
         <div className="note-source-editor">
-          <MarkdownSourceEditor
-            key={page.id}
-            value={draft}
-            onChange={onDraft}
-            onSave={onSave}
-            placeholder="Markdown 源码（含 YAML frontmatter）"
-          />
+          <Suspense fallback={<div className="empty-center loading-breathe">正在加载源码编辑器…</div>}>
+            <MarkdownSourceEditor
+              key={page.id}
+              value={draft}
+              onChange={onDraft}
+              onSave={onSave}
+              placeholder="Markdown 源码（含 YAML frontmatter）"
+            />
+          </Suspense>
         </div>
       ) : (
         <div className="note-read" ref={readRef}>
-          <MarkdownLiveEditor
-            ref={liveEditorRef}
-            editorKey={page.id}
-            body={liveBody}
-            onBodyChange={setLiveBody}
-            onSave={onSave}
-            pages={pages}
-            onOpen={onOpen}
-            assetRoot={assetRoot}
-            basePath={page.path}
-            ideaTarget={{ kind: "page", pageId: page.id }}
-            ideas={ideas}
-            ideasVisible={ideasVisible}
-            onIdeasVisible={onIdeasVisible}
-            onCreateIdea={onCreateIdea}
-            onUpdateIdea={onUpdateIdea}
-            onAddToChat={onAddToChat}
-            onLink={linkRangeInDraft}
-          />
+          <Suspense fallback={<div className="empty-center loading-breathe">正在加载编辑器…</div>}>
+            <MarkdownLiveEditor
+              ref={liveEditorRef}
+              editorKey={page.id}
+              body={liveBody}
+              onBodyChange={setLiveBody}
+              onSave={onSave}
+              pages={pages}
+              onOpen={onOpen}
+              assetRoot={assetRoot}
+              basePath={page.path}
+              ideaTarget={{ kind: "page", pageId: page.id }}
+              ideas={ideas}
+              ideasVisible={ideasVisible}
+              onIdeasVisible={onIdeasVisible}
+              onCreateIdea={onCreateIdea}
+              onUpdateIdea={onUpdateIdea}
+              onAddToChat={onAddToChat}
+              onLink={linkRangeInDraft}
+            />
+          </Suspense>
         </div>
       )}
     </div>

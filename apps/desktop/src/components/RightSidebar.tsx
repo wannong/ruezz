@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { PanelCloseGlyph } from "./iconGlyphs";
 import type { AgentAttachment, AgentSessionMessage, AgentSessionSummary, GraphDto, Idea, IdeaSelector, PageSummary } from "../api";
 import { attachResizeX } from "../lib/pointerResize";
@@ -5,11 +6,14 @@ import type { OutlineItem } from "../lib/outline";
 import type { Theme } from "../theme";
 import type { GraphViewScope } from "../lib/graph";
 import type { RuezzWorkMode } from "../lib/centaur-character/activity";
-import { AgentPane } from "./AgentPane";
 import { LocalGraphPane } from "./LocalGraphPane";
 import { OutlinePane } from "./OutlinePane";
 import { Presence } from "./Presence";
 import { IdeasPane } from "./IdeasPane";
+
+// The agent pane pulls in react-markdown/KaTeX (~400 kB). Load it when the user
+// actually opens the panel so startup stays light.
+const AgentPane = lazy(() => import("./AgentPane").then((mod) => ({ default: mod.AgentPane })));
 
 export type RightView = "agent" | "outline" | "ideas" | "graph";
 
@@ -168,6 +172,7 @@ export function RightSidebar({
         </button>
       </div>
       {view === "agent" && (
+        <Suspense fallback={<div className="empty-center loading-breathe">正在加载 Agent…</div>}>
         <AgentPane
           messages={messages}
           pendingUser={pendingUser}
@@ -210,6 +215,7 @@ export function RightSidebar({
           ruezzCelebrate={ruezzCelebrate}
           ruezzWorkMode={ruezzWorkMode}
         />
+        </Suspense>
       )}
       {view === "outline" && <OutlinePane items={outline} onJump={onJump} />}
       {view === "ideas" && (

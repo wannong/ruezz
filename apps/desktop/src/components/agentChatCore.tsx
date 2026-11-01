@@ -29,13 +29,7 @@ export function formatTokens(n: number): string {
 }
 
 /** Append a quoted selection into the Agent composer draft. */
-export function appendSelectionToDraft(draft: string, text: string): string {
-  const quote = text.trim();
-  if (!quote) return draft;
-  const block = `> ${quote.replace(/\n/g, "\n> ")}`;
-  const base = draft.trimEnd();
-  return base ? `${base}\n\n${block}\n\n` : `${block}\n\n`;
-}
+export { appendSelectionToDraft } from "../lib/agentDraft";
 
 function sessionUsage(messages: AgentSessionMessage[]): {
   input: number;
